@@ -293,6 +293,31 @@ async function resolveAppeal(appeal: Appeal, status: "RESOLVED" | "REJECTED") {
 }
 
 async function saveAiConfig() {
+  const { name, protocol, baseUrl, apiKey, model } = aiForm.value;
+  if (!name.trim()) {
+    notice.value = "请填写配置名称";
+    return;
+  }
+  if (!protocol) {
+    notice.value = "请选择协议";
+    return;
+  }
+  if (!baseUrl.trim()) {
+    notice.value = "请填写 Base URL";
+    return;
+  }
+  if (!/^https?:\/\//.test(baseUrl.trim())) {
+    notice.value = "Base URL 必须以 http:// 或 https:// 开头";
+    return;
+  }
+  if (!apiKey.trim()) {
+    notice.value = "请填写 API Key";
+    return;
+  }
+  if (!model.trim()) {
+    notice.value = "请填写模型";
+    return;
+  }
   await api("/api/admin/ai-config", { method: "PUT", body: JSON.stringify(aiForm.value) });
   notice.value = "AI 配置已保存并启用";
   await loadAi();
@@ -568,7 +593,7 @@ watch(tab, refresh);
         </div>
 
         <label class="block">
-          <span class="mb-1.5 block text-sm text-ink">配置名称</span>
+          <span class="mb-1.5 block text-sm text-ink">配置名称<span class="text-rose"> *</span></span>
           <input
             v-model="aiForm.name"
             class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
@@ -577,20 +602,20 @@ watch(tab, refresh);
         </label>
 
         <label class="block">
-          <span class="mb-1.5 block text-sm text-ink">API Key</span>
+          <span class="mb-1.5 block text-sm text-ink">API Key<span class="text-rose"> *</span></span>
           <input
             v-model="aiForm.apiKey"
             class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
             :placeholder="
               aiConfig
-                ? `留空表示不修改，当前 ${aiConfig.api_key_masked}`
-                : '请输入 DeepSeek API Key'
+                ? `请输入 API Key（当前 ${aiConfig.api_key_masked}）`
+                : '请输入 API Key'
             "
           />
         </label>
 
         <label class="block">
-          <span class="mb-1.5 block text-sm text-ink">协议</span>
+          <span class="mb-1.5 block text-sm text-ink">协议<span class="text-rose"> *</span></span>
           <select
             v-model="aiForm.protocol"
             class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
@@ -602,7 +627,7 @@ watch(tab, refresh);
         </label>
 
         <label class="block">
-          <span class="mb-1.5 block text-sm text-ink">Base URL</span>
+          <span class="mb-1.5 block text-sm text-ink">Base URL<span class="text-rose"> *</span></span>
           <input
             v-model="aiForm.baseUrl"
             class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
@@ -611,7 +636,7 @@ watch(tab, refresh);
         </label>
 
         <label class="block">
-          <span class="mb-1.5 block text-sm text-ink">模型</span>
+          <span class="mb-1.5 block text-sm text-ink">模型<span class="text-rose"> *</span></span>
           <input
             v-model="aiForm.model"
             class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"

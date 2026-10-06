@@ -252,28 +252,39 @@ public class AdminStatsController {
   public ApiResponse<Void> saveAiConfig(@RequestBody Map<String, Object> body) {
     String name = String.valueOf(body.getOrDefault("name", "")).trim();
     String baseUrl = body.get("baseUrl") == null ? "" : String.valueOf(body.get("baseUrl")).trim();
-    String protocol = AiClient.normalizeProtocol(
-        body.get("protocol") == null ? null : String.valueOf(body.get("protocol")));
+    String protocol = body.get("protocol") == null
+        ? "" : String.valueOf(body.get("protocol")).trim().toUpperCase();
     String apiKey = body.get("apiKey") == null ? "" : String.valueOf(body.get("apiKey")).trim();
     String model = String.valueOf(body.getOrDefault("model", "")).trim();
     String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
+
+    // 单条 AI 配置：所有项均为必填
     if (name.isEmpty()) {
       throw new ApiException(400, "配置名称不能为空");
     }
+    if (protocol.isEmpty()) {
+      throw new ApiException(400, "请选择协议");
+    }
+    if (!List.of(AiClient.PROTOCOL_OPENAI, AiClient.PROTOCOL_ANTHROPIC).contains(protocol)) {
+      throw new ApiException(400, "协议只能是 OPENAI / ANTHROPIC");
+    }
+    if (baseUrl.isEmpty()) {
+      throw new ApiException(400, "Base URL 不能为空");
+    }
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+      throw new ApiException(400, "Base URL 必须以 http:// 或 https:// 开头");
+    }
+    if (apiKey.isEmpty()) {
+      throw new ApiException(400, "API Key 不能为空");
+    }
     if (model.isEmpty()) {
-      model = "deepseek-flash";
+      throw new ApiException(400, "模型不能为空");
     }
     baseUrl = baseUrl.replaceAll("/+$", "");
-    if (baseUrl.isEmpty()) {
-      baseUrl = AiClient.defaultBaseUrl(protocol);
-    }
 
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select id from ai_config order by id asc limit 1");
     if (rows.isEmpty()) {
-      if (apiKey.isEmpty()) {
-        throw new ApiException(400, "首次配置必须填写 API Key");
-      }
       jdbc.update("""
           insert into ai_config
             (name, base_url, protocol, api_key_encrypted, model, purpose, status, remark)
@@ -285,13 +296,10 @@ public class AdminStatsController {
     long id = ((Number) rows.get(0).get("id")).longValue();
     jdbc.update("""
         update ai_config
-           set name = ?, base_url = ?, protocol = ?, model = ?, status = 'ENABLED', remark = ?
+           set name = ?, base_url = ?, protocol = ?, api_key_encrypted = ?,
+               model = ?, status = 'ENABLED', remark = ?
          where id = ?
-        """, name, baseUrl, protocol, model, remark, id);
-    if (!apiKey.isEmpty()) {
-      jdbc.update("update ai_config set api_key_encrypted = ? where id = ?",
-          aes.encrypt(apiKey), id);
-    }
+        """, name, baseUrl, protocol, aes.encrypt(apiKey), model, remark, id);
     return ApiResponse.ok(null);
   }
 
