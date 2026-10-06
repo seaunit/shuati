@@ -38,6 +38,10 @@ management:
         include: health
 
 shuati:
+  rate-limit:
+    enabled: true
+    # 同一 IP 每分钟请求总量兜底（拦脚本扫描），0=关闭
+    global-per-minute: 300
   captcha:
     # 图形验证码有效期（秒），写入 Redis TTL 自动过期
     ttl-seconds: 120

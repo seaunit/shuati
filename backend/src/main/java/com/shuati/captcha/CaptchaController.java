@@ -1,6 +1,7 @@
 package com.shuati.captcha;
 
 import com.shuati.common.ApiResponse;
+import com.shuati.common.ClientInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,8 @@ public class CaptchaController {
   /** 获取图形验证码：返回 Base64 图片 + ticket，不返回答案。 */
   @GetMapping("/captcha/image")
   public ApiResponse<CaptchaImageResponse> image(HttpServletRequest request) {
-    return ApiResponse.ok(captchaService.generate(clientIp(request), deviceId(request)));
+    return ApiResponse.ok(
+        captchaService.generate(ClientInfo.ip(request), ClientInfo.device(request)));
   }
 
   /** 校验图形验证码：一次性，成功后立即作废。 */
@@ -28,24 +30,4 @@ public class CaptchaController {
     return ApiResponse.ok(Map.of("valid", true));
   }
 
-  private String clientIp(HttpServletRequest request) {
-    String forwarded = request.getHeader("X-Forwarded-For");
-    if (forwarded != null && !forwarded.isBlank()) {
-      return forwarded.split(",")[0].trim();
-    }
-    String realIp = request.getHeader("X-Real-IP");
-    if (realIp != null && !realIp.isBlank()) {
-      return realIp.trim();
-    }
-    return request.getRemoteAddr();
-  }
-
-  private String deviceId(HttpServletRequest request) {
-    String device = request.getHeader("X-Device-Id");
-    if (device != null && !device.isBlank()) {
-      return device.trim();
-    }
-    String agent = request.getHeader("User-Agent");
-    return agent == null ? "unknown" : Integer.toHexString(agent.hashCode());
-  }
 }

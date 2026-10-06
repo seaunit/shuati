@@ -17,6 +17,10 @@ spring:
       timeout: 3s
 
 shuati:
+  rate-limit:
+    # 测试默认关掉，避免用例互相影响；限流本身由 RateLimitTest 单独验证
+    enabled: false
+    global-per-minute: 100000
   cookie:
     secure: false
   jwt:

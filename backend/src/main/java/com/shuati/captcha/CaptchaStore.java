@@ -16,8 +16,6 @@ import org.springframework.stereotype.Component;
 public class CaptchaStore {
 
   private static final String KEY_PREFIX = "captcha:";
-  private static final String RATE_PREFIX = "captcha:rate:";
-
   /**
    * 校验脚本（Lua 保证原子性，避免并发重复校验）：
    * 命中立即删除（一次性）；错误累加次数；达到上限直接作废。
@@ -59,16 +57,6 @@ public class CaptchaStore {
   public List<?> verify(String ticket, String submittedCode, int maxAttempts) {
     return redis.execute(VERIFY_SCRIPT, List.of(KEY_PREFIX + ticket),
         submittedCode, String.valueOf(maxAttempts));
-  }
-
-  /** 固定窗口限流：同一维度同一分钟内累加，首次写入时设置过期。 */
-  public long hitRate(String dimension, String value, Duration window) {
-    String key = RATE_PREFIX + dimension + ":" + value;
-    Long count = redis.opsForValue().increment(key);
-    if (count != null && count == 1L) {
-      redis.expire(key, window);
-    }
-    return count == null ? 0L : count;
   }
 
   public String rawEntry(String ticket) {

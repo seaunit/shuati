@@ -4,6 +4,7 @@ import com.shuati.auth.dto.LoginRequest;
 import com.shuati.auth.dto.RegisterRequest;
 import com.shuati.auth.dto.UserView;
 import com.shuati.common.ApiResponse;
+import com.shuati.rate.RateLimit;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
@@ -27,12 +28,16 @@ public class AuthController {
   private boolean cookieSecure;
 
   @PostMapping("/register")
+  // 注册：同一 IP 每小时最多 5 个（挡住批量注册刷注册赠点）
+  @RateLimit(name = "auth:register", limit = 5, windowSeconds = 3600, scope = RateLimit.Scope.IP)
   public ResponseEntity<ApiResponse<UserView>> register(
       @Valid @RequestBody RegisterRequest request) {
     return withAuthCookie(authService.register(request));
   }
 
   @PostMapping("/login")
+  // 登录：同一 IP 每分钟最多 10 次（配合验证码，挡住撞库）
+  @RateLimit(name = "auth:login", limit = 10, windowSeconds = 60, scope = RateLimit.Scope.IP)
   public ResponseEntity<ApiResponse<UserView>> login(
       @Valid @RequestBody LoginRequest request) {
     return withAuthCookie(authService.login(request));

@@ -2,6 +2,7 @@ package com.shuati.importer;
 
 import com.shuati.common.ApiResponse;
 import com.shuati.common.CurrentUser;
+import com.shuati.rate.RateLimit;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,8 @@ public class ImportController {
   private final ImportWorker importWorker;
 
   @PostMapping("/api/import")
+  // 导入会消耗 AI 点数：同一用户每小时最多 5 个任务
+  @RateLimit(name = "import:create", limit = 5, windowSeconds = 3600, scope = RateLimit.Scope.USER)
   public ApiResponse<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
     Map<String, Object> result = importService.createTask(CurrentUser.id(), body);
     importWorker.run(String.valueOf(result.get("taskId")));

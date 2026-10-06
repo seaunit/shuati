@@ -1,6 +1,7 @@
 package com.shuati.practice;
 
 import com.shuati.common.ApiResponse;
+import com.shuati.rate.RateLimit;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +60,8 @@ public class PracticeController {
   }
 
   @PostMapping("/api/practice/submit-essay")
+  // AI 判分要花钱：同一用户每分钟最多 30 次
+  @RateLimit(name = "ai:judge", limit = 30, windowSeconds = 60, scope = RateLimit.Scope.USER)
   public ApiResponse<Map<String, Object>> submitEssay(@RequestBody Map<String, Object> body) {
     long questionId = Long.parseLong(String.valueOf(body.get("questionId")));
     String answer = body.get("answer") == null ? "" : String.valueOf(body.get("answer")).trim();
@@ -72,6 +75,8 @@ public class PracticeController {
   }
 
   @GetMapping("/api/practice/questions/{id}/explanation")
+  // AI 解析同样花钱：同一用户每分钟最多 60 次
+  @RateLimit(name = "ai:explain", limit = 60, windowSeconds = 60, scope = RateLimit.Scope.USER)
   public ApiResponse<Map<String, Object>> explanation(
       @PathVariable long id,
       @org.springframework.web.bind.annotation.RequestParam(defaultValue = "") String selected,

@@ -1,6 +1,7 @@
 package com.shuati.captcha;
 
 import com.shuati.common.ApiException;
+import com.shuati.rate.RateLimiter;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -36,6 +37,7 @@ public class CaptchaService {
 
   private final CaptchaStore store;
   private final CaptchaProperties properties;
+  private final RateLimiter rateLimiter;
 
   public CaptchaImageResponse generate(String clientIp, String deviceId) {
     checkRateLimit("ip", clientIp, properties.getIpLimitPerMinute());
@@ -75,8 +77,7 @@ public class CaptchaService {
     if (value == null || value.isBlank() || limit <= 0) {
       return;
     }
-    long count = store.hitRate(dimension, value, RATE_WINDOW);
-    if (count > limit) {
+    if (!rateLimiter.allow("captcha:" + dimension + ":" + value, limit, RATE_WINDOW)) {
       throw new ApiException(429, "请求过于频繁，请稍后再试");
     }
   }

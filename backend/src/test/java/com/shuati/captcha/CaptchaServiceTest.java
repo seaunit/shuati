@@ -31,7 +31,12 @@ class CaptchaServiceTest {
 
   @BeforeEach
   void cleanRedis() {
-    Set<String> keys = redis.keys("captcha:*");
+    deleteByPrefix("captcha:*");
+    deleteByPrefix("rate:*");
+  }
+
+  private void deleteByPrefix(String pattern) {
+    Set<String> keys = redis.keys(pattern);
     if (keys != null && !keys.isEmpty()) {
       redis.delete(keys);
     }
