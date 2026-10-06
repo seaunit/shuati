@@ -1,6 +1,7 @@
 package com.shuati.admin;
 
 import com.shuati.ai.AesCrypto;
+import com.shuati.ai.AiClient;
 import com.shuati.billing.BillingService;
 import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
@@ -227,7 +228,7 @@ public class AdminStatsController {
   @GetMapping("/api/admin/ai-config")
   public ApiResponse<List<Map<String, Object>>> aiConfigs() {
     List<Map<String, Object>> rows = jdbc.queryForList("""
-        select id, name, base_url, model, purpose, status, remark,
+        select id, name, base_url, protocol, model, purpose, status, remark,
                api_key_encrypted, created_at, updated_at
           from ai_config order by id asc
         """);
@@ -251,6 +252,8 @@ public class AdminStatsController {
   public ApiResponse<Void> saveAiConfig(@RequestBody Map<String, Object> body) {
     String name = String.valueOf(body.getOrDefault("name", "")).trim();
     String baseUrl = body.get("baseUrl") == null ? "" : String.valueOf(body.get("baseUrl")).trim();
+    String protocol = AiClient.normalizeProtocol(
+        body.get("protocol") == null ? null : String.valueOf(body.get("protocol")));
     String apiKey = body.get("apiKey") == null ? "" : String.valueOf(body.get("apiKey")).trim();
     String model = String.valueOf(body.getOrDefault("model", "")).trim();
     String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
@@ -262,7 +265,7 @@ public class AdminStatsController {
     }
     baseUrl = baseUrl.replaceAll("/+$", "");
     if (baseUrl.isEmpty()) {
-      baseUrl = "https://api.deepseek.com";
+      baseUrl = AiClient.defaultBaseUrl(protocol);
     }
 
     List<Map<String, Object>> rows = jdbc.queryForList(
@@ -272,18 +275,19 @@ public class AdminStatsController {
         throw new ApiException(400, "首次配置必须填写 API Key");
       }
       jdbc.update("""
-          insert into ai_config (name, base_url, api_key_encrypted, model, purpose, status, remark)
-          values (?, ?, ?, ?, 'BOTH', 'ENABLED', ?)
-          """, name, baseUrl, aes.encrypt(apiKey), model, remark);
+          insert into ai_config
+            (name, base_url, protocol, api_key_encrypted, model, purpose, status, remark)
+          values (?, ?, ?, ?, ?, 'BOTH', 'ENABLED', ?)
+          """, name, baseUrl, protocol, aes.encrypt(apiKey), model, remark);
       return ApiResponse.ok(null);
     }
 
     long id = ((Number) rows.get(0).get("id")).longValue();
     jdbc.update("""
         update ai_config
-           set name = ?, base_url = ?, model = ?, status = 'ENABLED', remark = ?
+           set name = ?, base_url = ?, protocol = ?, model = ?, status = 'ENABLED', remark = ?
          where id = ?
-        """, name, baseUrl, model, remark, id);
+        """, name, baseUrl, protocol, model, remark, id);
     if (!apiKey.isEmpty()) {
       jdbc.update("update ai_config set api_key_encrypted = ? where id = ?",
           aes.encrypt(apiKey), id);
@@ -295,6 +299,8 @@ public class AdminStatsController {
   public ApiResponse<Void> createAiConfig(@RequestBody Map<String, Object> body) {
     String name = String.valueOf(body.getOrDefault("name", "")).trim();
     String baseUrl = body.get("baseUrl") == null ? "" : String.valueOf(body.get("baseUrl")).trim();
+    String protocol = AiClient.normalizeProtocol(
+        body.get("protocol") == null ? null : String.valueOf(body.get("protocol")));
     String apiKey = String.valueOf(body.getOrDefault("apiKey", "")).trim();
     String model = String.valueOf(body.getOrDefault("model", "")).trim();
     if (name.isEmpty() || apiKey.isEmpty() || model.isEmpty()) {
@@ -302,12 +308,12 @@ public class AdminStatsController {
     }
     baseUrl = baseUrl.replaceAll("/+$", "");
     if (baseUrl.isEmpty()) {
-      baseUrl = "https://api.deepseek.com";
+      baseUrl = AiClient.defaultBaseUrl(protocol);
     }
     jdbc.update("""
-        insert into ai_config (name, base_url, api_key_encrypted, model, purpose, remark)
-        values (?, ?, ?, ?, ?, ?)
-        """, name, baseUrl, aes.encrypt(apiKey), model,
+        insert into ai_config (name, base_url, protocol, api_key_encrypted, model, purpose, remark)
+        values (?, ?, ?, ?, ?, ?, ?)
+        """, name, baseUrl, protocol, aes.encrypt(apiKey), model,
         String.valueOf(body.getOrDefault("purpose", "BOTH")),
         body.get("remark") == null ? null : String.valueOf(body.get("remark")));
     return ApiResponse.ok(null);
@@ -322,10 +328,11 @@ public class AdminStatsController {
     jdbc.update("""
         update ai_config
            set name = coalesce(?, name), base_url = coalesce(?, base_url),
-               model = coalesce(?, model),
+               protocol = coalesce(?, protocol), model = coalesce(?, model),
                purpose = coalesce(?, purpose), remark = ?
          where id = ?
-        """, body.get("name"), body.get("baseUrl"), body.get("model"), body.get("purpose"),
+        """, body.get("name"), body.get("baseUrl"), body.get("protocol"), body.get("model"),
+        body.get("purpose"),
         body.get("remark") == null ? null : String.valueOf(body.get("remark")), id);
     return ApiResponse.ok(null);
   }
@@ -351,6 +358,7 @@ public class AdminStatsController {
     String baseUrl = String.valueOf(body.getOrDefault("baseUrl", "")).trim();
     String apiKey = String.valueOf(body.getOrDefault("apiKey", "")).trim();
     String model = String.valueOf(body.getOrDefault("model", "")).trim();
+    String protocol = body.get("protocol") == null ? null : String.valueOf(body.get("protocol"));
 
     // 未显式传入时，回退到库里已保存的配置（前端默认走这条路径）
     if (body.get("id") != null) {
@@ -362,11 +370,14 @@ public class AdminStatsController {
       }
       if (id > 0) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-            "select base_url, api_key_encrypted, model from ai_config where id = ?", id);
+            "select base_url, protocol, api_key_encrypted, model from ai_config where id = ?", id);
         if (!rows.isEmpty()) {
           Map<String, Object> saved = rows.get(0);
           if (baseUrl.isEmpty()) {
             baseUrl = String.valueOf(saved.get("base_url"));
+          }
+          if (protocol == null || protocol.isBlank()) {
+            protocol = String.valueOf(saved.get("protocol"));
           }
           if (model.isEmpty()) {
             model = String.valueOf(saved.get("model"));
@@ -377,8 +388,9 @@ public class AdminStatsController {
         }
       }
     }
+    protocol = AiClient.normalizeProtocol(protocol);
     if (baseUrl.isEmpty()) {
-      baseUrl = "https://api.deepseek.com";
+      baseUrl = AiClient.defaultBaseUrl(protocol);
     }
     if (model.isEmpty()) {
       model = "deepseek-flash";
@@ -387,22 +399,34 @@ public class AdminStatsController {
     if (apiKey.isEmpty()) {
       throw new ApiException(400, "API Key 必填");
     }
+    boolean anthropic = AiClient.isAnthropic(protocol);
     long start = System.currentTimeMillis();
     try {
       SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
       factory.setConnectTimeout(Duration.ofSeconds(15));
       factory.setReadTimeout(Duration.ofSeconds(60));
-      Map<?, ?> response = RestClient.builder().requestFactory(factory).build()
-          .post().uri(baseUrl + "/chat/completions")
-          .header("Authorization", "Bearer " + apiKey)
-          .contentType(MediaType.APPLICATION_JSON)
-          .body(Map.of(
-              "model", model,
-              "messages", List.of(
-                  Map.of("role", "system", "content", "你是连通性测试助手。"),
-                  Map.of("role", "user", "content", "回复 ok 两个字即可。")),
-              "temperature", 0))
-          .retrieve().body(Map.class);
+      RestClient client = RestClient.builder().requestFactory(factory).build();
+      Map<?, ?> response = anthropic
+          ? client.post().uri(baseUrl + "/v1/messages")
+              .header("x-api-key", apiKey)
+              .header("anthropic-version", "2023-06-01")
+              .contentType(MediaType.APPLICATION_JSON)
+              .body(Map.of(
+                  "model", model,
+                  "max_tokens", 64,
+                  "messages", List.of(
+                      Map.of("role", "user", "content", "回复 ok 两个字即可。"))))
+              .retrieve().body(Map.class)
+          : client.post().uri(baseUrl + "/chat/completions")
+              .header("Authorization", "Bearer " + apiKey)
+              .contentType(MediaType.APPLICATION_JSON)
+              .body(Map.of(
+                  "model", model,
+                  "messages", List.of(
+                      Map.of("role", "system", "content", "你是连通性测试助手。"),
+                      Map.of("role", "user", "content", "回复 ok 两个字即可。")),
+                  "temperature", 0))
+              .retrieve().body(Map.class);
       Map<String, Object> result = new LinkedHashMap<>();
       result.put("success", true);
       result.put("latencyMs", System.currentTimeMillis() - start);

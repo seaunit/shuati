@@ -54,6 +54,7 @@ interface AiConfig {
   id: number;
   name: string;
   base_url: string;
+  protocol: string;
   model: string;
   purpose: string;
   status: string;
@@ -104,6 +105,7 @@ const questionForm = ref({
 const aiForm = ref({
   name: "DeepSeek 默认",
   baseUrl: "https://api.deepseek.com",
+  protocol: "OPENAI",
   apiKey: "",
   model: "deepseek-flash",
   remark: "",
@@ -151,10 +153,21 @@ async function loadAi() {
   aiForm.value = {
     name: aiConfig.value?.name ?? "DeepSeek 默认",
     baseUrl: aiConfig.value?.base_url ?? "https://api.deepseek.com",
+    protocol: aiConfig.value?.protocol ?? "OPENAI",
     apiKey: "",
     model: aiConfig.value?.model ?? "deepseek-flash",
     remark: "",
   };
+}
+
+function onProtocolChange() {
+  const knownDefaults = ["", "https://api.deepseek.com", "https://api.deepseek.com/anthropic"];
+  if (knownDefaults.includes(aiForm.value.baseUrl)) {
+    aiForm.value.baseUrl =
+      aiForm.value.protocol === "ANTHROPIC"
+        ? "https://api.deepseek.com/anthropic"
+        : "https://api.deepseek.com";
+  }
 }
 
 async function loadBilling() {
@@ -288,6 +301,7 @@ async function saveAiConfig() {
 async function testAi() {
   const payload: Record<string, unknown> = {
     baseUrl: aiForm.value.baseUrl || aiConfig.value?.base_url || "https://api.deepseek.com",
+    protocol: aiForm.value.protocol,
     model: aiForm.value.model,
   };
   if (aiConfig.value) payload.id = aiConfig.value.id;
@@ -573,6 +587,18 @@ watch(tab, refresh);
                 : '请输入 DeepSeek API Key'
             "
           />
+        </label>
+
+        <label class="block">
+          <span class="mb-1.5 block text-sm text-ink">协议</span>
+          <select
+            v-model="aiForm.protocol"
+            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+            @change="onProtocolChange"
+          >
+            <option value="OPENAI">OpenAI 兼容（/chat/completions）</option>
+            <option value="ANTHROPIC">Anthropic 兼容（/v1/messages）</option>
+          </select>
         </label>
 
         <label class="block">
