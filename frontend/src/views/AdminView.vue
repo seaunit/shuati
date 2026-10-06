@@ -72,6 +72,11 @@ const TABS = [
   { id: "billing", label: "计费" },
 ];
 
+const PROTOCOLS = [
+  { value: "OPENAI", label: "OpenAI 兼容", hint: "/chat/completions" },
+  { value: "ANTHROPIC", label: "Anthropic 兼容", hint: "/v1/messages" },
+];
+
 const tab = ref("dashboard");
 const notice = ref("");
 
@@ -614,17 +619,32 @@ watch(tab, refresh);
           />
         </label>
 
-        <label class="block">
+        <div>
           <span class="mb-1.5 block text-sm text-ink">协议<span class="text-rose"> *</span></span>
-          <select
-            v-model="aiForm.protocol"
-            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
-            @change="onProtocolChange"
-          >
-            <option value="OPENAI">OpenAI 兼容（/chat/completions）</option>
-            <option value="ANTHROPIC">Anthropic 兼容（/v1/messages）</option>
-          </select>
-        </label>
+          <div class="flex flex-wrap gap-3">
+            <label
+              v-for="item in PROTOCOLS"
+              :key="item.value"
+              class="flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition"
+              :class="
+                aiForm.protocol === item.value
+                  ? 'border-moss bg-moss/10 text-moss'
+                  : 'border-mist bg-paper text-ink/75 hover:border-moss/60'
+              "
+            >
+              <input
+                v-model="aiForm.protocol"
+                type="radio"
+                name="aiProtocol"
+                :value="item.value"
+                class="accent-moss"
+                @change="onProtocolChange"
+              />
+              <span>{{ item.label }}</span>
+              <span class="text-xs text-oat">{{ item.hint }}</span>
+            </label>
+          </div>
+        </div>
 
         <label class="block">
           <span class="mb-1.5 block text-sm text-ink">Base URL<span class="text-rose"> *</span></span>
