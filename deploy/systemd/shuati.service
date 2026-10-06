@@ -1,0 +1,22 @@
+# /etc/systemd/system/shuati.service
+[Unit]
+Description=Shuati Spring Boot backend
+After=network.target mysqld.service
+
+[Service]
+Type=simple
+User=shuati
+Group=shuati
+WorkingDirectory=/opt/shuati
+EnvironmentFile=/etc/shuati/env
+ExecStart=/usr/bin/java -Xms256m -Xmx1024m -jar /opt/shuati/shuati-backend.jar --spring.profiles.active=prod
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

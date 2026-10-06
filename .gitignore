@@ -1,9 +1,28 @@
-node_modules
-.next
-out
+# Java / Maven
+backend/target/
+*.class
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# 环境与密钥
 .env
 .env.local
 .env.*.local
-.netlify
 *.log
+
+# 从 Supabase 导出的原始备份与含真实用户数据的数据文件
+db/_supabase_raw/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 旧 Next.js 项目残留的构建产物（本地文件，不提交）
+node_modules/
+.next/
+.netlify/
+out/
 tsconfig.tsbuildinfo

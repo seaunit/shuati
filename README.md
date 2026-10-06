@@ -1,76 +1,85 @@
-# 刷题系统
+# 拾题（Vue 3 + Spring Boot 3 + MySQL）
 
-基于 Next.js 15 + Supabase 的刷题与题库管理系统，部署在 Netlify。
+刷题与题库管理系统，前端 Vue 3 + Vite，后端 Spring Boot 3 + MySQL 8.4，
+部署形态为可执行 jar + systemd + Nginx 反向代理（同域）。
 
-## 功能
+## 目录
 
-- 题库 / 单元分类，支持公共题库与账号私有题库
-- 单元题、多选题、简答题三种题型，图片题面展示
-- 选择题本地判分，简答题与解析按需调用 AI
-- 刷题进度记录、错题本、练习评分与练习记录
-- 题库导入：文档（Word / PPT / PDF）、粘贴正文、网页链接，后台异步解析
-- 后台管理：题库、单元、题目、账号、AI 模型配置、数据统计与 Token 用量
+```
+backend/   Spring Boot 后端（Java 17 + Maven + Flyway）
+frontend/  Vue 3 前端（Vite + Pinia + Tailwind 4）
+db/        Supabase → MySQL 迁移脚本与说明
+deploy/    Nginx / systemd / 构建部署脚本
+docs/      设计与实施计划
+```
 
 ## 本地开发
 
+前置：JDK 17、Maven、Node 20+、MySQL 8.4。
+
 ```bash
-npm install
-cp .env.example .env.local   # 填写 Supabase / DeepSeek 配置
-npm run dev
+# 1. 初始化数据库（开发库）
+mysql -u root -p < db/mysql/00_create_database.sql
+mysql -u root -p shuati < db/mysql/01_schema.sql
+mysql -u root -p shuati < db/_supabase_raw/02_data.sql   # 迁移的真实数据
+mysql -u root -p shuati < db/mysql/03_billing_seed.sql
+
+# 2. 配置密钥（已被 gitignore）
+cp deploy/env.example .env.local
+# 至少填 APP_AES_SECRET、DEEPSEEK_API_KEY、SHUATI_JWT_SECRET
+
+# 3. 启动后端
+mvn -f backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=local
+
+# 4. 启动前端
+npm --prefix frontend install
+npm --prefix frontend run dev
 ```
 
-访问 http://localhost:3000 。
+访问 http://localhost:5173 ，开发服务器会把 `/api` 代理到 `127.0.0.1:8080`。
+
+## 测试
+
+```bash
+mvn -f backend/pom.xml test        # 需要本机 MySQL 的 shuati_test 库
+npm --prefix frontend run build    # 类型检查 + 生产构建
+```
+
+## 生产部署
+
+```bash
+# 服务器准备
+sudo useradd -r -s /usr/sbin/nologin shuati
+sudo mkdir -p /opt/shuati /etc/shuati
+sudo cp deploy/env.example /etc/shuati/env   # 填入生产密钥
+
+# 构建并上传
+bash deploy/scripts/deploy.sh user@server
+
+# 服务器上启用
+sudo cp deploy/systemd/shuati.service /etc/systemd/system/
+sudo cp deploy/nginx/shuati.conf /etc/nginx/conf.d/
+sudo systemctl daemon-reload
+sudo systemctl enable --now shuati
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+首次启动会用 `SHUATI_BOOTSTRAP_ADMIN_EMAIL/PASSWORD` 创建管理员；
+账号已存在时只提升角色、不覆盖密码。
 
 ## 环境变量
 
-部署环境（Netlify）需要配置：
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `DEEPSEEK_API_KEY`
-- `DEEPSEEK_BASE_URL`
-- `DEEPSEEK_MODEL`
-- `APP_AES_SECRET`
-
-仓库内不保存任何密钥，`.env.local` 已被 `.gitignore` 忽略。
-
-## 维护脚本
-
-`scripts/` 下的脚本从环境变量读取凭据（也会自动加载 `.env.local`）：
-
-- `ensure-admin.cjs`：创建或重置管理员账号，需要 `ADMIN_PASSWORD`
-- `smoke-api.cjs`：本地接口冒烟测试，需要 `SMOKE_PASSWORD`
-- `introspect.cjs` / `apply-import-migration.cjs`：数据库结构检查与迁移，需要 `SUPABASE_DB_URL`
-
-## 数据库
-
-数据库迁移文件位于 `supabase/migrations/`。
-
-## 商业化（套餐与点数）
-
-公共题库与选择题本地判分永久免费，AI 能力按点数计费。
-
-**点数规则**（后台可调，见 `ai_price_rule`）：
-
-| 功能 | 消耗 |
+| 变量 | 说明 |
 | --- | --- |
-| 选择题 AI 解析 | 1 点 / 次 |
-| 简答题 / 伪代码 AI 判分 | 3 点 / 次 |
-| 文档 / 网页 / 正文解析生成题库 | 10 点 / 1 万字 |
+| `SHUATI_DB_URL` / `SHUATI_DB_USER` / `SHUATI_DB_PASSWORD` | 生产 MySQL 连接 |
+| `SHUATI_JWT_SECRET` | JWT 签名密钥，至少 32 字节 |
+| `APP_AES_SECRET` | AI Key 的 AES-256-GCM 密钥（Base64，32 字节），与旧系统一致 |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | AI 接入兜底配置 |
+| `SHUATI_BOOTSTRAP_ADMIN_EMAIL` / `SHUATI_BOOTSTRAP_ADMIN_PASSWORD` | 首次启动引导管理员 |
 
-**账户结构**：点数分两个桶，`MONTHLY`（订阅周期额度，到期重置）与 `BONUS`
-（加量包与赠送，不随周期重置）。扣费优先扣 `MONTHLY`，再扣 `BONUS`；
-AI 调用失败自动退点，导入任务按失败切片比例退点。
+## 关键实现说明
 
-**套餐**：免费版 / Plus / Pro / 机构版，档位、价格、额度与题库上限都存在
-`public.plan` 表，可在后台「套餐与点数」中直接调整。
-
-**支付**：订单表 `subscription_order` 已就绪，但**尚未接入在线支付**。
-当前流程是用户下单生成待支付订单，管理员确认收款后在后台点「已收款」，
-系统自动发放点数或开通套餐。接入微信 / 支付宝 / Stripe 时，只需在支付回调中
-调用同样的结算逻辑。
-
-**迁移**：`supabase/migrations/20261006000000_billing.sql`。
-该迁移尚未在此仓库的部署流程中自动执行，需手动应用；未应用时后端会自动
-跳过扣费（fail-open），AI 功能仍可用。
+- 认证：Spring Security 6 + JWT（httpOnly Cookie）+ CSRF 双重提交，旧 `$2a$10$` bcrypt 哈希可直接登录。
+- 点数：`MONTHLY` 优先、`BONUS` 兜底，扣费用 `SELECT ... FOR UPDATE` 保证原子；AI 失败自动退点。
+- 导入：`@Async` 线程池 + `import_task` 轮询，文档 5000 字分块、10 万字上限，失败切片按比例退点。
+- 数据差异：MySQL 无法实现 PostgreSQL 的部分唯一索引，公共题库名唯一与默认题库唯一由服务层保证。

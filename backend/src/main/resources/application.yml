@@ -1,0 +1,31 @@
+spring:
+  config:
+    import:
+      - optional:file:.env.local[.properties]
+      - optional:file:../.env.local[.properties]
+  application:
+    name: shuati
+  profiles:
+    active: local
+  jackson:
+    time-zone: UTC
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        http-only: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

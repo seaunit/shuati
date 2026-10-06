@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: ${SHUATI_DB_URL}
+    username: ${SHUATI_DB_USER}
+    password: ${SHUATI_DB_PASSWORD}
+  flyway:
+    baseline-on-migrate: false
+
+logging:
+  level:
+    root: INFO
+    com.shuati: INFO
+
+shuati:
+  cookie:
+    secure: true
+  jwt:
+    secret: ${SHUATI_JWT_SECRET}
+    ttl-seconds: 604800

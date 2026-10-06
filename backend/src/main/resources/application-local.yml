@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/shuati?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${SHUATI_DB_USER:root}
+    password: ${SHUATI_DB_PASSWORD:Root@2026}
+  flyway:
+    # 开发库已经用 db/mysql 脚本建好表，把基线定在 2，让 V3 继续执行
+    baseline-on-migrate: true
+    baseline-version: 2
+
+logging:
+  level:
+    com.shuati: DEBUG
+
+shuati:
+  cookie:
+    secure: false
+  jwt:
+    secret: ${SHUATI_JWT_SECRET:shuati-local-dev-secret-please-change-in-production-32bytes}
+    ttl-seconds: 604800
