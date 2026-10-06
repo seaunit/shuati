@@ -2,13 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Dumbbell, BookX, BarChart3, Settings, type LucideIcon } from "lucide-react";
+import {
+  Home,
+  Dumbbell,
+  BookX,
+  BarChart3,
+  Settings,
+  Coins,
+  type LucideIcon,
+} from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
   home: Home,
   practice: Dumbbell,
   "wrong-book": BookX,
   stats: BarChart3,
+  pricing: Coins,
   admin: Settings,
 };
 

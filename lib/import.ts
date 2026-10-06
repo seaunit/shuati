@@ -1,7 +1,15 @@
 import { getAdminClient } from "./supabase/admin";
-import { chatJson, logUsage } from "./ai";
+import { chatJson, logUsage, DEFAULT_MODEL } from "./ai";
 import { EXTRACT_SYSTEM } from "./prompts";
 import { normalizeAnswer, validateQuestion, type QuestionType } from "./rules";
+import {
+  consumePoints,
+  refundPoints,
+  getEntitlements,
+  assertBankQuota,
+  assertQuestionQuota,
+  InsufficientPointsError,
+} from "./points";
 
 const CHUNK_SIZE = 5000;
 const MAX_TEXT_LENGTH = 100_000;
@@ -123,7 +131,15 @@ async function extractChunk(text: string, userId: string): Promise<ImportItem[]>
     err = e instanceof Error ? e.message : String(e);
     throw new Error("AI 解析失败：" + err);
   } finally {
-    await logUsage(userId, "EXTRACT", "deepseek-chat", null, result, err, Date.now() - start);
+    await logUsage(
+      userId,
+      "EXTRACT",
+      result?.model ?? DEFAULT_MODEL,
+      null,
+      result,
+      err,
+      Date.now() - start,
+    );
   }
 }
 
@@ -181,6 +197,7 @@ export async function runImportTask(taskId: string) {
   const { data: task } = await admin.from("import_task").select("*").eq("id", taskId).single();
   if (!task) return;
 
+  let chargedCost = 0;
   try {
     if (task.phase === "PARSE") {
       await admin
@@ -192,6 +209,17 @@ export async function runImportTask(taskId: string) {
       const capped = text.length > MAX_TEXT_LENGTH ? text.slice(0, MAX_TEXT_LENGTH) : text;
       const chunks = splitText(capped, CHUNK_SIZE);
       if (chunks.length === 0) throw new Error("未提取到可解析的文本内容");
+
+      // 按实际解析字数扣点，扣费失败直接终止任务
+      const charged = await consumePoints(task.user_id, "EXTRACT", {
+        chars: capped.length,
+        refType: "import_task",
+        refId: taskId,
+      });
+      if (!charged.ok) {
+        throw new InsufficientPointsError(charged.cost, charged.available);
+      }
+      chargedCost = charged.cost;
 
       await admin
         .from("import_task")
@@ -227,6 +255,21 @@ export async function runImportTask(taskId: string) {
           error: chunkErrors.length ? chunkErrors.join("\n") : null,
         })
         .eq("id", taskId);
+
+      // 失败的切片没有产生有效 AI 结果，按比例退点
+      if (chunkErrors.length && chargedCost > 0) {
+        const refund = Math.floor((chargedCost * chunkErrors.length) / chunks.length);
+        if (refund > 0) {
+          await refundPoints(
+            task.user_id,
+            refund,
+            "AI_EXTRACT_PARTIAL_FAILED",
+            "import_task",
+            taskId,
+          );
+          chargedCost -= refund;
+        }
+      }
       return;
     }
 
@@ -257,6 +300,17 @@ export async function runImportTask(taskId: string) {
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    // 任务整体失败时退回已扣点数
+    if (chargedCost > 0) {
+      await refundPoints(
+        task.user_id,
+        chargedCost,
+        "AI_EXTRACT_FAILED",
+        "import_task",
+        taskId,
+      );
+      chargedCost = 0;
+    }
     await admin
       .from("import_task")
       .update({ status: "FAILED", error: msg })
@@ -276,6 +330,13 @@ async function importBankAndQuestions(
     .eq("id", task.user_id)
     .single();
   const ownerId = profile?.role === "ADMIN" ? null : task.user_id;
+
+  // 自建题库与题量受套餐额度限制（管理员创建的公共题库不受限）
+  if (ownerId) {
+    const ent = await getEntitlements(task.user_id);
+    await assertBankQuota(task.user_id, ent);
+    await assertQuestionQuota(task.user_id, ent, items.length);
+  }
 
   const { data: bank, error: bankErr } = await admin
     .from("bank")

@@ -9,12 +9,16 @@ export interface AiEndpoint {
 
 export interface AiResult {
   content: string;
+  model: string;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
 }
 
 export type AiPurpose = "JUDGE" | "EXPLAIN" | "EXTRACT" | "TEST";
+
+/** DeepSeek 当前主力模型；旧名 deepseek-chat 已停用 */
+export const DEFAULT_MODEL = "deepseek-flash";
 
 export async function resolveEndpoint(purpose: AiPurpose): Promise<AiEndpoint> {
   const admin = getAdminClient();
@@ -40,7 +44,7 @@ export async function resolveEndpoint(purpose: AiPurpose): Promise<AiEndpoint> {
   return {
     baseUrl: (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, ""),
     apiKey: key,
-    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    model: process.env.DEEPSEEK_MODEL || DEFAULT_MODEL,
   };
 }
 
@@ -95,6 +99,7 @@ async function chat(
     if (!content) throw new Error("AI 返回内容为空");
     return {
       content: jsonMode ? stripCodeFence(content) : content,
+      model: endpoint.model,
       promptTokens: json.usage?.prompt_tokens ?? 0,
       completionTokens: json.usage?.completion_tokens ?? 0,
       totalTokens: json.usage?.total_tokens ?? 0,

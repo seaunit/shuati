@@ -2,6 +2,11 @@ import { requireUser, ok, ApiError, handleError } from "@/lib/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { chatJson, logUsage } from "@/lib/ai";
 import { ESSAY_SYSTEM, essayUser } from "@/lib/prompts";
+import {
+  consumePoints,
+  refundPoints,
+  InsufficientPointsError,
+} from "@/lib/points";
 
 export async function POST(req: Request) {
   try {
@@ -32,6 +37,12 @@ export async function POST(req: Request) {
     let feedback: Record<string, unknown> | null = null;
     let degraded = false;
 
+    const charged = await consumePoints(user.id, "JUDGE", {
+      refType: "question",
+      refId: String(questionId),
+    });
+    if (!charged.ok) throw new InsufficientPointsError(charged.cost, charged.available);
+
     try {
       const start = Date.now();
       const res = await chatJson(
@@ -39,7 +50,7 @@ export async function POST(req: Request) {
         ESSAY_SYSTEM,
         essayUser(String(q.content), keyPoints, referenceAnswer, answer),
       );
-      await logUsage(user.id, "JUDGE", "deepseek-chat", questionId, res, null, Date.now() - start);
+      await logUsage(user.id, "JUDGE", res.model, questionId, res, null, Date.now() - start);
       const parsed = JSON.parse(res.content) as {
         verdict?: string;
         score?: number;
@@ -57,8 +68,16 @@ export async function POST(req: Request) {
         feedback: parsed.feedback ?? "",
       };
     } catch (e) {
+      await refundPoints(
+        user.id,
+        charged.cost,
+        "AI_JUDGE_FAILED",
+        "question",
+        String(questionId),
+      );
       degraded = true;
       feedback = { feedback: "AI 判分暂不可用，请对照参考答案自行评估。" };
+      console.error("[submit-essay] AI 判分失败:", e instanceof Error ? e.message : String(e));
     }
 
     const { data: rec, error } = await admin

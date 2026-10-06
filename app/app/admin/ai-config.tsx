@@ -9,7 +9,7 @@ interface Cfg { id: number; name: string; base_url: string; model: string; purpo
 export default function AiConfigTab() {
   const [cfgs, setCfgs] = useState<Cfg[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", baseUrl: "https://api.deepseek.com", apiKey: "", model: "deepseek-chat", purpose: "BOTH", remark: "" });
+  const [form, setForm] = useState({ name: "", baseUrl: "https://api.deepseek.com", apiKey: "", model: "deepseek-flash", purpose: "BOTH", remark: "" });
   const [showForm, setShowForm] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState("");
@@ -18,7 +18,7 @@ export default function AiConfigTab() {
   function load() { api<Cfg[]>("/api/admin/ai-config").then(setCfgs).catch((e) => setError(e.message)); }
   useEffect(load, []);
 
-  function openNew() { setEditingId(null); setForm({ name: "", baseUrl: "https://api.deepseek.com", apiKey: "", model: "deepseek-chat", purpose: "BOTH", remark: "" }); setShowForm(true); }
+  function openNew() { setEditingId(null); setForm({ name: "", baseUrl: "https://api.deepseek.com", apiKey: "", model: "deepseek-flash", purpose: "BOTH", remark: "" }); setShowForm(true); }
   function openEdit(c: Cfg) { setEditingId(c.id); setForm({ name: c.name, baseUrl: c.base_url, apiKey: "", model: c.model, purpose: c.purpose, remark: c.remark ?? "" }); setShowForm(true); }
 
   async function save() {

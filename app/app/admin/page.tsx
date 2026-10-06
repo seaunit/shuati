@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Library, Layers, FileQuestion, Upload, Users, KeyRound, MessageSquareText } from "lucide-react";
+import {
+  LayoutDashboard,
+  Library,
+  Layers,
+  FileQuestion,
+  Upload,
+  Users,
+  KeyRound,
+  MessageSquareText,
+  Coins,
+} from "lucide-react";
 import { api } from "@/lib/client-api";
 import Dashboard from "./dashboard";
 import BanksTab from "./banks";
@@ -11,6 +21,7 @@ import ImportTab from "./import";
 import UsersTab from "./users";
 import AiConfigTab from "./ai-config";
 import AppealsTab from "./appeals";
+import BillingTab from "./billing";
 
 export default function AdminPage() {
   const [tab, setTab] = useState("dashboard");
@@ -31,6 +42,7 @@ export default function AdminPage() {
     ...(isAdmin
       ? [
           { id: "users", label: "账号管理", icon: Users },
+          { id: "billing", label: "套餐与点数", icon: Coins },
           { id: "ai", label: "模型与 API Key", icon: KeyRound },
           { id: "appeals", label: "申诉处理", icon: MessageSquareText },
         ]
@@ -66,6 +78,7 @@ export default function AdminPage() {
           {tab === "questions" && <QuestionsTab isAdmin={isAdmin} />}
           {tab === "import" && <ImportTab />}
           {isAdmin && tab === "users" && <UsersTab />}
+          {isAdmin && tab === "billing" && <BillingTab />}
           {isAdmin && tab === "ai" && <AiConfigTab />}
           {isAdmin && tab === "appeals" && <AppealsTab />}
         </>

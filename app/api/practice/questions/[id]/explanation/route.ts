@@ -2,6 +2,11 @@ import { requireUser, ok, ApiError, handleError } from "@/lib/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { chatText, logUsage } from "@/lib/ai";
 import { EXPLAIN_SYSTEM, explainUser } from "@/lib/prompts";
+import {
+  consumePoints,
+  refundPoints,
+  InsufficientPointsError,
+} from "@/lib/points";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -23,6 +28,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return ok({ explanation: q.explanation });
     }
 
+    const charged = await consumePoints(user.id, "EXPLAIN", {
+      refType: "question",
+      refId: String(questionId),
+    });
+    if (!charged.ok) throw new InsufficientPointsError(charged.cost, charged.available);
+
     const optionsText = JSON.stringify(q.options ?? []);
     const start = Date.now();
     try {
@@ -31,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         EXPLAIN_SYSTEM,
         explainUser(String(q.content), optionsText, String(q.answer), selected, correct),
       );
-      await logUsage(user.id, "EXPLAIN", "deepseek-chat", questionId, res, null, Date.now() - start);
+      await logUsage(user.id, "EXPLAIN", res.model, questionId, res, null, Date.now() - start);
       const generated = res.content;
       await admin
         .from("question")
@@ -40,7 +51,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         .is("explanation", null);
       return ok({ explanation: generated });
     } catch (e) {
-      await logUsage(user.id, "EXPLAIN", "deepseek-chat", questionId, null, String(e), Date.now() - start);
+      await refundPoints(
+        user.id,
+        charged.cost,
+        "AI_EXPLAIN_FAILED",
+        "question",
+        String(questionId),
+      );
+      await logUsage(user.id, "EXPLAIN", "unknown", questionId, null, String(e), Date.now() - start);
       throw new ApiError(502, "AI 解析失败，请稍后重试");
     }
   } catch (e) {
