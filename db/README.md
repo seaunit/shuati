@@ -24,19 +24,19 @@
 $mysql = 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe'
 
 & $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 `
-  --execute="source E:/CodexProject/shuati2/shuati3/db/mysql/00_create_database.sql"
+  --execute="source E:/CodexProject/shuati2/db/mysql/00_create_database.sql"
 
 & $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
-  --execute="source E:/CodexProject/shuati2/shuati3/db/mysql/01_schema.sql"
+  --execute="source E:/CodexProject/shuati2/db/mysql/01_schema.sql"
 
 & $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
-  --execute="source E:/CodexProject/shuati2/shuati3/db/_supabase_raw/02_data.sql"
+  --execute="source E:/CodexProject/shuati2/db/_supabase_raw/02_data.sql"
 
 & $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
-  --execute="source E:/CodexProject/shuati2/shuati3/db/mysql/03_billing_seed.sql"
+  --execute="source E:/CodexProject/shuati2/db/mysql/03_billing_seed.sql"
 
 & $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
-  --execute="source E:/CodexProject/shuati2/shuati3/db/mysql/99_verify.sql"
+  --execute="source E:/CodexProject/shuati2/db/mysql/99_verify.sql"
 ```
 
 ## 已迁移数据
