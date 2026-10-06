@@ -1,5 +1,6 @@
 import { requireUser, ok, ApiError, handleError } from "@/lib/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { getEntitlements, assertBankQuota } from "@/lib/points";
 
 export async function GET() {
   try {
@@ -58,7 +59,12 @@ export async function POST(req: Request) {
     const name = String(body.name ?? "").trim();
     if (!name) throw new ApiError(400, "题库名不能为空");
     const row: Record<string, unknown> = { name, description: body.description ?? null };
-    if (profile.role !== "ADMIN") row.owner_id = user.id;
+    if (profile.role !== "ADMIN") {
+      // 自建题库数量受套餐额度限制
+      const ent = await getEntitlements(user.id);
+      await assertBankQuota(user.id, ent);
+      row.owner_id = user.id;
+    }
     const { error } = await admin.from("bank").insert(row as any);
     if (error) {
       if (error.message.toLowerCase().includes("duplicate")) throw new ApiError(400, "题库名已存在");
