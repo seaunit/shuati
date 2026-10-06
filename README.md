@@ -15,7 +15,7 @@ docs/      设计与实施计划
 
 ## 本地开发
 
-前置：JDK 17、Maven、Node 20+、MySQL 8.4。
+前置：JDK 17、Maven、Node 20+、MySQL 8.4、Redis 6+。
 
 ```bash
 # 1. 初始化数据库（开发库）
@@ -76,10 +76,13 @@ sudo nginx -t && sudo systemctl reload nginx
 | `APP_AES_SECRET` | AI Key 的 AES-256-GCM 密钥（Base64，32 字节），与旧系统一致 |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | AI 接入兜底配置 |
 | `SHUATI_BOOTSTRAP_ADMIN_EMAIL` / `SHUATI_BOOTSTRAP_ADMIN_PASSWORD` | 首次启动引导管理员 |
+| `SHUATI_REDIS_HOST` / `SHUATI_REDIS_PORT` / `SHUATI_REDIS_PASSWORD` / `SHUATI_REDIS_DB` | Redis 连接（验证码存储与限流） |
+| `SHUATI_CAPTCHA_SECRET` | 验证码加盐哈希密钥 |
 
 ## 关键实现说明
 
 - 认证：Spring Security 6 + JWT（httpOnly Cookie）+ CSRF 双重提交，旧 `$2a$10$` bcrypt 哈希可直接登录。
 - 点数：`MONTHLY` 优先、`BONUS` 兜底，扣费用 `SELECT ... FOR UPDATE` 保证原子；AI 失败自动退点。
 - 导入：`@Async` 线程池 + `import_task` 轮询，文档 5000 字分块、10 万字上限，失败切片按比例退点。
+- 验证码：服务端生成、Redis 存储（`captcha:{ticket}`，TTL 自动过期）、一次性校验、错误统一提示、IP/设备限流；默认加盐哈希存储，答案永不返回前端。详见 `docs/验证码安全说明.md`。
 - 数据差异：MySQL 无法实现 PostgreSQL 的部分唯一索引，公共题库名唯一与默认题库唯一由服务层保证。

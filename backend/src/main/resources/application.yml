@@ -16,6 +16,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${SHUATI_REDIS_HOST:127.0.0.1}
+      port: ${SHUATI_REDIS_PORT:6379}
+      password: ${SHUATI_REDIS_PASSWORD:}
+      database: ${SHUATI_REDIS_DB:0}
+      timeout: 3s
 
 server:
   port: 8080
@@ -29,3 +36,19 @@ management:
     web:
       exposure:
         include: health
+
+shuati:
+  captcha:
+    # 图形验证码有效期（秒），写入 Redis TTL 自动过期
+    ttl-seconds: 120
+    # 单个 ticket 允许的最大校验次数，超过直接作废
+    max-attempts: 5
+    code-length: 4
+    width: 150
+    height: 48
+    # true=加盐哈希存储（默认，推荐）；false=明文存储
+    hash-store: true
+    secret: ${SHUATI_CAPTCHA_SECRET:shuati-captcha-secret-please-change}
+    # IP / 设备维度限流：每分钟最多申请次数
+    ip-limit-per-minute: 20
+    device-limit-per-minute: 20

@@ -8,6 +8,13 @@ spring:
     baseline-version: 2
   jpa:
     open-in-view: false
+  data:
+    redis:
+      host: ${SHUATI_REDIS_HOST:127.0.0.1}
+      port: ${SHUATI_REDIS_PORT:6379}
+      # 用 1 号库做测试，避免污染本地 0 号库
+      database: 1
+      timeout: 3s
 
 shuati:
   cookie:
@@ -15,3 +22,11 @@ shuati:
   jwt:
     secret: shuati-test-secret-please-change-in-production-32bytes
     ttl-seconds: 604800
+  captcha:
+    ttl-seconds: 120
+    max-attempts: 5
+    code-length: 4
+    hash-store: false
+    secret: test-captcha-secret
+    ip-limit-per-minute: 5
+    device-limit-per-minute: 5
