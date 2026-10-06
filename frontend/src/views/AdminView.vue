@@ -101,7 +101,13 @@ const questionForm = ref({
   difficulty: "MEDIUM",
   explanation: "",
 });
-const aiForm = ref({ name: "DeepSeek 默认", apiKey: "", model: "deepseek-flash", remark: "" });
+const aiForm = ref({
+  name: "DeepSeek 默认",
+  baseUrl: "https://api.deepseek.com",
+  apiKey: "",
+  model: "deepseek-flash",
+  remark: "",
+});
 
 async function loadDashboard() {
   overview.value = await api("/api/admin/stats/overview");
@@ -144,6 +150,7 @@ async function loadAi() {
   aiConfig.value = list[0] ?? null;
   aiForm.value = {
     name: aiConfig.value?.name ?? "DeepSeek 默认",
+    baseUrl: aiConfig.value?.base_url ?? "https://api.deepseek.com",
     apiKey: "",
     model: aiConfig.value?.model ?? "deepseek-flash",
     remark: "",
@@ -280,7 +287,7 @@ async function saveAiConfig() {
 
 async function testAi() {
   const payload: Record<string, unknown> = {
-    baseUrl: aiConfig.value?.base_url ?? "https://api.deepseek.com",
+    baseUrl: aiForm.value.baseUrl || aiConfig.value?.base_url || "https://api.deepseek.com",
     model: aiForm.value.model,
   };
   if (aiConfig.value) payload.id = aiConfig.value.id;
@@ -569,6 +576,15 @@ watch(tab, refresh);
         </label>
 
         <label class="block">
+          <span class="mb-1.5 block text-sm text-ink">Base URL</span>
+          <input
+            v-model="aiForm.baseUrl"
+            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+            placeholder="https://api.deepseek.com"
+          />
+        </label>
+
+        <label class="block">
           <span class="mb-1.5 block text-sm text-ink">模型</span>
           <input
             v-model="aiForm.model"
@@ -593,7 +609,7 @@ watch(tab, refresh);
         </div>
 
         <p class="text-xs text-oat">
-          Base URL 固定为 https://api.deepseek.com；保存后会自动启用该配置。
+          默认 https://api.deepseek.com，可改为兼容 OpenAI 协议的其它地址；保存后立即生效。
         </p>
       </div>
     </section>

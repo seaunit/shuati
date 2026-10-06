@@ -250,6 +250,7 @@ public class AdminStatsController {
   @PutMapping("/api/admin/ai-config")
   public ApiResponse<Void> saveAiConfig(@RequestBody Map<String, Object> body) {
     String name = String.valueOf(body.getOrDefault("name", "")).trim();
+    String baseUrl = body.get("baseUrl") == null ? "" : String.valueOf(body.get("baseUrl")).trim();
     String apiKey = body.get("apiKey") == null ? "" : String.valueOf(body.get("apiKey")).trim();
     String model = String.valueOf(body.getOrDefault("model", "")).trim();
     String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
@@ -258,6 +259,10 @@ public class AdminStatsController {
     }
     if (model.isEmpty()) {
       model = "deepseek-flash";
+    }
+    baseUrl = baseUrl.replaceAll("/+$", "");
+    if (baseUrl.isEmpty()) {
+      baseUrl = "https://api.deepseek.com";
     }
 
     List<Map<String, Object>> rows = jdbc.queryForList(
@@ -268,17 +273,17 @@ public class AdminStatsController {
       }
       jdbc.update("""
           insert into ai_config (name, base_url, api_key_encrypted, model, purpose, status, remark)
-          values (?, 'https://api.deepseek.com', ?, ?, 'BOTH', 'ENABLED', ?)
-          """, name, aes.encrypt(apiKey), model, remark);
+          values (?, ?, ?, ?, 'BOTH', 'ENABLED', ?)
+          """, name, baseUrl, aes.encrypt(apiKey), model, remark);
       return ApiResponse.ok(null);
     }
 
     long id = ((Number) rows.get(0).get("id")).longValue();
     jdbc.update("""
         update ai_config
-           set name = ?, model = ?, status = 'ENABLED', remark = ?
+           set name = ?, base_url = ?, model = ?, status = 'ENABLED', remark = ?
          where id = ?
-        """, name, model, remark, id);
+        """, name, baseUrl, model, remark, id);
     if (!apiKey.isEmpty()) {
       jdbc.update("update ai_config set api_key_encrypted = ? where id = ?",
           aes.encrypt(apiKey), id);
@@ -289,15 +294,20 @@ public class AdminStatsController {
   @PostMapping("/api/admin/ai-config")
   public ApiResponse<Void> createAiConfig(@RequestBody Map<String, Object> body) {
     String name = String.valueOf(body.getOrDefault("name", "")).trim();
+    String baseUrl = body.get("baseUrl") == null ? "" : String.valueOf(body.get("baseUrl")).trim();
     String apiKey = String.valueOf(body.getOrDefault("apiKey", "")).trim();
     String model = String.valueOf(body.getOrDefault("model", "")).trim();
     if (name.isEmpty() || apiKey.isEmpty() || model.isEmpty()) {
       throw new ApiException(400, "名称、API Key、模型均必填");
     }
+    baseUrl = baseUrl.replaceAll("/+$", "");
+    if (baseUrl.isEmpty()) {
+      baseUrl = "https://api.deepseek.com";
+    }
     jdbc.update("""
         insert into ai_config (name, base_url, api_key_encrypted, model, purpose, remark)
-        values (?, 'https://api.deepseek.com', ?, ?, ?, ?)
-        """, name, aes.encrypt(apiKey), model,
+        values (?, ?, ?, ?, ?, ?)
+        """, name, baseUrl, aes.encrypt(apiKey), model,
         String.valueOf(body.getOrDefault("purpose", "BOTH")),
         body.get("remark") == null ? null : String.valueOf(body.get("remark")));
     return ApiResponse.ok(null);
@@ -311,10 +321,11 @@ public class AdminStatsController {
     }
     jdbc.update("""
         update ai_config
-           set name = coalesce(?, name), model = coalesce(?, model),
+           set name = coalesce(?, name), base_url = coalesce(?, base_url),
+               model = coalesce(?, model),
                purpose = coalesce(?, purpose), remark = ?
          where id = ?
-        """, body.get("name"), body.get("model"), body.get("purpose"),
+        """, body.get("name"), body.get("baseUrl"), body.get("model"), body.get("purpose"),
         body.get("remark") == null ? null : String.valueOf(body.get("remark")), id);
     return ApiResponse.ok(null);
   }
