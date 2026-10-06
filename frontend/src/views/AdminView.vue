@@ -541,12 +541,8 @@ watch(tab, refresh);
       <div class="space-y-4 rounded-2xl border border-mist bg-white/70 p-5">
         <div class="flex items-center justify-between">
           <h2 class="font-medium text-ink">AI 配置</h2>
-          <span
-            v-if="aiConfig"
-            class="rounded-full px-2.5 py-0.5 text-xs"
-            :class="aiConfig.status === 'ENABLED' ? 'bg-moss/15 text-moss' : 'bg-rose/15 text-rose'"
-          >
-            {{ aiConfig.status === "ENABLED" ? "已启用" : "未启用" }}
+          <span v-if="aiConfig" class="rounded-full bg-moss/15 px-2.5 py-0.5 text-xs text-moss">
+            使用中
           </span>
         </div>
 

@@ -102,10 +102,11 @@ public class AiClient {
   }
 
   public AiEndpoint resolve(String purpose) {
+    // 单条配置模型：不再按 status 过滤，库里这一条就是当前生效配置
     List<Map<String, Object>> rows = jdbc.queryForList("""
         select base_url, api_key_encrypted, model, purpose
           from ai_config
-         where status = 'ENABLED' and purpose in (?, 'BOTH')
+         where purpose in (?, 'BOTH')
          order by id asc
          limit 20
         """, purpose);
