@@ -1,0 +1,9 @@
+# Normalize line endings in the repository; working tree line endings stay native.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
