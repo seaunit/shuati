@@ -27,17 +27,35 @@ export const useAuthStore = defineStore("auth", {
         this.loaded = true;
       }
     },
-    async login(email: string, password: string) {
+    async login(
+      email: string,
+      password: string,
+      captcha: { ticket: string; code: string },
+    ) {
       this.user = await api<User>("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          captchaTicket: captcha.ticket,
+          captchaCode: captcha.code,
+        }),
       });
       this.loaded = true;
     },
-    async register(email: string, password: string) {
+    async register(
+      email: string,
+      password: string,
+      captcha: { ticket: string; code: string },
+    ) {
       this.user = await api<User>("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          captchaTicket: captcha.ticket,
+          captchaCode: captcha.code,
+        }),
       });
       this.loaded = true;
     },

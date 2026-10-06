@@ -3,6 +3,7 @@ package com.shuati.auth;
 import com.shuati.auth.dto.LoginRequest;
 import com.shuati.auth.dto.RegisterRequest;
 import com.shuati.billing.PointAccountService;
+import com.shuati.captcha.CaptchaService;
 import com.shuati.common.ApiException;
 import com.shuati.user.Profile;
 import com.shuati.user.ProfileRepository;
@@ -23,9 +24,12 @@ public class AuthService {
   private final PasswordEncoder passwordEncoder;
   private final JwtService jwtService;
   private final PointAccountService pointAccounts;
+  private final CaptchaService captchaService;
 
   @Transactional
   public LoginResult register(RegisterRequest request) {
+    // 先校验图形验证码：验证码不过，直接返回统一提示，避免账号被脚本探测/批量注册
+    verifyCaptcha(request.captchaTicket(), request.captchaCode());
     String email = normalizeEmail(request.email());
     if (profiles.findByEmail(email).isPresent()) {
       throw new ApiException(400, "该邮箱已注册，请直接登录");
@@ -47,6 +51,8 @@ public class AuthService {
 
   @Transactional
   public LoginResult login(LoginRequest request) {
+    // 先校验图形验证码：验证码不过，直接返回统一提示，避免撞库与账号探测
+    verifyCaptcha(request.captchaTicket(), request.captchaCode());
     String email = normalizeEmail(request.email());
     Profile profile = profiles.findByEmail(email)
         .orElseThrow(() -> new ApiException(401, "邮箱或密码错误"));
@@ -62,6 +68,11 @@ public class AuthService {
     profile.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
     profiles.save(profile);
     return new LoginResult(profile, jwtService.issue(profile.getId(), profile.getRole()));
+  }
+
+  private void verifyCaptcha(String ticket, String code) {
+    // 统一错误提示由 CaptchaService 抛出，这里不区分具体失败原因
+    captchaService.verify(ticket, code);
   }
 
   private String normalizeEmail(String email) {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Leaf, Loader2 } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
+import { api } from "@/api/client";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -14,6 +15,24 @@ const password = ref("");
 const confirm = ref("");
 const loading = ref(false);
 const error = ref("");
+const captchaTicket = ref("");
+const captchaImage = ref("");
+const captchaCode = ref("");
+const captchaLoading = ref(false);
+
+async function loadCaptcha() {
+  captchaLoading.value = true;
+  try {
+    const data = await api<{ ticket: string; imageBase64: string }>("/captcha/image");
+    captchaTicket.value = data.ticket;
+    captchaImage.value = data.imageBase64;
+    captchaCode.value = "";
+  } catch {
+    captchaImage.value = "";
+  } finally {
+    captchaLoading.value = false;
+  }
+}
 
 async function submit() {
   error.value = "";
@@ -25,21 +44,31 @@ async function submit() {
     error.value = "两次输入的密码不一致";
     return;
   }
+  if (!captchaCode.value.trim()) {
+    error.value = "请输入验证码";
+    return;
+  }
   loading.value = true;
   try {
+    const captcha = { ticket: captchaTicket.value, code: captchaCode.value.trim() };
     if (mode.value === "login") {
-      await auth.login(email.value.trim(), password.value);
+      await auth.login(email.value.trim(), password.value, captcha);
     } else {
-      await auth.register(email.value.trim(), password.value);
+      await auth.register(email.value.trim(), password.value, captcha);
     }
     const next = typeof route.query.next === "string" ? route.query.next : "/app";
     await router.push(next);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "操作失败，请重试";
+    // 验证码一次性：失败后必须换一张，避免用户拿旧码反复试
+    await loadCaptcha();
   } finally {
     loading.value = false;
   }
 }
+
+onMounted(loadCaptcha);
+watch(mode, loadCaptcha);
 </script>
 
 <template>
@@ -104,6 +133,38 @@ async function submit() {
             class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 outline-none transition focus:border-moss"
             placeholder="再次输入密码"
           />
+        </label>
+
+        <label class="mb-5 block">
+          <span class="mb-1.5 block text-sm text-ink">验证码</span>
+          <div class="flex items-center gap-3">
+            <input
+              v-model="captchaCode"
+              maxlength="5"
+              autocomplete="off"
+              class="w-full flex-1 rounded-xl border border-mist bg-paper px-4 py-2.5 uppercase tracking-widest outline-none transition focus:border-moss"
+              placeholder="请输入图中字符"
+            />
+            <button
+              type="button"
+              class="shrink-0 overflow-hidden rounded-xl border border-mist bg-paper transition hover:border-moss"
+              title="点击刷新验证码"
+              @click="loadCaptcha"
+            >
+              <img
+                v-if="captchaImage"
+                :src="captchaImage"
+                alt="验证码"
+                class="block h-[44px] w-[120px] object-cover"
+              />
+              <span
+                v-else
+                class="flex h-[44px] w-[120px] items-center justify-center text-xs text-oat"
+              >
+                {{ captchaLoading ? "加载中" : "点击刷新" }}
+              </span>
+            </button>
+          </div>
         </label>
 
         <p v-if="error" class="mb-4 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">

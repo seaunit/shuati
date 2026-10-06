@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shuati.captcha.CaptchaImageResponse;
+import com.shuati.captcha.CaptchaService;
+import com.shuati.captcha.CaptchaStore;
 import jakarta.servlet.http.Cookie;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,6 +40,12 @@ class AuthFlowTest {
 
   @Autowired
   JdbcTemplate jdbc;
+
+  @Autowired
+  CaptchaService captchaService;
+
+  @Autowired
+  CaptchaStore captchaStore;
 
   @Test
   void registerCreatesPointAccountAndAllowsMe() throws Exception {
@@ -119,11 +128,34 @@ class AuthFlowTest {
         .andExpect(jsonPath("$.message").value("请先登录"));
   }
 
+  @Test
+  void registerWithoutCaptchaIsRejected() throws Exception {
+    String email = "t-" + UUID.randomUUID() + "@example.com";
+    mvc.perform(post("/api/auth/register")
+            .header("X-Requested-With", "ShuatiApp")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"email\":\"" + email + "\",\"password\":\"secret123\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("验证码错误或已过期"));
+  }
+
   private String credentials(String email, String password) throws Exception {
+    // 每次请求都带一张新的有效验证码（随机 IP/设备，避免触发限流）
+    String ip = "10." + random(255) + "." + random(255) + "." + random(255);
+    CaptchaImageResponse captcha = captchaService.generate(ip, "device-" + UUID.randomUUID());
+    String code = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
+        .path("code").asText();
+
     Map<String, String> body = new HashMap<>();
     body.put("email", email);
     body.put("password", password);
+    body.put("captchaTicket", captcha.ticket());
+    body.put("captchaCode", code);
     return objectMapper.writeValueAsString(body);
+  }
+
+  private int random(int bound) {
+    return java.util.concurrent.ThreadLocalRandom.current().nextInt(bound);
   }
 }
 

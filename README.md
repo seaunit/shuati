@@ -79,6 +79,8 @@ sudo nginx -t && sudo systemctl reload nginx
 | `SHUATI_REDIS_HOST` / `SHUATI_REDIS_PORT` / `SHUATI_REDIS_PASSWORD` / `SHUATI_REDIS_DB` | Redis 连接（验证码存储与限流） |
 | `SHUATI_CAPTCHA_SECRET` | 验证码加盐哈希密钥 |
 
+登录与注册已强制校验图形验证码（`/captcha/image` + `/captcha/verify`），详细说明见 `docs/验证码安全说明.md`。
+
 ## 关键实现说明
 
 - 认证：Spring Security 6 + JWT（httpOnly Cookie）+ CSRF 双重提交，旧 `$2a$10$` bcrypt 哈希可直接登录。
