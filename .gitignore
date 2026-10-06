@@ -20,7 +20,7 @@ db/_supabase_raw/
 .vscode/
 *.iml
 
-# 旧 Next.js 项目残留的构建产物（本地文件，不提交）
+# 通用构建产物与临时文件
 node_modules/
 .next/
 .netlify/
