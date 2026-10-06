@@ -83,7 +83,7 @@ const units = ref<Unit[]>([]);
 const questions = ref<Question[]>([]);
 const users = ref<User[]>([]);
 const appeals = ref<Appeal[]>([]);
-const aiConfigs = ref<AiConfig[]>([]);
+const aiConfig = ref<AiConfig | null>(null);
 const billing = ref<Record<string, any> | null>(null);
 
 const selectedBank = ref<number | null>(null);
@@ -101,7 +101,7 @@ const questionForm = ref({
   difficulty: "MEDIUM",
   explanation: "",
 });
-const aiForm = ref({ name: "", apiKey: "", model: "deepseek-flash", purpose: "BOTH", remark: "" });
+const aiForm = ref({ name: "DeepSeek 默认", apiKey: "", model: "deepseek-flash", remark: "" });
 
 async function loadDashboard() {
   overview.value = await api("/api/admin/stats/overview");
@@ -140,7 +140,14 @@ async function loadAppeals() {
 }
 
 async function loadAi() {
-  aiConfigs.value = await api<AiConfig[]>("/api/admin/ai-config");
+  const list = await api<AiConfig[]>("/api/admin/ai-config");
+  aiConfig.value = list[0] ?? null;
+  aiForm.value = {
+    name: aiConfig.value?.name ?? "DeepSeek 默认",
+    apiKey: "",
+    model: aiConfig.value?.model ?? "deepseek-flash",
+    remark: "",
+  };
 }
 
 async function loadBilling() {
@@ -265,35 +272,22 @@ async function resolveAppeal(appeal: Appeal, status: "RESOLVED" | "REJECTED") {
   await loadAppeals();
 }
 
-async function createAiConfig() {
-  await api("/api/admin/ai-config", { method: "POST", body: JSON.stringify(aiForm.value) });
-  aiForm.value = { name: "", apiKey: "", model: "deepseek-flash", purpose: "BOTH", remark: "" };
+async function saveAiConfig() {
+  await api("/api/admin/ai-config", { method: "PUT", body: JSON.stringify(aiForm.value) });
+  notice.value = "AI 配置已保存并启用";
   await loadAi();
 }
 
-async function toggleAi(config: AiConfig) {
-  await api(`/api/admin/ai-config/${config.id}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status: config.status === "ENABLED" ? "DISABLED" : "ENABLED" }),
-  });
-  await loadAi();
-}
-
-async function deleteAi(config: AiConfig) {
-  if (!confirm("确认删除该 AI 配置？")) return;
-  await api(`/api/admin/ai-config/${config.id}`, { method: "DELETE" });
-  await loadAi();
-}
-
-async function testAi(config: AiConfig) {
-  const apiKey = prompt("请输入该配置的 API Key 进行连通性测试");
-  if (!apiKey) return;
+async function testAi() {
+  const payload: Record<string, unknown> = {
+    baseUrl: aiConfig.value?.base_url ?? "https://api.deepseek.com",
+    model: aiForm.value.model,
+  };
+  if (aiConfig.value) payload.id = aiConfig.value.id;
+  if (aiForm.value.apiKey) payload.apiKey = aiForm.value.apiKey;
   const result = await api<{ success: boolean; latencyMs: number; error?: string }>(
     "/api/admin/ai-config/test",
-    {
-      method: "POST",
-      body: JSON.stringify({ baseUrl: config.base_url, apiKey, model: config.model }),
-    },
+    { method: "POST", body: JSON.stringify(payload) },
   );
   notice.value = result.success ? `连通正常（${result.latencyMs}ms）` : `失败：${result.error}`;
 }
@@ -544,24 +538,67 @@ watch(tab, refresh);
     </section>
 
     <section v-else-if="tab === 'ai'" class="space-y-4">
-      <div class="space-y-2 rounded-2xl border border-mist bg-white/70 p-4">
-        <input v-model="aiForm.name" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="配置名称" />
-        <input v-model="aiForm.apiKey" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="DeepSeek API Key" />
-        <input v-model="aiForm.model" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="模型名" />
-        <button class="rounded-xl bg-ink px-4 py-2 text-sm text-white" @click="createAiConfig">新增配置</button>
-      </div>
-      <div class="space-y-2">
-        <div v-for="config in aiConfigs" :key="config.id" class="flex items-center justify-between rounded-xl border border-mist bg-white/70 px-4 py-3 text-sm">
-          <div>
-            <p class="text-ink">{{ config.name }} · {{ config.model }}</p>
-            <p class="text-xs text-oat">{{ config.base_url }} · {{ config.api_key_masked }} · {{ config.status }}</p>
-          </div>
-          <div class="flex gap-2 text-xs">
-            <button class="text-moss" @click="testAi(config)">测试</button>
-            <button class="text-moss" @click="toggleAi(config)">启停</button>
-            <button class="text-rose" @click="deleteAi(config)">删除</button>
-          </div>
+      <div class="space-y-4 rounded-2xl border border-mist bg-white/70 p-5">
+        <div class="flex items-center justify-between">
+          <h2 class="font-medium text-ink">AI 配置</h2>
+          <span
+            v-if="aiConfig"
+            class="rounded-full px-2.5 py-0.5 text-xs"
+            :class="aiConfig.status === 'ENABLED' ? 'bg-moss/15 text-moss' : 'bg-rose/15 text-rose'"
+          >
+            {{ aiConfig.status === "ENABLED" ? "已启用" : "未启用" }}
+          </span>
         </div>
+
+        <label class="block">
+          <span class="mb-1.5 block text-sm text-ink">配置名称</span>
+          <input
+            v-model="aiForm.name"
+            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+            placeholder="DeepSeek 默认"
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1.5 block text-sm text-ink">API Key</span>
+          <input
+            v-model="aiForm.apiKey"
+            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+            :placeholder="
+              aiConfig
+                ? `留空表示不修改，当前 ${aiConfig.api_key_masked}`
+                : '请输入 DeepSeek API Key'
+            "
+          />
+        </label>
+
+        <label class="block">
+          <span class="mb-1.5 block text-sm text-ink">模型</span>
+          <input
+            v-model="aiForm.model"
+            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+            placeholder="deepseek-flash"
+          />
+        </label>
+
+        <div class="flex items-center gap-2">
+          <button
+            class="rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90"
+            @click="saveAiConfig"
+          >
+            保存修改
+          </button>
+          <button
+            class="rounded-xl border border-moss px-4 py-2 text-sm text-moss transition hover:bg-moss/10"
+            @click="testAi"
+          >
+            测试连通
+          </button>
+        </div>
+
+        <p class="text-xs text-oat">
+          Base URL 固定为 https://api.deepseek.com；保存后会自动启用该配置。
+        </p>
       </div>
     </section>
 

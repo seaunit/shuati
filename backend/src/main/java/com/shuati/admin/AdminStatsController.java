@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
@@ -245,6 +246,46 @@ public class AdminStatsController {
     return ApiResponse.ok(result);
   }
 
+  /** 单条 AI 配置维护：不存在则创建，存在则覆盖，保存后强制启用。 */
+  @PutMapping("/api/admin/ai-config")
+  public ApiResponse<Void> saveAiConfig(@RequestBody Map<String, Object> body) {
+    String name = String.valueOf(body.getOrDefault("name", "")).trim();
+    String apiKey = body.get("apiKey") == null ? "" : String.valueOf(body.get("apiKey")).trim();
+    String model = String.valueOf(body.getOrDefault("model", "")).trim();
+    String remark = body.get("remark") == null ? null : String.valueOf(body.get("remark"));
+    if (name.isEmpty()) {
+      throw new ApiException(400, "配置名称不能为空");
+    }
+    if (model.isEmpty()) {
+      model = "deepseek-flash";
+    }
+
+    List<Map<String, Object>> rows = jdbc.queryForList(
+        "select id from ai_config order by id asc limit 1");
+    if (rows.isEmpty()) {
+      if (apiKey.isEmpty()) {
+        throw new ApiException(400, "首次配置必须填写 API Key");
+      }
+      jdbc.update("""
+          insert into ai_config (name, base_url, api_key_encrypted, model, purpose, status, remark)
+          values (?, 'https://api.deepseek.com', ?, ?, 'BOTH', 'ENABLED', ?)
+          """, name, aes.encrypt(apiKey), model, remark);
+      return ApiResponse.ok(null);
+    }
+
+    long id = ((Number) rows.get(0).get("id")).longValue();
+    jdbc.update("""
+        update ai_config
+           set name = ?, model = ?, status = 'ENABLED', remark = ?
+         where id = ?
+        """, name, model, remark, id);
+    if (!apiKey.isEmpty()) {
+      jdbc.update("update ai_config set api_key_encrypted = ? where id = ?",
+          aes.encrypt(apiKey), id);
+    }
+    return ApiResponse.ok(null);
+  }
+
   @PostMapping("/api/admin/ai-config")
   public ApiResponse<Void> createAiConfig(@RequestBody Map<String, Object> body) {
     String name = String.valueOf(body.getOrDefault("name", "")).trim();
@@ -296,10 +337,42 @@ public class AdminStatsController {
 
   @PostMapping("/api/admin/ai-config/test")
   public ApiResponse<Map<String, Object>> testAiConfig(@RequestBody Map<String, Object> body) {
-    String baseUrl = String.valueOf(body.getOrDefault("baseUrl", "https://api.deepseek.com"))
-        .replaceAll("/+$", "");
+    String baseUrl = String.valueOf(body.getOrDefault("baseUrl", "")).trim();
     String apiKey = String.valueOf(body.getOrDefault("apiKey", "")).trim();
-    String model = String.valueOf(body.getOrDefault("model", "deepseek-flash")).trim();
+    String model = String.valueOf(body.getOrDefault("model", "")).trim();
+
+    // 未显式传入时，回退到库里已保存的配置（前端默认走这条路径）
+    if (body.get("id") != null) {
+      long id;
+      try {
+        id = (long) Double.parseDouble(String.valueOf(body.get("id")));
+      } catch (NumberFormatException e) {
+        id = 0;
+      }
+      if (id > 0) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+            "select base_url, api_key_encrypted, model from ai_config where id = ?", id);
+        if (!rows.isEmpty()) {
+          Map<String, Object> saved = rows.get(0);
+          if (baseUrl.isEmpty()) {
+            baseUrl = String.valueOf(saved.get("base_url"));
+          }
+          if (model.isEmpty()) {
+            model = String.valueOf(saved.get("model"));
+          }
+          if (apiKey.isEmpty()) {
+            apiKey = aes.decrypt(String.valueOf(saved.get("api_key_encrypted")));
+          }
+        }
+      }
+    }
+    if (baseUrl.isEmpty()) {
+      baseUrl = "https://api.deepseek.com";
+    }
+    if (model.isEmpty()) {
+      model = "deepseek-flash";
+    }
+    baseUrl = baseUrl.replaceAll("/+$", "");
     if (apiKey.isEmpty()) {
       throw new ApiException(400, "API Key 必填");
     }
