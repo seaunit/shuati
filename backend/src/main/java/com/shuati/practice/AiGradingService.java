@@ -129,16 +129,18 @@ public class AiGradingService {
       throw new ApiException(404, "题目不存在");
     }
     Map<String, Object> question = rows.get(0);
-    Object existing = question.get("explanation");
-    if (existing != null && !String.valueOf(existing).isBlank()) {
-      return Map.of("explanation", existing);
-    }
 
     Map<String, Object> charged = points.consumePoints(
         userId, "EXPLAIN", null, "question", String.valueOf(questionId));
     if (!Boolean.TRUE.equals(charged.get("ok"))) {
       throw new ApiException(402, "AI 点数不足：本次需要 " + charged.get("cost")
           + " 点，当前可用 " + charged.get("available") + " 点。可在「套餐与点数」升级套餐或购买加量包。");
+    }
+
+    Object existing = question.get("explanation");
+    if (existing != null && !String.valueOf(existing).isBlank()) {
+      // 缓存命中不调用 AI，但“查看 AI 解析”仍按一次解析计费并写入流水。
+      return Map.of("explanation", existing);
     }
 
     long start = System.currentTimeMillis();

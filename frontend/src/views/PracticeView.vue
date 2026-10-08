@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-vue-next";
 import { api } from "@/api/client";
 import MarkdownText from "@/components/MarkdownText.vue";
+import { useBillingStore } from "@/stores/billing";
 
 interface Option {
   key: string;
@@ -24,6 +25,7 @@ interface Question {
 
 const route = useRoute();
 const router = useRouter();
+const billing = useBillingStore();
 
 const questions = ref<Question[]>([]);
 const index = ref(0);
@@ -144,6 +146,7 @@ async function loadExplanation() {
       )}&correct=${result.value.verdict === "CORRECT"}`,
     );
     explanation.value = response.explanation;
+    await billing.load();
   } catch (e) {
     explanation.value = e instanceof Error ? e.message : "解析失败";
   } finally {
