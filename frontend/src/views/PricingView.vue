@@ -17,6 +17,7 @@ interface Plan {
   max_banks: number | null;
   max_questions: number | null;
   features: string[];
+  currency: string;
 }
 
 interface Pack {
@@ -25,6 +26,7 @@ interface Pack {
   price_cents: number;
   points: number;
   bonus_points: number;
+  currency: string;
 }
 
 interface Rule {
@@ -98,10 +100,11 @@ const orders = ref<Order[]>([]);
 const notice = ref("");
 const busy = ref("");
 
-function yuan(cents: number) {
+function money(cents: number, currency: string) {
   if (!cents) return "定制";
   const value = cents / 100;
-  return "¥" + (Number.isInteger(value) ? value : value.toFixed(2));
+  const symbol = currency === "USD" ? "$" : currency === "CNY" ? "¥" : `${currency} `;
+  return symbol + (Number.isInteger(value) ? value : value.toFixed(2));
 }
 
 function priceOf(plan: Plan) {
@@ -182,7 +185,7 @@ onMounted(() => {
 
     <p v-if="notice" class="rounded-xl bg-moss/10 px-4 py-3 text-sm text-ink">{{ notice }}</p>
 
-    <section>
+    <section v-if="plans.length > 0">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="font-medium text-ink">选择套餐</h2>
         <div class="flex rounded-xl bg-mist p-1">
@@ -216,7 +219,7 @@ onMounted(() => {
           </div>
           <p class="mt-1 text-xs text-oat">{{ plan.tagline ?? plan.description ?? "" }}</p>
           <p class="mt-4 text-2xl font-semibold text-ink">
-            {{ yuan(priceOf(plan)) }}
+            {{ money(priceOf(plan), plan.currency) }}
             <span v-if="priceOf(plan) > 0" class="text-sm font-normal text-oat">
               {{ PERIODS.find((p) => p.key === period)?.suffix }}
             </span>
@@ -271,7 +274,7 @@ onMounted(() => {
             :disabled="busy !== ''"
             @click="buy('PACK', pack.code)"
           >
-            {{ yuan(pack.price_cents) }}
+            {{ money(pack.price_cents, pack.currency) }}
           </button>
         </div>
       </div>
@@ -323,7 +326,7 @@ onMounted(() => {
               <p class="mt-0.5 text-xs text-oat">{{ new Date(order.created_at).toLocaleString("zh-CN") }}</p>
             </div>
             <div class="text-right">
-              <p class="text-ink">{{ yuan(order.amount_cents) }}</p>
+              <p class="text-ink">{{ money(order.amount_cents, order.kind === "PLAN" ? "USD" : "CNY") }}</p>
               <p class="mt-0.5 text-xs text-oat">
                 {{
                   order.status === "PAID"

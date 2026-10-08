@@ -39,6 +39,11 @@ public class BillingService {
         select code, name, price_cents, points, bonus_points, sort
           from point_pack where status = 'ENABLED' order by sort asc
         """);
+    // 带上真实计价币种：订阅与一次性可能不同（Waffo 订阅不支持 CNY）
+    String planCurrency = paymentGateway.currencyFor("PLAN");
+    String packCurrency = paymentGateway.currencyFor("PACK");
+    plans.forEach(p -> p.put("currency", planCurrency));
+    packs.forEach(p -> p.put("currency", packCurrency));
     List<Map<String, Object>> rules = points.priceRules();
     int signupBonus = jdbc.queryForList(
         "select value from billing_config where `key` = 'signup_bonus_points'")
@@ -71,6 +76,10 @@ public class BillingService {
     String normalizedKind = kind == null ? "" : kind.toUpperCase();
     if (!List.of("PLAN", "PACK").contains(normalizedKind)) {
       throw new ApiException(400, "订单类型不正确");
+    }
+    // 纯点数制：只在线售卖点数包，套餐不开放自助购买
+    if ("PLAN".equals(normalizedKind)) {
+      throw new ApiException(400, "当前仅支持购买点数包，套餐变更请联系管理员");
     }
     if (itemCode == null || itemCode.isBlank()) {
       throw new ApiException(400, "缺少商品编码");
