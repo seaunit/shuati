@@ -1,0 +1,20 @@
+# /etc/systemd/system/shuati-payments.service
+[Unit]
+Description=Shuati Waffo Pancake payments sidecar
+After=network.target
+
+[Service]
+Type=simple
+User=shuati
+Group=shuati
+WorkingDirectory=/opt/shuati/payments
+EnvironmentFile=/etc/shuati/payments.env
+ExecStart=/usr/bin/node /opt/shuati/payments/src/server.mjs
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

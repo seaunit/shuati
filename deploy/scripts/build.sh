@@ -11,6 +11,10 @@ npm --prefix frontend run build
 echo "==> 构建后端"
 mvn -f backend/pom.xml clean package -DskipTests
 
+echo "==> 安装支付侧车依赖"
+npm --prefix payments ci
+
 echo "==> 产物"
 ls -lh backend/target/shuati-backend.jar
 du -sh frontend/dist
+du -sh payments/node_modules

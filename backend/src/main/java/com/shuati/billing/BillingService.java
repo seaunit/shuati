@@ -3,6 +3,8 @@ package com.shuati.billing;
 import com.shuati.common.ApiException;
 import com.shuati.common.CurrentUser;
 import com.shuati.common.Json;
+import com.shuati.payment.PaymentGateway;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -12,17 +14,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BillingService {
 
   private final JdbcTemplate jdbc;
   private final Json json;
   private final PointAccountService points;
+  private final PaymentGateway paymentGateway;
 
   public Map<String, Object> catalog() {
     List<Map<String, Object>> plans = json.normalize(jdbc.queryForList("""
@@ -115,14 +120,46 @@ public class BillingService {
         values (?, ?, ?, ?, ?, ?, ?, 'PENDING')
         """, orderId, userId, normalizedKind, itemCode, normalizedPeriod, amountCents, orderPoints);
 
-    return json.normalize(jdbc.queryForMap("""
+    Map<String, Object> order = new LinkedHashMap<>(json.normalize(jdbc.queryForMap("""
         select id, status, amount_cents, points, kind, item_code, period, created_at
           from subscription_order where id = ?
-        """, orderId), Set.of());
+        """, orderId), Set.of()));
+
+    // 配置了支付网关时，顺带创建 Waffo 收银台并把地址回填到订单
+    if (paymentGateway.isEnabled()) {
+      String buyerEmail = jdbc.queryForList(
+          "select email from profiles where id = ?", String.class, userId)
+          .stream().findFirst().orElse(null);
+      try {
+        PaymentGateway.CheckoutSession checkout = paymentGateway.createCheckout(
+            orderId,
+            PaymentGateway.itemCodeOf(normalizedKind, itemCode, normalizedPeriod),
+            userId,
+            buyerEmail,
+            BigDecimal.valueOf(amountCents, 2).toPlainString());
+        jdbc.update("""
+            update subscription_order
+               set checkout_url = ?, provider = 'waffo', provider_session_id = ?
+             where id = ?
+            """, checkout.checkoutUrl(), checkout.sessionId(), orderId);
+        order.put("checkoutUrl", checkout.checkoutUrl());
+      } catch (Exception e) {
+        // 收银台失败不影响订单本身：订单仍是 PENDING，管理员可人工结算
+        log.warn("订单 {} 创建收银台失败：{}", orderId, e.getMessage());
+        order.put("checkoutError", e.getMessage());
+      }
+    }
+    return order;
   }
 
   @Transactional
   public void settleOrder(String orderId, String action) {
+    settleOrder(orderId, action, false);
+  }
+
+  /** @param idempotent true=已支付订单直接返回成功（供支付回调重复投递时使用） */
+  @Transactional
+  public void settleOrder(String orderId, String action, boolean idempotent) {
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select * from subscription_order where id = ? for update", orderId);
     if (rows.isEmpty()) {
@@ -130,6 +167,9 @@ public class BillingService {
     }
     Map<String, Object> order = rows.get(0);
     if ("PAID".equals(order.get("status"))) {
+      if (idempotent) {
+        return;
+      }
       throw new ApiException(400, "订单已结算，请勿重复操作");
     }
 

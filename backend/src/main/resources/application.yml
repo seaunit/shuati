@@ -38,6 +38,14 @@ management:
         include: health
 
 shuati:
+  payments:
+    # 是否启用在线支付（启用后下单会调用 Node 支付侧车创建 Waffo 收银台）
+    enabled: ${SHUATI_PAYMENTS_ENABLED:false}
+    base-url: ${SHUATI_PAYMENTS_URL:http://127.0.0.1:8090}
+    # 与支付侧车共享的密钥，务必改成随机值
+    internal-secret: ${SHUATI_PAYMENTS_SECRET:}
+    # 收银台计价币种（ISO 4217）
+    currency: ${SHUATI_PAYMENTS_CURRENCY:USD}
   rate-limit:
     enabled: true
     # 同一 IP 每分钟请求总量兜底（拦脚本扫描），0=关闭

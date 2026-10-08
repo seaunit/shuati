@@ -35,7 +35,12 @@ public class SecurityConfig {
             session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(
-                "/api/auth/**", "/api/plans", "/captcha/**", "/actuator/health")
+                "/api/auth/**",
+                "/api/plans",
+                // 支付回调由共享密钥校验，不走 JWT
+                "/api/payments/waffo/notify",
+                "/captcha/**",
+                "/actuator/health")
             .permitAll()
             .requestMatchers("/api/admin/**").hasRole("ADMIN")
             .anyRequest().authenticated())

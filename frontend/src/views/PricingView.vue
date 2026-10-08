@@ -128,12 +128,20 @@ async function buy(kind: "PLAN" | "PACK", itemCode: string) {
   busy.value = kind + ":" + itemCode;
   notice.value = "";
   try {
-    await api("/api/orders", {
+    const order = await api<{ checkoutUrl?: string; checkoutError?: string }>("/api/orders", {
       method: "POST",
       body: JSON.stringify({ kind, itemCode, period: kind === "PLAN" ? period.value : null }),
     });
     await load();
-    notice.value = "订单已创建。当前尚未接入在线支付，请联系管理员确认收款后开通。";
+    if (order?.checkoutUrl) {
+      // 按官方建议：新标签页打开收银台，保留当前页面状态
+      window.open(order.checkoutUrl, "_blank", "noopener,noreferrer");
+      notice.value = "已打开收银台，完成支付后会自动开通。";
+    } else if (order?.checkoutError) {
+      notice.value = `订单已创建，但收银台创建失败：${order.checkoutError}`;
+    } else {
+      notice.value = "订单已创建。当前尚未接入在线支付，请联系管理员确认收款后开通。";
+    }
   } catch (e) {
     notice.value = e instanceof Error ? e.message : "下单失败";
   } finally {

@@ -1,0 +1,17 @@
+{
+  "name": "shuati-payments",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Waffo Pancake 支付侧车服务（Node + @waffo/pancake-ts）",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "setup": "node scripts/setup-catalog.mjs"
+  },
+  "dependencies": {
+    "@waffo/pancake-ts": "^0.25.0"
+  }
+}
