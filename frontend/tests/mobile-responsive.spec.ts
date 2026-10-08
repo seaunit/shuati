@@ -65,6 +65,17 @@ test("mobile app shell uses bottom navigation without horizontal overflow", asyn
   expect(hasHorizontalOverflow).toBe(false);
 });
 
+test("site favicon uses the Shuati leaf brand mark", async ({ page, request }) => {
+  await page.goto("/login");
+
+  const icon = page.locator('link[rel="icon"]');
+  await expect(icon).toHaveAttribute("href", "/favicon.svg");
+
+  const response = await request.get("/favicon.svg");
+  expect(response.ok()).toBe(true);
+  expect(await response.text()).toContain("<svg");
+});
+
 test("stats table scrolls horizontally on mobile instead of being clipped", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({
