@@ -13,7 +13,8 @@ logging:
 
 shuati:
   cookie:
-    secure: true
+    # 正式环境必须 true（HTTPS）；纯 IP + HTTP 的临时 demo 可设 false
+    secure: ${SHUATI_COOKIE_SECURE:true}
   jwt:
     secret: ${SHUATI_JWT_SECRET}
     ttl-seconds: 604800
