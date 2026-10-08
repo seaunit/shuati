@@ -26,6 +26,20 @@
 
 ## 1. 初始化服务器
 
+Ubuntu 24.04 全新实例可以直接用一键脚本完成环境、建库、构建和启动：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/provision-ubuntu.sh | sudo bash
+```
+
+脚本默认按 **HTTP + 公网 IP** 启动，因此会写入 `SHUATI_COOKIE_SECURE=false`。
+域名和 HTTPS 配好后，再改为 `true`。生产数据库从空库开始，Flyway 首次启动自动建表。
+首次部署会创建管理员 `shuati.admin@gmail.com`，初始密码 `Shuati@2026`。
+支付侧车首次先用占位密钥并保持 `SHUATI_PAYMENTS_ENABLED=false`，真实 Waffo 密钥写入
+`/etc/shuati/payments.env` 后再启用。
+
+如果需要手工拆开每一步执行，再使用下面的初始化脚本：
+
 ```bash
 sudo bash deploy/scripts/server-bootstrap.sh
 ```
