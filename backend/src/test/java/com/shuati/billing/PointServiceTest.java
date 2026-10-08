@@ -55,6 +55,38 @@ class PointServiceTest {
     assertThat(intValue(account.get("lifetime_used"))).isEqualTo(0);
   }
 
+  @Test
+  void freeMonthlyGrantIsOnlyATopUpToFifty() {
+    String userId = createUser();
+    points.ensureAccount(userId); // 50 月度 + 100 注册赠 = 150
+
+    // 场景一：资产 150 >= 50，到期后不再赠送
+    jdbc.update(
+        "update point_account set period_end = date_sub(now(6), interval 1 day) where user_id = ?",
+        userId);
+    points.renewPeriod(userId);
+    Map<String, Object> afterRich = jdbc.queryForMap(
+        "select monthly_quota, monthly_used, bonus_balance from point_account where user_id = ?",
+        userId);
+    assertThat(intValue(afterRich.get("monthly_quota"))).isZero();
+    assertThat(intValue(afterRich.get("bonus_balance"))).isEqualTo(100);
+    assertThat(intValue(points.entitlements(userId).get("available"))).isEqualTo(100);
+
+    // 场景二：资产降到 10，只补差额到 50
+    jdbc.update("""
+        update point_account
+           set bonus_balance = 10, monthly_quota = 0, monthly_used = 0,
+               period_end = date_sub(now(6), interval 1 day)
+         where user_id = ?
+        """, userId);
+    points.renewPeriod(userId);
+    Map<String, Object> afterPoor = jdbc.queryForMap(
+        "select monthly_quota, bonus_balance from point_account where user_id = ?", userId);
+    assertThat(intValue(afterPoor.get("monthly_quota"))).isEqualTo(40);
+    assertThat(intValue(afterPoor.get("bonus_balance"))).isEqualTo(10);
+    assertThat(intValue(points.entitlements(userId).get("available"))).isEqualTo(50);
+  }
+
   private String createUser() {
     String id = UUID.randomUUID().toString();
     jdbc.update("""

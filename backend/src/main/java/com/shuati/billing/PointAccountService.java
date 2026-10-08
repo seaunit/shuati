@@ -60,8 +60,20 @@ public class PointAccountService {
 
     Map<String, Object> plan = jdbc.queryForMap(
         "select * from plan where code = ?", account.get("plan_code"));
-    int newQuota = intValue(plan.get("monthly_points"));
-    int delta = Math.max(newQuota - intValue(account.get("monthly_quota")), 0);
+    int planMonthly = intValue(plan.get("monthly_points"));
+
+    // 免费版每月额度改成「保底」：
+    //   账号资产 >= planMonthly  -> 不赠送（quota 置 0）
+    //   账号资产 <  planMonthly  -> 只补差额，补到刚好 planMonthly
+    // 付费套餐仍是完整发放（付费额度是花钱买的权益，不做保底处理）。
+    int grant;
+    if ("free".equals(account.get("plan_code"))) {
+      int totalBefore = balanceOf(account);
+      grant = Math.max(planMonthly - totalBefore, 0);
+    } else {
+      grant = planMonthly;
+    }
+    int delta = Math.max(grant - intValue(account.get("monthly_quota")), 0);
 
     jdbc.update("""
         update point_account
@@ -69,7 +81,7 @@ public class PointAccountService {
                period_end = date_add(now(6), interval 1 month),
                lifetime_granted = lifetime_granted + ?
          where user_id = ?
-        """, newQuota, delta, userId);
+        """, grant, delta, userId);
 
     if (delta > 0) {
       Map<String, Object> refreshed = account(userId);
