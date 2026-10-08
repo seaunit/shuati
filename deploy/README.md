@@ -177,6 +177,27 @@ Nginx 跳转，并把后端 Cookie 切换为安全模式：
 curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/enable-https.sh | sudo bash
 ```
 
+### 大陆网络：Cloudflare Named Tunnel
+
+香港源站直连在大陆部分运营商网络会被阻断，`*.trycloudflare.com` 也可能被单独屏蔽。
+正式使用建议把域名 NS 切到 Cloudflare，然后使用 Named Tunnel：
+
+1. Cloudflare 添加站点 `seaunit.site`，把阿里云域名 NS 改成 Cloudflare 分配的两条 NS；
+2. Zero Trust → Networks → Tunnels → Create tunnel，复制 Tunnel Token；
+3. 在服务器执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/install-cloudflare-tunnel.sh | sudo bash -s -- '<TUNNEL_TOKEN>'
+```
+
+4. 为 Tunnel 添加 Public Hostname：
+   - `seaunit.site` → `https://127.0.0.1:443`
+   - `www.seaunit.site` → `https://127.0.0.1:443`
+   - 高级设置里开启 `No TLS Verify`
+   - `HTTP Host Header` 填 `seaunit.site`
+
+这样仍然使用现有香港服务器作为源站，只是公网入口改为 Cloudflare。
+
 ## 7. 支付回调
 
 把 `https://你的域名/pay/webhooks/waffo` 填到 Waffo 后台的 Webhook（事件只勾 `order.completed`）。
