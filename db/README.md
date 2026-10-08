@@ -13,6 +13,7 @@
 | `mysql/00_create_database.sql` | 创建 `shuati` 数据库 |
 | `mysql/01_schema.sql` | 全部建表脚本（业务表 + 用户表 + 商业化表） |
 | `mysql/03_billing_seed.sql` | 套餐、点数包、计费规则、注册赠点的种子数据 |
+| `mysql/soft_exam.sql` | 软考真题题库导入（158 单元 / 322 题，不含用户数据，可重复执行） |
 | `mysql/99_verify.sql` | 行数与外键孤儿校验 |
 | `etl/introspect.mjs` | 从 Supabase 读取结构元数据，输出 `_supabase_raw/schema.json` |
 | `etl/export-data.mjs` | 从 Supabase 导出数据，生成 `_supabase_raw/02_data.sql` |
@@ -36,8 +37,14 @@ $mysql = 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe'
   --execute="source E:/CodexProject/shuati2/db/mysql/03_billing_seed.sql"
 
 & $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
+  --execute="source E:/CodexProject/shuati2/db/mysql/soft_exam.sql"
+
+& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
   --execute="source E:/CodexProject/shuati2/db/mysql/99_verify.sql"
 ```
+
+`soft_exam.sql` 只包含公共题库「软考真题」的题库、单元和题目；生产库已存在同名公共题库时
+整批跳过，不会导入用户、练习记录、订单或点数数据。
 
 ## 已迁移数据
 

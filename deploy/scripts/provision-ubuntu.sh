@@ -206,6 +206,25 @@ if [ "$HEALTH_OK" -ne 1 ]; then
   exit 1
 fi
 
+echo "==> 导入软考真题库（已存在时自动跳过）"
+if [ -s "$BUILD_DIR/db/mysql/soft_exam.sql" ]; then
+  mysql --protocol=socket -uroot "$DB_NAME" <"$BUILD_DIR/db/mysql/soft_exam.sql"
+  SOFT_EXAM_COUNTS="$(
+    mysql --protocol=socket -uroot --batch --raw --skip-column-names "$DB_NAME" -e "
+      select
+        (select count(*) from bank where owner_id is null and name = '软考真题'),
+        (select count(*) from unit u join bank b on b.id = u.bank_id
+          where b.owner_id is null and b.name = '软考真题'),
+        (select count(*) from question q join unit u on u.id = q.unit_id
+          join bank b on b.id = u.bank_id
+          where b.owner_id is null and b.name = '软考真题');
+    "
+  )"
+  echo "软考真题库：题库/单元/题目 = ${SOFT_EXAM_COUNTS}"
+else
+  echo "未找到 db/mysql/soft_exam.sql，跳过题库导入"
+fi
+
 echo
 echo "==================== 部署完成 ===================="
 echo "后端：http://127.0.0.1:8080/actuator/health"
