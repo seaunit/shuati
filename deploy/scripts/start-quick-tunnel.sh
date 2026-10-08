@@ -36,7 +36,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url https://127.0.0.1:443 --no-tls-verify --http-host-header seaunit.site
+Environment=TUNNEL_EDGE_IP_VERSION=4
+ExecStart=/usr/bin/cloudflared --no-autoupdate --logfile /var/log/shuati-quick-tunnel.log --loglevel info --edge-ip-version 4 tunnel --url https://127.0.0.1:443 --no-tls-verify --http-host-header seaunit.site
 Restart=always
 RestartSec=5
 StandardOutput=append:/var/log/shuati-quick-tunnel.log
