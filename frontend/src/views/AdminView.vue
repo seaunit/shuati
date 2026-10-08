@@ -372,16 +372,18 @@ watch(tab, refresh);
       <p class="mt-1 text-sm text-oat">题库、题目、用户、AI 与计费</p>
     </header>
 
-    <div class="mb-5 flex flex-wrap gap-2">
-      <button
-        v-for="item in TABS"
-        :key="item.id"
-        class="rounded-xl px-3 py-1.5 text-sm transition"
-        :class="tab === item.id ? 'bg-moss/15 font-medium text-moss' : 'text-ink/75 hover:bg-mist'"
-        @click="tab = item.id"
-      >
-        {{ item.label }}
-      </button>
+    <div class="-mx-4 mb-5 overflow-x-auto px-4 pb-1 sm:-mx-5 sm:px-5 lg:mx-0 lg:px-0">
+      <div class="flex w-max gap-2">
+        <button
+          v-for="item in TABS"
+          :key="item.id"
+          class="shrink-0 rounded-xl px-3 py-1.5 text-sm transition"
+          :class="tab === item.id ? 'bg-moss/15 font-medium text-moss' : 'text-ink/75 hover:bg-mist'"
+          @click="tab = item.id"
+        >
+          {{ item.label }}
+        </button>
+      </div>
     </div>
 
     <p v-if="notice" class="mb-4 rounded-xl bg-moss/10 px-4 py-2.5 text-sm text-ink">{{ notice }}</p>
@@ -423,9 +425,9 @@ watch(tab, refresh);
           <p class="mt-1 text-2xl font-semibold text-ink">{{ aiUsage.summary.failed_calls }}</p>
         </div>
       </div>
-      <div class="overflow-hidden rounded-2xl border border-mist bg-white/70">
+      <div class="overflow-x-auto rounded-2xl border border-mist bg-white/70">
         <div class="border-b border-mist px-5 py-3 text-sm font-medium text-ink">按单元统计</div>
-        <table class="w-full text-sm">
+        <table class="w-full min-w-[34rem] text-sm">
           <thead>
             <tr class="text-left text-xs text-oat">
               <th class="px-5 py-2.5 font-normal">题库</th>
@@ -447,13 +449,13 @@ watch(tab, refresh);
     </section>
 
     <section v-else-if="tab === 'banks'" class="space-y-4">
-      <div class="flex flex-wrap items-end gap-2 rounded-2xl border border-mist bg-white/70 p-4">
-        <input v-model="bankForm.name" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="新题库名称" />
-        <input v-model="bankForm.description" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="描述（可选）" />
-        <button class="rounded-xl bg-ink px-4 py-2 text-sm text-white" @click="createBank">新建公共题库</button>
+      <div class="flex flex-col gap-2 rounded-2xl border border-mist bg-white/70 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <input v-model="bankForm.name" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto sm:flex-1" placeholder="新题库名称" />
+        <input v-model="bankForm.description" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto sm:flex-1" placeholder="描述（可选）" />
+        <button class="w-full rounded-xl bg-ink px-4 py-2 text-sm text-white sm:w-auto" @click="createBank">新建公共题库</button>
       </div>
-      <div class="overflow-hidden rounded-2xl border border-mist bg-white/70">
-        <table class="w-full text-sm">
+      <div class="overflow-x-auto rounded-2xl border border-mist bg-white/70">
+        <table class="w-full min-w-[40rem] text-sm">
           <thead class="bg-mist/60 text-left text-xs text-oat">
             <tr>
               <th class="px-5 py-2.5 font-normal">名称</th>
@@ -480,43 +482,43 @@ watch(tab, refresh);
     </section>
 
     <section v-else-if="tab === 'units'" class="space-y-4">
-      <select v-model.number="selectedBank" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm">
+      <select v-model.number="selectedBank" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
         <option :value="null" disabled>选择题库</option>
         <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
       </select>
-      <div class="flex gap-2 rounded-2xl border border-mist bg-white/70 p-4">
-        <input v-model="unitForm.name" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="单元名称" />
-        <input v-model.number="unitForm.sort" type="number" class="w-24 rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="排序" />
-        <button class="rounded-xl bg-ink px-4 py-2 text-sm text-white" @click="createUnit">新建单元</button>
+      <div class="flex flex-col gap-2 rounded-2xl border border-mist bg-white/70 p-4 sm:flex-row">
+        <input v-model="unitForm.name" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:flex-1" placeholder="单元名称" />
+        <input v-model.number="unitForm.sort" type="number" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-24" placeholder="排序" />
+        <button class="w-full rounded-xl bg-ink px-4 py-2 text-sm text-white sm:w-auto" @click="createUnit">新建单元</button>
       </div>
       <div class="space-y-2">
-        <div v-for="unit in units" :key="unit.id" class="flex items-center justify-between rounded-xl border border-mist bg-white/70 px-4 py-3 text-sm">
-          <span class="text-ink">{{ unit.name }}</span>
-          <span class="text-oat">{{ unit.question_count }} 题</span>
-          <button class="text-xs text-rose" @click="deleteUnit(unit.id)">删除</button>
+        <div v-for="unit in units" :key="unit.id" class="flex items-center justify-between gap-3 rounded-xl border border-mist bg-white/70 px-4 py-3 text-sm">
+          <span class="min-w-0 flex-1 truncate text-ink">{{ unit.name }}</span>
+          <span class="shrink-0 text-oat">{{ unit.question_count }} 题</span>
+          <button class="shrink-0 text-xs text-rose" @click="deleteUnit(unit.id)">删除</button>
         </div>
       </div>
     </section>
 
     <section v-else-if="tab === 'questions'" class="space-y-4">
       <div class="flex flex-wrap gap-2">
-        <select v-model.number="selectedBank" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm">
+        <select v-model.number="selectedBank" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
           <option :value="null" disabled>选择题库</option>
           <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
         </select>
-        <select v-model.number="selectedUnit" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm">
+        <select v-model.number="selectedUnit" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
           <option :value="null">全部单元</option>
           <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
         </select>
       </div>
       <div class="space-y-2 rounded-2xl border border-mist bg-white/70 p-4">
-        <div class="flex gap-2">
-          <select v-model="questionForm.type" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm">
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <select v-model="questionForm.type" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
             <option value="SINGLE">单选</option>
             <option value="MULTI">多选</option>
             <option value="SHORT">简答</option>
           </select>
-          <select v-model="questionForm.difficulty" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm">
+          <select v-model="questionForm.difficulty" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
             <option value="EASY">简单</option>
             <option value="MEDIUM">中等</option>
             <option value="HARD">困难</option>
@@ -526,12 +528,12 @@ watch(tab, refresh);
         <input v-model="questionForm.answer" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="答案（选择题如 A / AB；简答题为参考答案）" />
         <input v-model="questionForm.options" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 font-mono text-xs" placeholder='选项 JSON' />
         <input v-model="questionForm.keyPoints" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 font-mono text-xs" placeholder='评分要点 JSON' />
-        <button class="rounded-xl bg-ink px-4 py-2 text-sm text-white" @click="createQuestion">新增题目</button>
+        <button class="w-full rounded-xl bg-ink px-4 py-2 text-sm text-white sm:w-auto" @click="createQuestion">新增题目</button>
       </div>
       <div class="space-y-2">
         <div v-for="question in questions" :key="question.id" class="rounded-xl border border-mist bg-white/70 p-3 text-sm">
           <p class="whitespace-pre-wrap text-ink">{{ question.content }}</p>
-          <div class="mt-2 flex items-center gap-3 text-xs text-oat">
+          <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-oat">
             <span>{{ question.type }} · {{ question.difficulty }} · {{ question.status }}</span>
             <button class="text-moss" @click="toggleQuestion(question)">
               {{ question.status === "ON" ? "下架" : "上架" }}
@@ -542,8 +544,8 @@ watch(tab, refresh);
       </div>
     </section>
 
-    <section v-else-if="tab === 'users'" class="overflow-hidden rounded-2xl border border-mist bg-white/70">
-      <table class="w-full text-sm">
+    <section v-else-if="tab === 'users'" class="overflow-x-auto rounded-2xl border border-mist bg-white/70">
+      <table class="w-full min-w-[38rem] text-sm">
         <thead class="bg-mist/60 text-left text-xs text-oat">
           <tr>
             <th class="px-5 py-2.5 font-normal">邮箱</th>
@@ -568,7 +570,7 @@ watch(tab, refresh);
     </section>
 
     <section v-else-if="tab === 'appeals'" class="space-y-4">
-      <select v-model="appealStatus" class="rounded-xl border border-mist bg-paper px-3 py-2 text-sm" @change="loadAppeals">
+      <select v-model="appealStatus" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto" @change="loadAppeals">
         <option value="PENDING">待处理</option>
         <option value="RESOLVED">已处理</option>
         <option value="REJECTED">已驳回</option>
@@ -708,9 +710,9 @@ watch(tab, refresh);
           <p class="mt-1 text-xl font-semibold text-ink">{{ billing.stats.pendingOrders }}</p>
         </div>
       </div>
-      <div class="overflow-hidden rounded-2xl border border-mist bg-white/70">
+      <div class="overflow-x-auto rounded-2xl border border-mist bg-white/70">
         <div class="border-b border-mist px-5 py-3 text-sm font-medium text-ink">订单</div>
-        <table class="w-full text-sm">
+        <table class="w-full min-w-[42rem] text-sm">
           <thead class="bg-mist/60 text-left text-xs text-oat">
             <tr>
               <th class="px-5 py-2.5 font-normal">类型</th>

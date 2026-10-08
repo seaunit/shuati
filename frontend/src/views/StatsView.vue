@@ -82,10 +82,10 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="mt-6 overflow-hidden rounded-2xl border border-mist bg-white/70 shadow-sm">
+      <div class="mt-6 overflow-x-auto rounded-2xl border border-mist bg-white/70 shadow-sm">
         <div class="border-b border-mist px-5 py-3 text-sm font-medium text-ink">单元明细</div>
         <div v-if="stats.byUnit.length === 0" class="p-10 text-center text-sm text-oat">还没有作答记录</div>
-        <table v-else class="w-full text-sm">
+        <table v-else class="w-full min-w-[42rem] text-sm">
           <thead>
             <tr class="text-left text-xs text-oat">
               <th class="px-5 py-2.5 font-normal">题库</th>
@@ -113,10 +113,10 @@ onMounted(async () => {
         </table>
       </div>
 
-      <div class="mt-6 overflow-hidden rounded-2xl border border-mist bg-white/70 shadow-sm">
+      <div class="mt-6 overflow-x-auto rounded-2xl border border-mist bg-white/70 shadow-sm">
         <div class="border-b border-mist px-5 py-3 text-sm font-medium text-ink">我的练习记录</div>
         <div v-if="sessions.length === 0" class="p-10 text-center text-sm text-oat">还没有练习记录</div>
-        <table v-else class="w-full text-sm">
+        <table v-else class="w-full min-w-[42rem] text-sm">
           <thead>
             <tr class="text-left text-xs text-oat">
               <th class="px-5 py-2.5 font-normal">范围</th>

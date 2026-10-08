@@ -10,7 +10,13 @@ import {
   type LucideIcon,
 } from "lucide-vue-next";
 
-defineProps<{ nav: { href: string; label: string; icon: string }[] }>();
+withDefaults(
+  defineProps<{
+    nav: { href: string; label: string; icon: string }[];
+    variant?: "sidebar" | "bottom";
+  }>(),
+  { variant: "sidebar" },
+);
 
 const route = useRoute();
 
@@ -36,14 +42,21 @@ function isActive(href: string) {
     v-for="item in nav"
     :key="item.href"
     :to="item.href"
-    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition"
-    :class="isActive(item.href) ? 'bg-moss/15 font-medium text-moss' : 'text-ink/75 hover:bg-mist'"
+    class="transition"
+    :class="[
+      isActive(item.href) ? 'bg-moss/15 font-medium text-moss' : 'text-ink/75 hover:bg-mist',
+      variant === 'bottom'
+        ? 'flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-[10px] leading-none'
+        : 'flex items-center gap-3 rounded-xl px-3 py-2 text-sm',
+    ]"
   >
     <component
       :is="icons[item.icon] ?? Home"
-      class="h-4 w-4"
-      :class="isActive(item.href) ? 'text-moss' : 'text-oat'"
+      :class="[
+        variant === 'bottom' ? 'h-[18px] w-[18px]' : 'h-4 w-4',
+        isActive(item.href) ? 'text-moss' : 'text-oat',
+      ]"
     />
-    {{ item.label }}
+    <span class="truncate">{{ item.label }}</span>
   </RouterLink>
 </template>

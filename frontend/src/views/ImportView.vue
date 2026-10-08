@@ -149,7 +149,7 @@ onMounted(loadTasks);
     </header>
 
     <div class="grid gap-6 lg:grid-cols-2">
-      <section class="rounded-2xl border border-mist bg-white/70 p-5">
+      <section class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
         <div class="mb-4 flex rounded-xl bg-mist p-1">
           <button
             v-for="item in [
@@ -215,7 +215,7 @@ onMounted(loadTasks);
         <p v-if="notice" class="mt-3 rounded-xl bg-moss/10 px-4 py-2.5 text-sm text-ink">{{ notice }}</p>
       </section>
 
-      <section class="rounded-2xl border border-mist bg-white/70 p-5">
+      <section class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
         <h2 class="mb-3 font-medium text-ink">解析结果</h2>
         <div v-if="!currentTask" class="text-sm text-oat">还没有任务</div>
         <template v-else>
@@ -254,11 +254,11 @@ onMounted(loadTasks);
           <button
             v-for="task in tasks"
             :key="task.id"
-            class="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition hover:bg-mist"
+            class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-mist"
             @click="openTask(task.id)"
           >
-            <span class="text-ink">{{ task.bank_name }}</span>
-            <span class="text-xs text-oat">{{ task.status }} · {{ task.progress }}%</span>
+            <span class="min-w-0 truncate text-ink">{{ task.bank_name }}</span>
+            <span class="shrink-0 text-xs text-oat">{{ task.status }} · {{ task.progress }}%</span>
           </button>
         </div>
       </section>

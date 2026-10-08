@@ -220,25 +220,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl">
+  <div class="mx-auto max-w-3xl pb-28 lg:pb-0">
     <div v-if="loading" class="flex h-64 items-center justify-center text-sm text-oat">加载中…</div>
     <div v-else-if="questions.length === 0" class="flex h-64 items-center justify-center text-sm text-oat">
       没有可练习的题目
     </div>
     <template v-else-if="current">
-      <header class="mb-4 flex items-center justify-between">
-        <div>
+      <header class="mb-4 flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
           <p class="text-xs text-oat">
             第 {{ index + 1 }} / {{ questions.length }} 题 · {{ typeLabel(current.type) }}
           </p>
-          <div class="mt-2 h-1.5 w-64 overflow-hidden rounded-full bg-mist">
+          <div class="mt-2 h-1.5 w-full max-w-64 overflow-hidden rounded-full bg-mist">
             <div class="h-full rounded-full bg-moss" :style="{ width: progress + '%' }" />
           </div>
         </div>
-        <button class="text-sm text-oat transition hover:text-ink" @click="finish">结束练习</button>
+        <button class="shrink-0 text-sm text-oat transition hover:text-ink" @click="finish">结束练习</button>
       </header>
 
-      <article class="rounded-2xl border border-mist bg-white/70 p-6">
+      <article class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-6">
         <MarkdownText :text="current.content" />
         <div v-if="current.images?.length" class="mt-4 space-y-3">
           <img
@@ -304,19 +304,22 @@ onMounted(async () => {
         </div>
       </article>
 
-      <div class="mt-4 flex items-center justify-between">
+      <div
+        data-testid="practice-actions"
+        class="fixed inset-x-4 bottom-[5.5rem] z-30 mt-4 flex items-center justify-between gap-2 rounded-2xl border border-mist bg-paper/95 p-2 shadow-sm backdrop-blur sm:inset-x-5 lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+      >
         <button
-          class="flex items-center gap-1 rounded-xl border border-mist bg-white/70 px-4 py-2 text-sm text-ink transition hover:border-moss disabled:opacity-40"
+          class="flex shrink-0 items-center gap-1 rounded-xl border border-mist bg-white/80 px-3 py-2.5 text-sm text-ink transition hover:border-moss disabled:opacity-40 sm:px-4"
           :disabled="index === 0"
           @click="index -= 1; resetState()"
         >
           <ChevronLeft class="h-4 w-4" /> 上一题
         </button>
 
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 items-center justify-end gap-2">
           <button
             v-if="result"
-            class="flex items-center gap-1 rounded-xl border border-moss px-4 py-2 text-sm text-moss transition hover:bg-moss/10"
+            class="flex shrink-0 items-center gap-1 rounded-xl border border-moss px-3 py-2.5 text-sm text-moss transition hover:bg-moss/10 sm:px-4"
             :disabled="explanationLoading || !!explanation"
             @click="loadExplanation"
           >
@@ -326,7 +329,7 @@ onMounted(async () => {
           </button>
           <button
             v-if="!result"
-            class="flex items-center gap-1 rounded-xl bg-ink px-5 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
+            class="flex shrink-0 items-center gap-1 rounded-xl bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50 sm:px-5"
             :disabled="submitting"
             @click="submit"
           >
@@ -335,7 +338,7 @@ onMounted(async () => {
           </button>
           <button
             v-else
-            class="flex items-center gap-1 rounded-xl bg-ink px-5 py-2 text-sm text-white transition hover:bg-ink/90"
+            class="flex shrink-0 items-center gap-1 rounded-xl bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-ink/90 sm:px-5"
             @click="next"
           >
             {{ index < questions.length - 1 ? "下一题" : "完成练习" }}

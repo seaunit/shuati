@@ -22,10 +22,18 @@ body,
 
 body {
   margin: 0;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 18% 12%, rgba(201, 138, 138, 0.1), transparent 38%),
     radial-gradient(circle at 82% 20%, rgba(125, 155, 118, 0.1), transparent 36%),
     var(--color-paper);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
 }

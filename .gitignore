@@ -5,6 +5,8 @@ backend/target/
 # Node / Vite
 frontend/node_modules/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
 
 # 环境与密钥
 .env

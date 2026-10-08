@@ -72,7 +72,7 @@ watch(mode, loadCaptcha);
 </script>
 
 <template>
-  <main class="flex min-h-screen items-center justify-center px-6">
+  <main class="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
     <div class="w-full max-w-md">
       <div class="mb-8 text-center">
         <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-moss/15 text-moss">
@@ -83,7 +83,7 @@ watch(mode, loadCaptcha);
       </div>
 
       <form
-        class="rounded-3xl border border-mist bg-white/70 p-8 shadow-sm backdrop-blur"
+        class="rounded-3xl border border-mist bg-white/70 p-5 shadow-sm backdrop-blur sm:p-8"
         @submit.prevent="submit"
       >
         <div class="mb-6 flex rounded-xl bg-mist p-1">
@@ -155,11 +155,11 @@ watch(mode, loadCaptcha);
                 v-if="captchaImage"
                 :src="captchaImage"
                 alt="验证码"
-                class="block h-[44px] w-[120px] object-cover"
+                class="block h-[44px] w-[110px] object-cover sm:w-[120px]"
               />
               <span
                 v-else
-                class="flex h-[44px] w-[120px] items-center justify-center text-xs text-oat"
+                class="flex h-[44px] w-[110px] items-center justify-center text-xs text-oat sm:w-[120px]"
               >
                 {{ captchaLoading ? "加载中" : "点击刷新" }}
               </span>

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:mobile": "playwright test tests/mobile-responsive.spec.ts"
   },
   "dependencies": {
     "lucide-vue-next": "^0.468.0",
@@ -15,6 +16,7 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
     "@vitejs/plugin-vue": "^5.2.0",

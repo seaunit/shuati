@@ -182,9 +182,9 @@ onMounted(() => {
     <p v-if="notice" class="rounded-xl bg-moss/10 px-4 py-3 text-sm text-ink">{{ notice }}</p>
 
     <section v-if="plans.length > 0">
-      <div class="mb-4 flex items-center justify-between">
+      <div class="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <h2 class="font-medium text-ink">选择套餐</h2>
-        <div class="flex rounded-xl bg-mist p-1">
+        <div class="grid w-full grid-cols-3 rounded-xl bg-mist p-1 sm:w-auto">
           <button
             v-for="item in PERIODS"
             :key="item.key"
@@ -258,7 +258,7 @@ onMounted(() => {
         <div
           v-for="pack in packs"
           :key="pack.code"
-          class="flex items-center justify-between rounded-2xl border border-mist bg-white/70 p-5"
+          class="flex items-center justify-between gap-4 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5"
         >
           <div>
             <p class="font-medium text-ink">{{ pack.name }}</p>
@@ -278,8 +278,8 @@ onMounted(() => {
 
     <section>
       <h2 class="mb-4 font-medium text-ink">AI 点数消耗</h2>
-      <div class="overflow-hidden rounded-2xl border border-mist bg-white/70">
-        <table class="w-full text-sm">
+      <div class="overflow-x-auto rounded-2xl border border-mist bg-white/70">
+        <table class="w-full min-w-[30rem] text-sm">
           <thead class="bg-mist/60 text-left text-xs text-oat">
             <tr>
               <th class="px-4 py-2.5 font-normal">功能</th>
