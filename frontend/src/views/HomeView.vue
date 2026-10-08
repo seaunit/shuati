@@ -77,7 +77,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl">
+  <div class="w-full">
     <header class="mb-6">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">题库</h1>
       <p class="mt-1 text-sm text-oat">选择题库后，按单元开始练习</p>

@@ -119,7 +119,7 @@ onMounted(() => {
     </aside>
 
     <main
-      class="min-h-[calc(100vh-3.5rem)] min-w-0 overflow-x-hidden px-4 pb-28 pt-5 sm:px-5 lg:min-h-screen lg:p-8"
+      class="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 overflow-x-hidden px-4 pb-28 pt-5 sm:px-5 lg:min-h-screen lg:p-8"
     >
       <RouterView />
     </main>

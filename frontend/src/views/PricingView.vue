@@ -158,7 +158,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl space-y-8">
+  <div class="w-full space-y-8">
     <header>
       <h1 class="text-2xl font-semibold tracking-tight text-ink">套餐与点数</h1>
       <p class="mt-1 text-sm text-oat">公共题库与选择题判分永久免费，AI 能力按点数计费</p>

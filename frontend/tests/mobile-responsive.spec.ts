@@ -262,5 +262,10 @@ test.describe("desktop layout", () => {
     expect(mainBox).not.toBeNull();
     expect(mainBox!.x).toBeGreaterThanOrEqual(sidebarBox!.x + sidebarBox!.width);
     expect(mainBox!.y).toBe(0);
+
+    const content = page.locator("main > div").first();
+    const contentBox = await content.boundingBox();
+    expect(contentBox).not.toBeNull();
+    expect(contentBox!.width).toBeGreaterThanOrEqual(mainBox!.width * 0.9);
   });
 });

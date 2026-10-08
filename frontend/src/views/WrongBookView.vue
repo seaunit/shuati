@@ -45,7 +45,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl">
+  <div class="w-full">
     <header class="mb-6">
       <h1 class="text-2xl font-semibold tracking-tight text-ink">错题本</h1>
       <p class="mt-1 text-sm text-oat">按最近一次作答结果统计</p>

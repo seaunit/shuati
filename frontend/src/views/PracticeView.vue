@@ -220,7 +220,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl pb-28 lg:pb-0">
+  <div class="w-full pb-28 lg:pb-0">
     <div v-if="loading" class="flex h-64 items-center justify-center text-sm text-oat">加载中…</div>
     <div v-else-if="questions.length === 0" class="flex h-64 items-center justify-center text-sm text-oat">
       没有可练习的题目
