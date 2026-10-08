@@ -134,6 +134,7 @@ public class BillingService {
         PaymentGateway.CheckoutSession checkout = paymentGateway.createCheckout(
             orderId,
             PaymentGateway.itemCodeOf(normalizedKind, itemCode, normalizedPeriod),
+            paymentGateway.currencyFor(normalizedKind),
             userId,
             buyerEmail,
             BigDecimal.valueOf(amountCents, 2).toPlainString());

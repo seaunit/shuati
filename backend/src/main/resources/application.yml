@@ -44,8 +44,10 @@ shuati:
     base-url: ${SHUATI_PAYMENTS_URL:http://127.0.0.1:8090}
     # 与支付侧车共享的密钥，务必改成随机值
     internal-secret: ${SHUATI_PAYMENTS_SECRET:}
-    # 收银台计价币种（ISO 4217）
-    currency: ${SHUATI_PAYMENTS_CURRENCY:USD}
+    # 一次性支付（点数包）币种
+    currency: ${SHUATI_PAYMENTS_CURRENCY:CNY}
+    # 订阅币种：Waffo 平台不支持订阅用 CNY，固定用 USD
+    subscription-currency: ${SHUATI_PAYMENTS_SUBSCRIPTION_CURRENCY:USD}
   rate-limit:
     enabled: true
     # 同一 IP 每分钟请求总量兜底（拦脚本扫描），0=关闭

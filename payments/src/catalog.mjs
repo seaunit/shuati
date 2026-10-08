@@ -1,7 +1,10 @@
 /**
  * 本项目的商品编码（与 Java 侧 plan.code / point_pack.code 对应）。
- * 金额一律用展示金额字符串（USD 传 "19.00"，不是分）。
+ * 金额一律用展示金额字符串（"19.00"，不是分）。
+ * 币种由 WAFFO_CURRENCY 决定，默认 CNY。
  */
+export const CURRENCY = (process.env.WAFFO_CURRENCY?.trim() || "CNY").toUpperCase();
+
 export const CATALOG = [
   {
     itemCode: "PLAN:plus:MONTHLY",

@@ -62,8 +62,15 @@ async function handleCheckout(req, res) {
     return;
   }
 
-  const { orderId, itemCode, currency = "USD", buyerIdentity, buyerEmail, amount, successUrl } =
-    body;
+  const {
+    orderId,
+    itemCode,
+    currency = "CNY",
+    buyerIdentity,
+    buyerEmail,
+    amount,
+    successUrl,
+  } = body;
   if (!orderId || !itemCode || !buyerIdentity) {
     json(res, 400, { ok: false, message: "orderId / itemCode / buyerIdentity 必填" });
     return;

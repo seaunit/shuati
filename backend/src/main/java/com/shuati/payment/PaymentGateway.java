@@ -25,17 +25,20 @@ public class PaymentGateway {
   private final String baseUrl;
   private final String internalSecret;
   private final String currency;
+  private final String subscriptionCurrency;
   private final boolean enabled;
 
   public PaymentGateway(
       @Value("${shuati.payments.enabled:false}") boolean enabled,
       @Value("${shuati.payments.base-url:}") String baseUrl,
       @Value("${shuati.payments.internal-secret:}") String internalSecret,
-      @Value("${shuati.payments.currency:USD}") String currency) {
+      @Value("${shuati.payments.currency:CNY}") String currency,
+      @Value("${shuati.payments.subscription-currency:USD}") String subscriptionCurrency) {
     this.enabled = enabled && baseUrl != null && !baseUrl.isBlank();
     this.baseUrl = baseUrl == null ? "" : baseUrl.replaceAll("/+$", "");
     this.internalSecret = internalSecret == null ? "" : internalSecret;
     this.currency = currency;
+    this.subscriptionCurrency = subscriptionCurrency;
   }
 
   public boolean isEnabled() {
@@ -49,9 +52,18 @@ public class PaymentGateway {
         : "PACK:" + itemCode;
   }
 
+  /**
+   * Waffo 平台限制：订阅（recurring）不支持 CNY，一次性支付支持。
+   * 所以订阅走 subscription-currency（默认 USD），点数包走 currency（默认 CNY）。
+   */
+  public String currencyFor(String kind) {
+    return "PLAN".equals(kind) ? subscriptionCurrency : currency;
+  }
+
   public CheckoutSession createCheckout(
       String orderId,
       String waffoItemCode,
+      String currency,
       String buyerIdentity,
       String buyerEmail,
       String amount) {

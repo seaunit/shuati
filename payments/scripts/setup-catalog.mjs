@@ -12,20 +12,22 @@ if (existsSync(envPath)) {
 }
 
 const { client, storeId, environment } = await import("../src/waffo.mjs");
-const { CATALOG } = await import("../src/catalog.mjs");
+const { CATALOG, CURRENCY } = await import("../src/catalog.mjs");
 
 if (!storeId) {
   console.error("缺少 WAFFO_STORE_ID");
   process.exit(1);
 }
 
-console.log(`环境=${environment} 店铺=${storeId}，开始创建 ${CATALOG.length} 个商品…\n`);
+console.log(
+  `环境=${environment} 店铺=${storeId} 币种=${CURRENCY}，开始创建 ${CATALOG.length} 个商品…\n`,
+);
 
 const mapping = [];
 
 for (const item of CATALOG) {
   const prices = {
-    USD: { amount: item.amount, taxIncluded: true, taxCategory: item.taxCategory },
+    [CURRENCY]: { amount: item.amount, taxIncluded: true, taxCategory: item.taxCategory },
   };
   try {
     const created =
