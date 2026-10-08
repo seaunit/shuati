@@ -199,3 +199,68 @@ test("practice actions stay directly above the mobile navigation", async ({ page
   const position = await actions.evaluate((element) => getComputedStyle(element).position);
   expect(position).toBe("fixed");
 });
+
+test.describe("desktop layout", () => {
+  test.use({
+    viewport: { width: 1440, height: 900 },
+    isMobile: false,
+    hasTouch: false,
+  });
+
+  test("keeps the sidebar and main content side by side", async ({ page }) => {
+    await page.route("**/api/me", (route) =>
+      route.fulfill({
+        json: {
+          code: 200,
+          message: "ok",
+          data: {
+            id: "test-user",
+            email: "shuati.admin@gmail.com",
+            nickname: "admin",
+            role: "ADMIN",
+            status: "ENABLED",
+          },
+        },
+      }),
+    );
+    await page.route("**/api/points", (route) =>
+      route.fulfill({
+        json: {
+          code: 200,
+          message: "ok",
+          data: {
+            entitlements: {
+              planCode: "free",
+              planName: "免费版",
+              planExpiresAt: null,
+              monthlyQuota: 50,
+              monthlyUsed: 0,
+              monthlyLeft: 50,
+              bonusBalance: 100,
+              available: 150,
+              lifetimeUsed: 0,
+            },
+            ledger: [],
+          },
+        },
+      }),
+    );
+    await page.route("**/api/banks", (route) =>
+      route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+    );
+
+    await page.goto("/app");
+
+    const sidebar = page.getByTestId("desktop-sidebar");
+    const main = page.locator("main");
+    await expect(sidebar).toBeVisible();
+    await expect(page.getByTestId("mobile-nav")).toBeHidden();
+
+    const sidebarBox = await sidebar.boundingBox();
+    const mainBox = await main.boundingBox();
+    expect(sidebarBox).not.toBeNull();
+    expect(mainBox).not.toBeNull();
+    expect(mainBox!.x).toBeGreaterThanOrEqual(sidebarBox!.x + sidebarBox!.width);
+    expect(mainBox!.y).toBe(0);
+  });
+});

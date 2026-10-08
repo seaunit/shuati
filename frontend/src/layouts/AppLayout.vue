@@ -41,7 +41,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen">
+  <div class="min-h-screen lg:flex">
     <header
       class="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-mist/80 bg-paper/90 px-4 backdrop-blur-xl lg:hidden"
     >
