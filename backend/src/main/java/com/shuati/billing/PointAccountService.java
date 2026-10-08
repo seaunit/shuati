@@ -229,9 +229,19 @@ public class PointAccountService {
     int bonus = intValue(account.get("bonus_balance"));
     int monthlyLeft = Math.max(monthlyQuota - monthlyUsed, 0);
 
+    // 纯点数制：买过点数包的用户，展示最近购买的包名，而不是“免费版”
+    String lastPackCode = account.get("last_pack_code") == null
+        ? null : String.valueOf(account.get("last_pack_code"));
+    String displayName = String.valueOf(plan.getOrDefault("name", "免费版"));
+    if (lastPackCode != null && !lastPackCode.isBlank()) {
+      displayName = jdbc.queryForList(
+              "select name from point_pack where code = ?", String.class, lastPackCode)
+          .stream().findFirst().orElse(displayName);
+    }
+
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("planCode", planCode);
-    result.put("planName", plan.getOrDefault("name", "免费版"));
+    result.put("planName", displayName);
     result.put("planExpiresAt", toIso(account.get("plan_expires_at")));
     result.put("monthlyQuota", monthlyQuota);
     result.put("monthlyUsed", monthlyUsed);

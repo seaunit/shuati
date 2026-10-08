@@ -195,6 +195,9 @@ public class BillingService {
     String userId = String.valueOf(order.get("user_id"));
     if ("PACK".equals(order.get("kind"))) {
       points.addBonusPoints(userId, intValue(order.get("points")), "PACK_PURCHASE", "order", orderId);
+      // 纯点数制：记下最近购买的包，用于界面展示
+      jdbc.update("update point_account set last_pack_code = ? where user_id = ?",
+          order.get("item_code"), userId);
     } else {
       LocalDateTime expiresAt = expiryFor(String.valueOf(order.get("period")));
       points.applyPlan(userId, String.valueOf(order.get("item_code")), expiresAt);
