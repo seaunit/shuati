@@ -164,7 +164,7 @@ onMounted(() => {
       <p class="mt-1 text-sm text-oat">公共题库与选择题判分永久免费，AI 能力按点数计费</p>
     </header>
 
-    <section v-if="entitlements" class="grid gap-4 rounded-2xl border border-mist bg-white/70 p-5 sm:grid-cols-4">
+    <section v-if="entitlements" class="grid gap-4 rounded-2xl border border-mist bg-white/70 p-5 sm:grid-cols-3">
       <div>
         <p class="text-xs text-oat">当前套餐</p>
         <p class="mt-1 font-medium text-ink">{{ entitlements.planName }}</p>
@@ -172,10 +172,6 @@ onMounted(() => {
       <div>
         <p class="text-xs text-oat">可用点数</p>
         <p class="mt-1 font-medium text-ink">{{ entitlements.available }} 点</p>
-      </div>
-      <div>
-        <p class="text-xs text-oat">本月剩余额度</p>
-        <p class="mt-1 font-medium text-ink">{{ entitlements.monthlyLeft }} / {{ entitlements.monthlyQuota }} 点</p>
       </div>
       <div>
         <p class="text-xs text-oat">加量包余额</p>
