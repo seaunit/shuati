@@ -36,7 +36,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:80
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --url https://127.0.0.1:443 --no-tls-verify --http-host-header seaunit.site
 Restart=always
 RestartSec=5
 StandardOutput=append:/var/log/shuati-quick-tunnel.log
@@ -48,11 +48,12 @@ EOF
 
 : >/var/log/shuati-quick-tunnel.log
 systemctl daemon-reload
-systemctl enable --now shuati-quick-tunnel.service
+systemctl enable shuati-quick-tunnel.service
+systemctl restart shuati-quick-tunnel.service
 
 echo "==> 等待 Cloudflare 分配临时 HTTPS 地址"
 URL=""
-for _ in $(seq 1 30); do
+for _ in $(seq 1 45); do
   URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /var/log/shuati-quick-tunnel.log | tail -1 || true)"
   if [ -n "$URL" ]; then
     break
