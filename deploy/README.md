@@ -3,6 +3,20 @@
 > 目标形态：**一台服务器**跑 Spring Boot jar + Node 支付侧车 + MySQL + Redis + Nginx。
 > 下面的步骤以 **Ubuntu 22.04 / 24.04** 为例（CentOS/OpenCloudOS 把 `apt` 换成 `dnf` 即可）。
 
+## 本项目实际参数
+
+| 项 | 值 |
+| --- | --- |
+| 域名 | `seaunit.site`（同时支持 `www.seaunit.site`） |
+| 服务器 | 阿里云香港轻量 · 2 vCPU / 4 GiB / 50 GiB ESSD |
+| 公网 IP | `8.210.73.129` |
+| Nginx `server_name` | 已写好，无需再改 |
+
+> ⚠️ **系统建议**：当前实例是 **CentOS 8.2**，而 CentOS 8 已于 2021-12 停止维护，
+> 官方 yum 源已下线，直接 `dnf install` 会报 404。**建议在轻量控制台「重置系统」里换成
+> Ubuntu 22.04 LTS**（一键重装，约 5 分钟），之后 `deploy/scripts/server-bootstrap.sh` 可直接使用。
+> 坚持用 CentOS 的话，需要先把 yum 源指向 `vault.centos.org`，再手工安装 JDK/Node/MySQL/Redis/Nginx。
+
 ## 0. 机器规格
 
 | 项 | 建议 |
