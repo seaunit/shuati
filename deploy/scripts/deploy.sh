@@ -24,6 +24,10 @@ tar -C "$ROOT" --exclude='payments/node_modules' --exclude='payments/.env' \
   -czf /tmp/shuati-payments.tar.gz payments
 scp /tmp/shuati-payments.tar.gz "$TARGET:/tmp/shuati-payments.tar.gz"
 
+echo "==> 上传部署文件（systemd / Nginx）"
+tar -C "$ROOT" -czf /tmp/shuati-deploy.tar.gz deploy
+scp /tmp/shuati-deploy.tar.gz "$TARGET:/tmp/shuati-deploy.tar.gz"
+
 echo "==> 远端替换并重启"
 ssh "$TARGET" 'bash -s' <<'REMOTE'
 set -euo pipefail
@@ -33,10 +37,20 @@ sudo rm -rf /opt/shuati/frontend/*
 sudo tar -C /opt/shuati/frontend -xzf /tmp/shuati-frontend.tar.gz --strip-components=1
 sudo rm -rf /opt/shuati/payments
 sudo tar -C /opt/shuati -xzf /tmp/shuati-payments.tar.gz
+sudo rm -rf /opt/shuati/deploy
+sudo tar -C /opt/shuati -xzf /tmp/shuati-deploy.tar.gz
 cd /opt/shuati/payments && sudo npm ci --omit=dev
+
+echo "==> 安装 systemd 与 Nginx 配置"
+sudo cp /opt/shuati/deploy/systemd/shuati.service /etc/systemd/system/
+sudo cp /opt/shuati/deploy/systemd/shuati-payments.service /etc/systemd/system/
+sudo cp /opt/shuati/deploy/nginx/shuati.conf /etc/nginx/conf.d/
+sudo systemctl daemon-reload
+sudo systemctl enable shuati shuati-payments
+
 sudo chown -R shuati:shuati /opt/shuati
-sudo systemctl restart shuati
-sudo systemctl restart shuati-payments
+sudo systemctl restart shuati shuati-payments
+sudo nginx -t
 sudo systemctl reload nginx
 sudo systemctl status shuati --no-pager
 sudo systemctl status shuati-payments --no-pager
