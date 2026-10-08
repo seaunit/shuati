@@ -167,6 +167,12 @@ async function handleWebhook(req, res) {
         currency: data.currency,
       }),
     });
+    // 404 = 本地查不到该订单（例如后台的测试事件），回 200 让平台停止重试
+    if (resp.status === 404) {
+      console.log(`[payments] 忽略未知订单 ${orderId}（${event.eventType}）`);
+      json(res, 200, { ok: true, ignored: "order not found" });
+      return;
+    }
     if (!resp.ok) {
       throw new Error(`java notify ${resp.status}`);
     }
