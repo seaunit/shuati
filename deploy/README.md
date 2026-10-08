@@ -38,6 +38,16 @@ curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/
 支付侧车首次先用占位密钥并保持 `SHUATI_PAYMENTS_ENABLED=false`，真实 Waffo 密钥写入
 `/etc/shuati/payments.env` 后再启用。
 
+域名审核或证书签发期间，如果部分手机运营商无法直连公网 IP，可临时开启
+Cloudflare Quick Tunnel：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/start-quick-tunnel.sh | sudo bash
+```
+
+脚本会输出一个 `https://*.trycloudflare.com` 地址，适合手机临时验收；正式域名生效后
+应停用该隧道。
+
 如果需要手工拆开每一步执行，再使用下面的初始化脚本：
 
 ```bash
