@@ -170,6 +170,13 @@ sudo certbot --nginx -d 你的域名
 
 证书自动续期已由 certbot 的 systemd timer 处理。启用后把 `SHUATI_COOKIE_SECURE` 设回 `true`。
 
+项目提供了幂等 HTTPS 脚本，会申请 `seaunit.site` 与 `www.seaunit.site` 的证书、配置
+Nginx 跳转，并把后端 Cookie 切换为安全模式：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/enable-https.sh | sudo bash
+```
+
 ## 7. 支付回调
 
 把 `https://你的域名/pay/webhooks/waffo` 填到 Waffo 后台的 Webhook（事件只勾 `order.completed`）。

@@ -179,7 +179,10 @@ echo "==> 9/9 安装 systemd / Nginx 并启动"
 install -m 0644 "$APP_DIR/deploy/systemd/shuati.service" /etc/systemd/system/shuati.service
 install -m 0644 "$APP_DIR/deploy/systemd/shuati-payments.service" \
   /etc/systemd/system/shuati-payments.service
-install -m 0644 "$APP_DIR/deploy/nginx/shuati.conf" /etc/nginx/conf.d/shuati.conf
+if [ ! -f /etc/nginx/conf.d/shuati.conf ] \
+  || ! grep -q 'ssl_certificate' /etc/nginx/conf.d/shuati.conf; then
+  install -m 0644 "$APP_DIR/deploy/nginx/shuati.conf" /etc/nginx/conf.d/shuati.conf
+fi
 rm -f /etc/nginx/sites-enabled/default
 
 systemctl daemon-reload

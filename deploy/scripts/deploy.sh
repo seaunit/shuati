@@ -44,7 +44,10 @@ cd /opt/shuati/payments && sudo npm ci --omit=dev
 echo "==> 安装 systemd 与 Nginx 配置"
 sudo cp /opt/shuati/deploy/systemd/shuati.service /etc/systemd/system/
 sudo cp /opt/shuati/deploy/systemd/shuati-payments.service /etc/systemd/system/
-sudo cp /opt/shuati/deploy/nginx/shuati.conf /etc/nginx/conf.d/
+if [ ! -f /etc/nginx/conf.d/shuati.conf ] \
+  || ! grep -q 'ssl_certificate' /etc/nginx/conf.d/shuati.conf; then
+  sudo cp /opt/shuati/deploy/nginx/shuati.conf /etc/nginx/conf.d/
+fi
 sudo systemctl daemon-reload
 sudo systemctl enable shuati shuati-payments
 
