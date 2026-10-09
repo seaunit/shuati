@@ -94,7 +94,7 @@ test("captcha is only required for login, not register or forgot password", asyn
   await page.getByRole("button", { name: "注册", exact: true }).click();
   await expect(captchaInput).toBeHidden();
 
-  await page.getByRole("button", { name: "忘记密码" }).click();
+  await page.getByRole("button", { name: "找回密码", exact: true }).click();
   await expect(captchaInput).toBeHidden();
 
   await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -213,7 +213,7 @@ test("forgot password sends reset code and resets password", async ({ page }) =>
   });
 
   await page.goto("/login");
-  await page.getByRole("button", { name: "忘记密码" }).click();
+  await page.getByRole("button", { name: "找回密码", exact: true }).click();
   await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("reset@example.com");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await page.getByPlaceholder("6 位数字").fill("123456");

@@ -189,13 +189,14 @@ watch(email, resetEmailCode);
             v-for="item in [
               { key: 'login', label: '登录' },
               { key: 'register', label: '注册' },
+              { key: 'forgot', label: '找回密码' },
             ]"
             :key="item.key"
             type="button"
             class="flex-1 rounded-lg py-2 text-sm transition"
             :class="mode === item.key ? 'bg-white text-ink shadow-sm' : 'text-oat'"
             @click="
-              mode = item.key as 'login' | 'register';
+              mode = item.key as 'login' | 'register' | 'forgot';
               error = '';
               notice = '';
             "
@@ -203,19 +204,6 @@ watch(email, resetEmailCode);
             {{ item.label }}
           </button>
         </div>
-
-        <button
-          v-if="mode !== 'forgot'"
-          type="button"
-          class="-mt-3 mb-5 block text-sm text-moss transition hover:text-moss/80"
-          @click="
-            mode = 'forgot';
-            error = '';
-            notice = '';
-          "
-        >
-          忘记密码
-        </button>
 
         <label class="mb-5 block">
           <span class="mb-1.5 block text-sm text-ink">邮箱</span>
