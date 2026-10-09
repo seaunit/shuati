@@ -110,7 +110,52 @@ GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
 
+# 交互读取 DirectMail SMTP 密码（输入不回显；直接回车即跳过）。
+# curl | bash 这类拿不到控制终端的环境会自动跳过，不会卡住部署。
+prompt_mail_password() {
+  # 注意：没有控制终端时 /dev/tty 依然存在，-r/-w 也会通过，必须真正尝试打开
+  if ! { : >/dev/tty; } 2>/dev/null; then
+    # 走 stderr：stdout 会被调用方 $(...) 捕获成密码值
+    echo "[配置] 未检测到可交互终端，跳过 SMTP 密码输入" >&2
+    printf '%s' ""
+    return 0
+  fi
+  printf '\n[配置] 阿里云 DirectMail 邮箱 SMTP 密码（账号 no-reply@mail.seaunit.site）\n' >/dev/tty
+  printf '[配置] 输入不会回显，直接回车可跳过：' >/dev/tty
+  local input=""
+  IFS= read -rs input </dev/tty || input=""
+  printf '\n' >/dev/tty
+  if [ -z "$input" ]; then
+    printf '[配置] 已跳过 SMTP 密码输入\n' >/dev/tty
+  else
+    printf '[配置] SMTP 密码已记录，将写入 /etc/shuati/env\n' >/dev/tty
+  fi
+  printf '%s' "$input"
+}
+
+# 覆盖或追加单个 env 变量（保持单引号写法，只动这一行）
+set_env_var() {
+  local key="$1" value="$2" tmp="$ENV_DIR/env.tmp"
+  awk -v key="$key" -v val="$value" -v q="'" '
+    $0 ~ "^" key "=" { print key "=" q val q; done = 1; next }
+    { print }
+    END { if (!done) print key "=" q val q }
+  ' "$ENV_DIR/env" >"$tmp" && mv "$tmp" "$ENV_DIR/env"
+}
+
 echo "==> 8/9 写入配置"
+
+# 优先级：环境变量 > 已有配置 > 交互输入。已有密码时不再重复打扰。
+MAIL_PASSWORD="${SHUATI_MAIL_PASSWORD:-}"
+if [ -z "$MAIL_PASSWORD" ] && [ -s "$ENV_DIR/env" ]; then
+  MAIL_PASSWORD="$(
+    sed -n "s/^SHUATI_MAIL_PASSWORD='\\(.*\\)'$/\\1/p" "$ENV_DIR/env" | head -1
+  )"
+fi
+if [ -z "$MAIL_PASSWORD" ]; then
+  MAIL_PASSWORD="$(prompt_mail_password)"
+fi
+
 if [ ! -s "$ENV_DIR/env" ]; then
   JWT_SECRET="$(openssl rand -hex 32)"
   APP_AES_SECRET="$(openssl rand 32 | base64 -w0)"
@@ -147,8 +192,8 @@ SHUATI_MAIL_ENABLED='true'
 SHUATI_MAIL_HOST='smtpdm.aliyun.com'
 SHUATI_MAIL_PORT=465
 SHUATI_MAIL_USERNAME='no-reply@mail.seaunit.site'
-# SMTP 密码必须手动填写，部署后写入真实值再重启 shuati
-SHUATI_MAIL_PASSWORD=''
+# SMTP 密码：部署时交互输入；留空则稍后在 /etc/shuati/env 手动补填
+SHUATI_MAIL_PASSWORD='${MAIL_PASSWORD}'
 SHUATI_MAIL_FROM='no-reply@mail.seaunit.site'
 SHUATI_MAIL_FROM_NAME='拾题'
 SHUATI_EMAIL_SECRET='${EMAIL_SECRET}'
@@ -193,7 +238,6 @@ EOF
 fi
 
 # 旧版 env 可能缺少邮件验证码配置：只补缺失的键，绝不覆盖已有值。
-# SMTP 密码必须手动填写，这里只留空占位。
 ensure_env_line() {
   local key="$1" value="$2"
   if ! grep -q "^${key}=" "$ENV_DIR/env"; then
@@ -206,7 +250,6 @@ ensure_env_line SHUATI_MAIL_ENABLED true
 ensure_env_line SHUATI_MAIL_HOST smtpdm.aliyun.com
 ensure_env_line SHUATI_MAIL_PORT 465
 ensure_env_line SHUATI_MAIL_USERNAME no-reply@mail.seaunit.site
-ensure_env_line SHUATI_MAIL_PASSWORD ""
 ensure_env_line SHUATI_MAIL_FROM no-reply@mail.seaunit.site
 ensure_env_line SHUATI_MAIL_FROM_NAME 拾题
 ensure_env_line SHUATI_EMAIL_SECRET "$(openssl rand -hex 32)"
@@ -221,12 +264,23 @@ ensure_env_line SHUATI_MAIL_IP_HOURLY_LIMIT 20
 ensure_env_line SHUATI_MAIL_DEVICE_DAILY_LIMIT 30
 ensure_env_line SHUATI_MAIL_GLOBAL_DAILY_LIMIT 2000
 
+# 老部署里 SMTP 密码还是空值时，用本次输入的值补上；已有非空值不会被改动
+if [ -n "$MAIL_PASSWORD" ]; then
+  set_env_var SHUATI_MAIL_PASSWORD "$MAIL_PASSWORD"
+fi
+
 MAIL_PASSWORD_VALUE="$(
   grep -E '^SHUATI_MAIL_PASSWORD=' "$ENV_DIR/env" \
     | tail -1 | cut -d= -f2- | tr -d "'\""
 )"
 if [ -z "$MAIL_PASSWORD_VALUE" ]; then
-  echo "[env] 注意：SHUATI_MAIL_PASSWORD 仍为空，请在 /etc/shuati/env 填入 DirectMail SMTP 密码后执行 systemctl restart shuati"
+  echo
+  echo "==================== 告警 ===================="
+  echo "未设置 SMTP 密码，邮箱验证码、注册和找回密码暂时不可用。"
+  echo "补填方式：编辑 /etc/shuati/env 里的 SHUATI_MAIL_PASSWORD，保存后执行："
+  echo "  sudo systemctl restart shuati"
+  echo "=============================================="
+  echo
 fi
 
 chown -R shuati:shuati "$ENV_DIR"
