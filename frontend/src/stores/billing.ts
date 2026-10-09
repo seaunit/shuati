@@ -20,7 +20,12 @@ export const useBillingStore = defineStore("billing", {
   actions: {
     async load() {
       try {
-        const data = await api<{ entitlements: Entitlements }>("/api/points");
+        // 游客没有点数，未登录时静默失败，不要触发跳转登录页
+        const data = await api<{ entitlements: Entitlements }>(
+          "/api/points",
+          {},
+          { redirectOn401: false },
+        );
         this.entitlements = data.entitlements;
       } catch {
         this.entitlements = null;

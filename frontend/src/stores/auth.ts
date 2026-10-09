@@ -20,7 +20,8 @@ export const useAuthStore = defineStore("auth", {
   actions: {
     async load() {
       try {
-        this.user = await api<User>("/api/me");
+        // 未登录是游客模式的正常状态，不能触发跳转登录页
+        this.user = await api<User>("/api/me", {}, { redirectOn401: false });
       } catch {
         this.user = null;
       } finally {

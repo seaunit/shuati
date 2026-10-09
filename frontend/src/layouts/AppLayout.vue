@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { Coins, Ellipsis, Leaf, LogOut, X } from "lucide-vue-next";
+import { Coins, Ellipsis, Leaf, LogIn, LogOut, X } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { useBillingStore } from "@/stores/billing";
 import NavLinks from "@/components/NavLinks.vue";
@@ -36,7 +36,9 @@ async function signOut() {
 }
 
 onMounted(() => {
-  billing.load();
+  if (auth.user) {
+    billing.load();
+  }
 });
 </script>
 
@@ -54,21 +56,30 @@ onMounted(() => {
 
       <div class="flex items-center gap-2">
         <RouterLink
-          v-if="billing.entitlements"
-          to="/app/pricing"
-          class="flex h-9 items-center gap-1.5 rounded-full border border-mist bg-white/75 px-3 text-xs text-ink"
+          v-if="!auth.user"
+          to="/login"
+          class="flex h-9 items-center rounded-full border border-moss px-3 text-xs text-moss transition hover:bg-moss/10"
         >
-          <Coins class="h-3.5 w-3.5 text-moss" />
-          <span class="font-medium">{{ billing.entitlements.available }}</span>
-          <span class="text-oat">点</span>
+          登录 / 注册
         </RouterLink>
-        <button
-          class="flex h-9 w-9 items-center justify-center rounded-full border border-mist bg-white/75 text-ink"
-          aria-label="打开更多菜单"
-          @click="moreOpen = true"
-        >
-          <Ellipsis class="h-5 w-5" />
-        </button>
+        <template v-else>
+          <RouterLink
+            v-if="billing.entitlements"
+            to="/app/pricing"
+            class="flex h-9 items-center gap-1.5 rounded-full border border-mist bg-white/75 px-3 text-xs text-ink"
+          >
+            <Coins class="h-3.5 w-3.5 text-moss" />
+            <span class="font-medium">{{ billing.entitlements.available }}</span>
+            <span class="text-oat">点</span>
+          </RouterLink>
+          <button
+            class="flex h-9 w-9 items-center justify-center rounded-full border border-mist bg-white/75 text-ink"
+            aria-label="打开更多菜单"
+            @click="moreOpen = true"
+          >
+            <Ellipsis class="h-5 w-5" />
+          </button>
+        </template>
       </div>
     </header>
 
@@ -82,18 +93,18 @@ onMounted(() => {
         </span>
         <div class="min-w-0">
           <p class="font-semibold text-ink">拾题</p>
-          <p class="truncate text-xs text-oat">{{ auth.user?.email }}</p>
+          <p class="truncate text-xs text-oat">{{ auth.user?.email ?? "未登录" }}</p>
         </div>
       </div>
 
       <div class="mt-3 px-2">
         <span class="inline-flex items-center rounded-full bg-sand/40 px-2.5 py-0.5 text-xs text-oat">
-          {{ auth.isAdmin ? "管理员" : "普通用户" }}
+          {{ !auth.user ? "游客模式" : auth.isAdmin ? "管理员" : "普通用户" }}
         </span>
       </div>
 
       <RouterLink
-        v-if="billing.entitlements"
+        v-if="auth.user && billing.entitlements"
         to="/app/pricing"
         class="mt-3 flex items-center justify-between rounded-xl border border-mist bg-white/70 px-3 py-2 transition hover:border-moss"
       >
@@ -110,11 +121,19 @@ onMounted(() => {
 
       <div class="px-2">
         <button
+          v-if="auth.user"
           class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink/75 transition hover:bg-mist"
           @click="signOut"
         >
           退出登录
         </button>
+        <RouterLink
+          v-else
+          to="/login"
+          class="flex w-full items-center gap-3 rounded-xl bg-ink px-3 py-2 text-sm text-white transition hover:bg-ink/90"
+        >
+          登录 / 注册
+        </RouterLink>
       </div>
     </aside>
 
@@ -132,6 +151,7 @@ onMounted(() => {
     >
       <NavLinks :nav="primaryNav" variant="bottom" />
       <button
+        v-if="auth.user"
         class="flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-[10px] leading-none transition"
         :class="moreOpen ? 'bg-moss/15 font-medium text-moss' : 'text-ink/75'"
         @click="moreOpen = true"
@@ -139,6 +159,14 @@ onMounted(() => {
         <Ellipsis class="h-[18px] w-[18px]" />
         <span>更多</span>
       </button>
+      <RouterLink
+        v-else
+        to="/login"
+        class="flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-[10px] leading-none text-moss transition"
+      >
+        <LogIn class="h-[18px] w-[18px]" />
+        <span>登录</span>
+      </RouterLink>
     </nav>
 
     <div v-if="moreOpen" class="fixed inset-0 z-50 lg:hidden">

@@ -14,13 +14,38 @@ const router = createRouter({
       path: "/app",
       component: () => import("@/layouts/AppLayout.vue"),
       children: [
+        // 游客模式：首页的公共题库允许未登录浏览
         { path: "", component: () => import("@/views/HomeView.vue") },
-        { path: "practice", component: () => import("@/views/PracticeView.vue") },
-        { path: "wrong-book", component: () => import("@/views/WrongBookView.vue") },
-        { path: "stats", component: () => import("@/views/StatsView.vue") },
-        { path: "import", component: () => import("@/views/ImportView.vue") },
-        { path: "pricing", component: () => import("@/views/PricingView.vue") },
-        { path: "admin", component: () => import("@/views/AdminView.vue"), meta: { admin: true } },
+        {
+          path: "practice",
+          component: () => import("@/views/PracticeView.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: "wrong-book",
+          component: () => import("@/views/WrongBookView.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: "stats",
+          component: () => import("@/views/StatsView.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: "import",
+          component: () => import("@/views/ImportView.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: "pricing",
+          component: () => import("@/views/PricingView.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
+          path: "admin",
+          component: () => import("@/views/AdminView.vue"),
+          meta: { requiresAuth: true, admin: true },
+        },
       ],
     },
   ],
@@ -31,7 +56,7 @@ router.beforeEach(async (to) => {
   if (!auth.loaded) {
     await auth.load();
   }
-  if (!to.meta.public && !auth.user) {
+  if (to.meta.requiresAuth && !auth.user) {
     return { path: "/login", query: { next: to.fullPath } };
   }
   if (to.meta.admin && !auth.isAdmin) {

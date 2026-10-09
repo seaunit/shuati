@@ -9,9 +9,20 @@ public final class CurrentUser {
   }
 
   public static String id() {
+    String id = idOrNull();
+    if (id == null) {
+      throw new ApiException(401, "请先登录");
+    }
+    return id;
+  }
+
+  /**
+   * 游客模式下用来读取公开数据：未登录返回 null，由调用方决定可见范围。
+   */
+  public static String idOrNull() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-      throw new ApiException(401, "请先登录");
+      return null;
     }
     return String.valueOf(auth.getPrincipal());
   }

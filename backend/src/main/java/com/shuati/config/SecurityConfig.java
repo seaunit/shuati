@@ -7,6 +7,7 @@ import com.shuati.common.ApiResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -42,6 +43,8 @@ public class SecurityConfig {
                 "/captcha/**",
                 "/actuator/health")
             .permitAll()
+            // 游客模式：首页展示公共题库与单元，无需登录；其余接口仍要求登录
+            .requestMatchers(HttpMethod.GET, "/api/banks", "/api/banks/*/units").permitAll()
             .requestMatchers("/api/admin/**").hasRole("ADMIN")
             .anyRequest().authenticated())
         .exceptionHandling(handling -> handling

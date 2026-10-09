@@ -24,7 +24,8 @@ public class BankService {
   private final Json json;
 
   public List<Map<String, Object>> listBanks() {
-    String userId = CurrentUser.id();
+    // 游客没有 userId，只会看到公共题库（owner_id 为空）
+    String userId = CurrentUser.idOrNull();
     boolean admin = CurrentUser.isAdmin();
 
     List<Map<String, Object>> banks = jdbc.queryForList("""
@@ -33,7 +34,7 @@ public class BankService {
          order by is_default desc, id asc
         """).stream()
         .filter(b -> admin || b.get("owner_id") == null
-            || userId.equals(String.valueOf(b.get("owner_id"))))
+            || (userId != null && userId.equals(String.valueOf(b.get("owner_id")))))
         .map(b -> json.normalize(b, Set.of()))
         .toList();
 
@@ -78,7 +79,7 @@ public class BankService {
 
   public List<Map<String, Object>> listUnits(long bankId) {
     requireBankAccess(bankId);
-    String userId = CurrentUser.id();
+    String userId = CurrentUser.idOrNull();
 
     List<Map<String, Object>> units = jdbc.queryForList("""
         select id, bank_id, name, sort, created_at
@@ -199,6 +200,9 @@ public class BankService {
   }
 
   private Set<Long> answeredQuestionIds(String userId) {
+    if (userId == null) {
+      return Set.of();
+    }
     return new HashSet<>(jdbc.queryForList(
         "select distinct question_id from practice_record where user_id = ?",
         Long.class, userId));
@@ -226,8 +230,12 @@ public class BankService {
       throw new ApiException(404, "题库不存在");
     }
     Object ownerId = rows.get(0).get("owner_id");
-    if (!CurrentUser.isAdmin() && ownerId != null
-        && !String.valueOf(ownerId).equals(CurrentUser.id())) {
+    if (CurrentUser.isAdmin() || ownerId == null) {
+      return;
+    }
+    // 私有题库只有所有者本人能访问，游客一律拒绝
+    String userId = CurrentUser.idOrNull();
+    if (userId == null || !String.valueOf(ownerId).equals(userId)) {
       throw new ApiException(403, "无权访问该题库");
     }
   }

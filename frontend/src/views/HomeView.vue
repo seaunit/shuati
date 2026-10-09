@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { BookOpen, CheckCircle2 } from "lucide-vue-next";
+import { BookOpen, CheckCircle2, Lock } from "lucide-vue-next";
 import { api } from "@/api/client";
+import { useAuthStore } from "@/stores/auth";
 
 interface Bank {
   id: number;
@@ -25,6 +26,7 @@ interface Unit {
 }
 
 const router = useRouter();
+const auth = useAuthStore();
 const banks = ref<Bank[]>([]);
 const units = ref<Unit[]>([]);
 const bankId = ref<number | null>(null);
@@ -32,6 +34,7 @@ const loading = ref(true);
 const unitsLoading = ref(false);
 
 const currentBank = computed(() => banks.value.find((b) => b.id === bankId.value));
+const isGuest = computed(() => !auth.user);
 const totalQuestions = computed(() =>
   units.value.reduce((sum, unit) => sum + (unit.question_count ?? 0), 0),
 );
@@ -83,6 +86,22 @@ onMounted(async () => {
       <p class="mt-1 text-sm text-oat">选择题库后，按单元开始练习</p>
     </header>
 
+    <div
+      v-if="isGuest"
+      class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-moss/30 bg-moss/10 px-4 py-3"
+    >
+      <p class="flex items-center gap-2 text-sm text-ink/80">
+        <Lock class="h-4 w-4 shrink-0 text-moss" />
+        游客模式：公共题库可直接浏览，登录后即可刷题并记录进度
+      </p>
+      <RouterLink
+        to="/login"
+        class="shrink-0 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90"
+      >
+        登录 / 注册
+      </RouterLink>
+    </div>
+
     <div v-if="loading" class="space-y-4">
       <div class="h-10 animate-pulse rounded-xl border border-mist bg-white/50" />
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -126,11 +145,15 @@ onMounted(async () => {
             </p>
           </div>
           <div class="text-right">
-            <p class="text-sm text-ink">{{ totalAnswered }} / {{ totalQuestions }}</p>
-            <p class="text-xs text-oat">{{ bankPercent }}% 已完成</p>
+            <p class="text-sm text-ink">
+              {{ isGuest ? totalQuestions + " 题" : totalAnswered + " / " + totalQuestions }}
+            </p>
+            <p class="text-xs text-oat">
+              {{ isGuest ? "登录后可记录进度" : bankPercent + "% 已完成" }}
+            </p>
           </div>
         </div>
-        <div class="mt-3 h-2 overflow-hidden rounded-full bg-mist">
+        <div v-if="!isGuest" class="mt-3 h-2 overflow-hidden rounded-full bg-mist">
           <div class="h-full rounded-full bg-moss" :style="{ width: bankPercent + '%' }" />
         </div>
         <button
@@ -138,7 +161,7 @@ onMounted(async () => {
           :disabled="totalQuestions === 0"
           @click="router.push(`/app/practice?bankId=${currentBank.id}`)"
         >
-          开始练习本库
+          {{ isGuest ? "登录后开始练习" : "开始练习本库" }}
         </button>
       </section>
 
@@ -161,14 +184,16 @@ onMounted(async () => {
             <div class="flex items-center justify-between">
               <p class="text-sm font-medium text-ink">{{ unit.name }}</p>
               <CheckCircle2
-                v-if="unit.question_count && unit.answered_count >= unit.question_count"
+                v-if="!isGuest && unit.question_count && unit.answered_count >= unit.question_count"
                 class="h-4 w-4 text-moss"
               />
             </div>
-            <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-mist">
+            <div v-if="!isGuest" class="mt-3 h-1.5 overflow-hidden rounded-full bg-mist">
               <div class="h-full rounded-full bg-moss" :style="{ width: percent(unit) + '%' }" />
             </div>
-            <p class="mt-2 text-xs text-oat">{{ unit.answered_count }} / {{ unit.question_count }} 题</p>
+            <p class="mt-2 text-xs text-oat">
+              {{ isGuest ? unit.question_count + " 题" : unit.answered_count + " / " + unit.question_count + " 题" }}
+            </p>
           </button>
         </div>
       </section>

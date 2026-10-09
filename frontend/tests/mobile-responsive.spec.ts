@@ -101,6 +101,70 @@ test("captcha is only required for login, not register or forgot password", asyn
   await expect(captchaInput).toBeVisible();
 });
 
+async function mockGuestBankList(page: import("@playwright/test").Page) {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ status: 401, json: { code: 401, message: "请先登录", data: null } }),
+  );
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 5,
+            name: "软考真题",
+            description: null,
+            is_default: false,
+            is_public: true,
+            unit_count: 1,
+            question_count: 12,
+            answered_count: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/banks/5/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 9,
+            bank_id: 5,
+            name: "操作系统基础",
+            sort: 0,
+            question_count: 12,
+            answered_count: 0,
+          },
+        ],
+      },
+    }),
+  );
+}
+
+test("guest can browse public banks without being sent to login", async ({ page }) => {
+  await mockGuestBankList(page);
+
+  await page.goto("/app");
+
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByText(/游客模式：公共题库可直接浏览/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /软考真题/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "登录后开始练习" })).toBeVisible();
+});
+
+test("guest is asked to log in before practicing", async ({ page }) => {
+  await mockGuestBankList(page);
+
+  await page.goto("/app");
+  await page.getByRole("button", { name: "登录后开始练习" }).click();
+
+  await expect(page).toHaveURL(/\/login\?next=/);
+});
+
 test("registration sends email code and starts sixty second countdown", async ({ page }) => {
   await page.route("**/captcha/image", (route) =>
     route.fulfill({
