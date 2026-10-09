@@ -99,10 +99,6 @@ async function sendEmailCode() {
     error.value = "请先填写邮箱";
     return;
   }
-  if (!captchaCode.value.trim()) {
-    error.value = "请先输入图中字符";
-    return;
-  }
 
   emailCode.value = "";
   sendingCode.value = true;
@@ -114,18 +110,14 @@ async function sendEmailCode() {
       path,
       {
         method: "POST",
-        body: JSON.stringify({
-          email: requestedEmail,
-          captchaTicket: captchaTicket.value,
-          captchaCode: captchaCode.value.trim(),
-        }),
+        // 注册 / 找回密码只校验邮箱验证码，不再需要图形验证码
+        body: JSON.stringify({ email: requestedEmail }),
       },
     );
     if (email.value.trim() !== requestedEmail) {
       return;
     }
     startCooldown(data.cooldownSeconds);
-    await loadCaptcha();
   } catch (e) {
     if (email.value.trim() === requestedEmail) {
       const message = e instanceof Error ? e.message : "验证码发送失败";
@@ -135,7 +127,6 @@ async function sendEmailCode() {
         startCooldown(seconds);
       }
     }
-    await loadCaptcha();
   } finally {
     sendingCode.value = false;
   }
@@ -260,7 +251,7 @@ watch(email, resetEmailCode);
           />
         </label>
 
-        <label class="mb-5 block">
+        <label v-if="mode === 'login'" class="mb-5 block">
           <span class="mb-1.5 block text-sm text-ink">验证码</span>
           <div class="flex items-center gap-3">
             <input

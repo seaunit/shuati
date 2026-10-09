@@ -1,6 +1,5 @@
 package com.shuati.email;
 
-import com.shuati.captcha.CaptchaService;
 import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
 import com.shuati.common.ClientInfo;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class EmailVerificationController {
 
-  private final CaptchaService captchaService;
   private final ProfileRepository profiles;
   private final EmailVerificationService emails;
 
@@ -30,7 +28,7 @@ public class EmailVerificationController {
   public ApiResponse<EmailVerificationService.SendResult> send(
       @Valid @RequestBody EmailCodeRequest request,
       HttpServletRequest http) {
-    captchaService.verify(request.captchaTicket(), request.captchaCode());
+    // 注册仅依赖邮箱验证码，不再要求图形验证码；发送频率由邮箱冷却与 IP/设备限流兜底。
     String email = request.email().trim().toLowerCase(Locale.ROOT);
     if (profiles.findByEmail(email).isPresent()) {
       throw new ApiException(400, "该邮箱已注册，请直接登录");

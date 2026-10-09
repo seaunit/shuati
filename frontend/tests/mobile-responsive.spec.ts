@@ -76,6 +76,31 @@ test("site favicon uses the Shuati leaf brand mark", async ({ page, request }) =
   expect(await response.text()).toContain("<svg");
 });
 
+test("captcha is only required for login, not register or forgot password", async ({ page }) => {
+  await page.route("**/captcha/image", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { ticket: "t1", imageBase64: "data:image/png;base64,AA==" },
+      },
+    }),
+  );
+
+  await page.goto("/login");
+  const captchaInput = page.getByPlaceholder("请输入图中字符");
+  await expect(captchaInput).toBeVisible();
+
+  await page.getByRole("button", { name: "注册", exact: true }).click();
+  await expect(captchaInput).toBeHidden();
+
+  await page.getByRole("button", { name: "忘记密码" }).click();
+  await expect(captchaInput).toBeHidden();
+
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(captchaInput).toBeVisible();
+});
+
 test("registration sends email code and starts sixty second countdown", async ({ page }) => {
   await page.route("**/captcha/image", (route) =>
     route.fulfill({
@@ -99,7 +124,6 @@ test("registration sends email code and starts sixty second countdown", async ({
   await page.goto("/login");
   await page.getByRole("button", { name: "注册", exact: true }).click();
   await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("user@example.com");
-  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
   await page.getByRole("button", { name: "发送验证码" }).click();
 
   await expect(page.getByRole("button", { name: /60 秒后重发/ })).toBeDisabled();
@@ -129,7 +153,6 @@ test("changing email clears old code and countdown", async ({ page }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: "注册", exact: true }).click();
   await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("first@example.com");
-  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("second@example.com");
 
@@ -158,7 +181,6 @@ test("rate limited send resumes countdown from server retry time", async ({ page
   await page.goto("/login");
   await page.getByRole("button", { name: "注册", exact: true }).click();
   await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("limited@example.com");
-  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
   await page.getByRole("button", { name: "发送验证码" }).click();
 
   await expect(page.getByRole("button", { name: /42 秒后重发/ })).toBeDisabled();
@@ -193,7 +215,6 @@ test("forgot password sends reset code and resets password", async ({ page }) =>
   await page.goto("/login");
   await page.getByRole("button", { name: "忘记密码" }).click();
   await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("reset@example.com");
-  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await page.getByPlaceholder("6 位数字").fill("123456");
   await page.getByRole("textbox", { name: "新密码", exact: true }).fill("new-secret");

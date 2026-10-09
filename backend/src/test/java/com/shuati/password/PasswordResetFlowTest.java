@@ -11,12 +11,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shuati.auth.JwtAuthFilter;
 import com.shuati.auth.JwtService;
-import com.shuati.captcha.CaptchaImageResponse;
-import com.shuati.captcha.CaptchaService;
-import com.shuati.captcha.CaptchaStore;
 import com.shuati.email.EmailPurpose;
 import com.shuati.email.EmailDispatchService;
 import com.shuati.email.EmailVerificationProperties;
@@ -46,9 +42,6 @@ import org.springframework.test.web.servlet.ResultActions;
 class PasswordResetFlowTest {
 
   @Autowired MockMvc mvc;
-  @Autowired CaptchaService captchaService;
-  @Autowired ObjectMapper objectMapper;
-  @Autowired CaptchaStore captchaStore;
   @Autowired JdbcTemplate jdbc;
   @Autowired PasswordEncoder passwordEncoder;
   @Autowired EmailVerificationStore emailStore;
@@ -67,8 +60,8 @@ class PasswordResetFlowTest {
     insertUser(existing, "old-password");
     String missing = "missing-" + UUID.randomUUID() + "@example.com";
 
-    expectCodeSent(existing, "9.8.7.1", "reset-device-1", true);
-    expectCodeSent(missing, "9.8.7.2", "reset-device-2", false);
+    expectCodeSent(existing, true);
+    expectCodeSent(missing, false);
   }
 
   @Test
@@ -105,18 +98,14 @@ class PasswordResetFlowTest {
         .andExpect(jsonPath("$.message").value("验证码错误或已过期"));
   }
 
-  private void expectCodeSent(
-      String email, String ip, String device, boolean senderCalled) throws Exception {
+  private void expectCodeSent(String email, boolean senderCalled) throws Exception {
     clearInvocations(dispatch);
-    CaptchaImageResponse captcha = captchaService.generate(ip, device);
-    String captchaCode = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
-        .path("code").asText();
     mvc.perform(post("/api/auth/password-reset/email-code")
             .header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
-                {"email":"%s","captchaTicket":"%s","captchaCode":"%s"}
-                """.formatted(email, captcha.ticket(), captchaCode)))
+                {"email":"%s"}
+                """.formatted(email)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.cooldownSeconds").value(60))
         .andExpect(jsonPath("$.data.expiresInSeconds").value(300));

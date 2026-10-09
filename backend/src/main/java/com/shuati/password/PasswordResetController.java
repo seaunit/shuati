@@ -1,6 +1,5 @@
 package com.shuati.password;
 
-import com.shuati.captcha.CaptchaService;
 import com.shuati.common.ApiResponse;
 import com.shuati.common.ClientInfo;
 import com.shuati.email.EmailVerificationService;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PasswordResetController {
 
-  private final CaptchaService captchaService;
   private final PasswordResetService passwordResetService;
 
   @PostMapping("/email-code")
@@ -27,7 +25,7 @@ public class PasswordResetController {
   public ApiResponse<EmailVerificationService.SendResult> sendCode(
       @Valid @RequestBody PasswordResetCodeRequest request,
       HttpServletRequest http) {
-    captchaService.verify(request.captchaTicket(), request.captchaCode());
+    // 找回密码仅依赖邮箱验证码，不再要求图形验证码；发送频率由邮箱冷却与 IP/设备限流兜底。
     return ApiResponse.ok(passwordResetService.sendCode(
         request.email(), ClientInfo.ip(http), ClientInfo.device(http)));
   }
