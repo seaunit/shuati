@@ -2,6 +2,7 @@ package com.shuati.password;
 
 import com.shuati.common.ApiException;
 import com.shuati.email.EmailPurpose;
+import com.shuati.email.EmailDispatchService;
 import com.shuati.email.EmailVerificationService;
 import com.shuati.user.Profile;
 import com.shuati.user.ProfileRepository;
@@ -20,6 +21,7 @@ public class PasswordResetService {
   private final ProfileRepository profiles;
   private final PasswordEncoder passwordEncoder;
   private final EmailVerificationService emails;
+  private final EmailDispatchService emailDispatch;
 
   public EmailVerificationService.SendResult sendCode(
       String email, String ip, String device) {
@@ -27,7 +29,10 @@ public class PasswordResetService {
     if (profiles.findByEmail(normalized).isEmpty()) {
       return emails.consumeAllowance(normalized, ip, device, EmailPurpose.RESET);
     }
-    return emails.sendCode(normalized, ip, device, EmailPurpose.RESET);
+    EmailVerificationService.PreparedCode prepared =
+        emails.prepareCode(normalized, ip, device, EmailPurpose.RESET);
+    emailDispatch.send(prepared);
+    return prepared.result();
   }
 
   @Transactional

@@ -2,8 +2,8 @@ package com.shuati.password;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,7 +18,7 @@ import com.shuati.captcha.CaptchaImageResponse;
 import com.shuati.captcha.CaptchaService;
 import com.shuati.captcha.CaptchaStore;
 import com.shuati.email.EmailPurpose;
-import com.shuati.email.EmailSender;
+import com.shuati.email.EmailDispatchService;
 import com.shuati.email.EmailVerificationProperties;
 import com.shuati.email.EmailVerificationService;
 import com.shuati.email.EmailVerificationStore;
@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -53,11 +54,11 @@ class PasswordResetFlowTest {
   @Autowired EmailVerificationStore emailStore;
   @Autowired EmailVerificationService emailService;
   @Autowired JwtService jwtService;
-  @MockitoBean EmailSender sender;
+  @MockitoBean EmailDispatchService dispatch;
 
   @BeforeEach
   void resetSender() {
-    org.mockito.Mockito.reset(sender);
+    org.mockito.Mockito.reset(dispatch);
   }
 
   @Test
@@ -106,6 +107,7 @@ class PasswordResetFlowTest {
 
   private void expectCodeSent(
       String email, String ip, String device, boolean senderCalled) throws Exception {
+    clearInvocations(dispatch);
     CaptchaImageResponse captcha = captchaService.generate(ip, device);
     String captchaCode = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
         .path("code").asText();
@@ -119,9 +121,13 @@ class PasswordResetFlowTest {
         .andExpect(jsonPath("$.data.cooldownSeconds").value(60))
         .andExpect(jsonPath("$.data.expiresInSeconds").value(300));
     if (senderCalled) {
-      verify(sender).sendCode(eq(email), anyString(), eq(EmailPurpose.RESET));
+      ArgumentCaptor<EmailVerificationService.PreparedCode> captor =
+          ArgumentCaptor.forClass(EmailVerificationService.PreparedCode.class);
+      verify(dispatch).send(captor.capture());
+      assertThat(captor.getValue().email()).isEqualTo(email);
+      assertThat(captor.getValue().purpose()).isEqualTo(EmailPurpose.RESET);
     } else {
-      verify(sender, never()).sendCode(eq(email), anyString(), eq(EmailPurpose.RESET));
+      verify(dispatch, never()).send(any(EmailVerificationService.PreparedCode.class));
     }
   }
 

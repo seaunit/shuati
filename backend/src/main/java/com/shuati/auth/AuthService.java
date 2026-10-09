@@ -68,8 +68,7 @@ public class AuthService {
       throw new ApiException(401, "邮箱或密码错误");
     }
 
-    profile.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
-    profiles.save(profile);
+    profiles.updateLastLoginAt(profile.getId(), LocalDateTime.now(ZoneOffset.UTC));
     return new LoginResult(profile, jwtService.issue(
         profile.getId(), profile.getRole(), profile.getSessionVersion()));
   }

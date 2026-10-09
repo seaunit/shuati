@@ -36,6 +36,13 @@ public class EmailVerificationService {
 
   public SendResult sendCode(
       String email, String ip, String device, EmailPurpose purpose) {
+    PreparedCode prepared = prepareCode(email, ip, device, purpose);
+    sendPrepared(prepared);
+    return prepared.result();
+  }
+
+  public PreparedCode prepareCode(
+      String email, String ip, String device, EmailPurpose purpose) {
     if (!properties.enabled()) {
       throw new ApiException(503, "邮箱验证暂不可用");
     }
@@ -46,24 +53,39 @@ public class EmailVerificationService {
 
     String emailHash = emailHash(normalized);
     SendResult allowance = consumeAllowance(email, ip, device, purpose);
-    if (!allowance.codeAllowed()) {
-      return allowance;
-    }
 
     String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
     String codeHash = codeHash(normalized, code, purpose);
     String nonce = store.saveCode(
         emailHash, purpose, codeHash, properties.codeTtlSeconds());
+    return new PreparedCode(
+        normalized,
+        emailHash,
+        purpose,
+        code,
+        codeHash,
+        nonce,
+        allowance);
+  }
+
+  public void sendPrepared(PreparedCode prepared) {
     try {
-      sender.sendCode(normalized, code, purpose);
-      return new SendResult(properties.cooldownSeconds(), properties.codeTtlSeconds());
+      sender.sendCode(prepared.email(), prepared.code(), prepared.purpose());
     } catch (ApiException e) {
-      store.deleteAttempt(emailHash, purpose, codeHash, nonce);
+      cleanup(prepared);
       throw e;
     } catch (Exception e) {
-      store.deleteAttempt(emailHash, purpose, codeHash, nonce);
+      cleanup(prepared);
       throw new ApiException(503, "验证码邮件发送失败，请稍后重试");
     }
+  }
+
+  private void cleanup(PreparedCode prepared) {
+    store.deleteAttempt(
+        prepared.emailHash(),
+        prepared.purpose(),
+        prepared.codeHash(),
+        prepared.nonce());
   }
 
   public void verifyRegisterCode(String email, String code) {
@@ -164,5 +186,15 @@ public class EmailVerificationService {
     public SendResult(int cooldownSeconds, int expiresInSeconds) {
       this(cooldownSeconds, expiresInSeconds, true);
     }
+  }
+
+  public record PreparedCode(
+      String email,
+      String emailHash,
+      EmailPurpose purpose,
+      String code,
+      String codeHash,
+      String nonce,
+      SendResult result) {
   }
 }

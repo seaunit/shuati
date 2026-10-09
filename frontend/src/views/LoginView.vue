@@ -104,6 +104,7 @@ async function sendEmailCode() {
     return;
   }
 
+  emailCode.value = "";
   sendingCode.value = true;
   const path = mode.value === "forgot"
     ? "/api/auth/password-reset/email-code"
@@ -123,7 +124,6 @@ async function sendEmailCode() {
     if (email.value.trim() !== requestedEmail) {
       return;
     }
-    emailCode.value = "";
     startCooldown(data.cooldownSeconds);
     await loadCaptcha();
   } catch (e) {
