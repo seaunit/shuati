@@ -15,8 +15,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class EmailVerificationStore {
 
-  private static final String PREFIX = "email:register:";
-
   private static final DefaultRedisScript<List> VERIFY_SCRIPT = new DefaultRedisScript<>("""
       local value = redis.call('GET', KEYS[1])
       if not value then
@@ -56,48 +54,56 @@ public class EmailVerificationStore {
   private final StringRedisTemplate redis;
   private final ObjectMapper objectMapper;
 
-  public boolean acquireCooldown(String emailHash, int seconds) {
+  public boolean acquireCooldown(
+      String emailHash, EmailPurpose purpose, int seconds) {
     return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(
-        cooldownKey(emailHash), "1", Duration.ofSeconds(seconds)));
+        cooldownKey(emailHash, purpose), "1", Duration.ofSeconds(seconds)));
   }
 
-  public String saveCode(String emailHash, String codeHash, int ttlSeconds) {
+  public String saveCode(
+      String emailHash, EmailPurpose purpose, String codeHash, int ttlSeconds) {
     try {
       String nonce = UUID.randomUUID().toString();
       String json = objectMapper.writeValueAsString(new CodeEntry(codeHash, 0, nonce));
-      redis.opsForValue().set(codeKey(emailHash), json, Duration.ofSeconds(ttlSeconds));
+      redis.opsForValue().set(
+          codeKey(emailHash, purpose), json, Duration.ofSeconds(ttlSeconds));
       return nonce;
     } catch (Exception e) {
       throw new IllegalStateException("邮箱验证码写入 Redis 失败", e);
     }
   }
 
-  public void deleteCode(String emailHash) {
-    redis.delete(codeKey(emailHash));
+  public void deleteCode(String emailHash, EmailPurpose purpose) {
+    redis.delete(codeKey(emailHash, purpose));
   }
 
-  public void deleteCooldown(String emailHash) {
-    redis.delete(cooldownKey(emailHash));
+  public void deleteCooldown(String emailHash, EmailPurpose purpose) {
+    redis.delete(cooldownKey(emailHash, purpose));
   }
 
-  public long remainingCooldownSeconds(String emailHash) {
-    Long ttl = redis.getExpire(cooldownKey(emailHash), TimeUnit.SECONDS);
+  public long remainingCooldownSeconds(String emailHash, EmailPurpose purpose) {
+    Long ttl = redis.getExpire(cooldownKey(emailHash, purpose), TimeUnit.SECONDS);
     return ttl == null || ttl < 1 ? 1 : ttl;
   }
 
-  public boolean deleteAttempt(String emailHash, String codeHash, String nonce) {
+  public boolean deleteAttempt(
+      String emailHash, EmailPurpose purpose, String codeHash, String nonce) {
     Long deleted = redis.execute(
         DELETE_ATTEMPT_SCRIPT,
-        List.of(codeKey(emailHash), cooldownKey(emailHash)),
+        List.of(codeKey(emailHash, purpose), cooldownKey(emailHash, purpose)),
         codeHash,
         nonce);
     return deleted != null && deleted == 1L;
   }
 
-  public VerifyResult verify(String emailHash, String submittedHash, int maxAttempts) {
+  public VerifyResult verify(
+      String emailHash,
+      EmailPurpose purpose,
+      String submittedHash,
+      int maxAttempts) {
     List<?> result = redis.execute(
         VERIFY_SCRIPT,
-        List.of(codeKey(emailHash)),
+        List.of(codeKey(emailHash, purpose)),
         submittedHash,
         String.valueOf(maxAttempts));
     String status = result == null || result.isEmpty()
@@ -110,12 +116,16 @@ public class EmailVerificationStore {
         "LOCKED".equals(status));
   }
 
-  private String codeKey(String emailHash) {
-    return PREFIX + "code:" + emailHash;
+  private String codeKey(String emailHash, EmailPurpose purpose) {
+    return prefix(purpose) + "code:" + emailHash;
   }
 
-  private String cooldownKey(String emailHash) {
-    return PREFIX + "cooldown:" + emailHash;
+  private String cooldownKey(String emailHash, EmailPurpose purpose) {
+    return prefix(purpose) + "cooldown:" + emailHash;
+  }
+
+  private String prefix(EmailPurpose purpose) {
+    return "email:" + purpose.name().toLowerCase(java.util.Locale.ROOT) + ":";
   }
 
   public record VerifyResult(boolean ok, int attempts, boolean locked) {

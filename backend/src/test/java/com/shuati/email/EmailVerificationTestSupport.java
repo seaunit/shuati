@@ -11,9 +11,20 @@ public final class EmailVerificationTestSupport {
       EmailVerificationProperties properties,
       String email,
       String code) {
+    seed(store, service, properties, email, code, EmailPurpose.REGISTER);
+  }
+
+  public static void seed(
+      EmailVerificationStore store,
+      EmailVerificationService service,
+      EmailVerificationProperties properties,
+      String email,
+      String code,
+      EmailPurpose purpose) {
     store.saveCode(
         service.emailHash(email),
-        service.codeHash(email, code),
+        purpose,
+        service.codeHash(email, code, purpose),
         properties.codeTtlSeconds());
   }
 }

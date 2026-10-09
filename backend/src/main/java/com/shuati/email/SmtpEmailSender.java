@@ -17,7 +17,7 @@ public class SmtpEmailSender implements EmailSender {
   private final EmailVerificationProperties properties;
 
   @Override
-  public void sendRegisterCode(String email, String code) {
+  public void sendCode(String email, String code, EmailPurpose purpose) {
     try {
       MimeMessage message = mailSender.createMimeMessage();
       MimeMessageHelper helper =
@@ -25,11 +25,12 @@ public class SmtpEmailSender implements EmailSender {
       helper.setFrom(new InternetAddress(
           properties.from(), properties.fromName(), StandardCharsets.UTF_8.name()));
       helper.setTo(email);
-      helper.setSubject("【拾题】注册邮箱验证码");
+      String action = purpose == EmailPurpose.RESET ? "重置密码" : "注册";
+      helper.setSubject("【拾题】" + action + "邮箱验证码");
       helper.setText(
-          "您的注册验证码是：" + code
+          "您的" + action + "验证码是：" + code
               + "\n\n验证码 5 分钟内有效。若非本人操作，请忽略本邮件。",
-          "<p>您的注册验证码是：<strong>" + code + "</strong></p>"
+          "<p>您的" + action + "验证码是：<strong>" + code + "</strong></p>"
               + "<p>验证码 5 分钟内有效。若非本人操作，请忽略本邮件。</p>");
       mailSender.send(message);
     } catch (Exception e) {

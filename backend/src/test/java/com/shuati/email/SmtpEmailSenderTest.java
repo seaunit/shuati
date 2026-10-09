@@ -33,7 +33,7 @@ class SmtpEmailSenderTest {
     when(mailSender.createMimeMessage()).thenReturn(message);
     doNothing().when(mailSender).send(any(MimeMessage.class));
 
-    sender.sendRegisterCode("user@example.com", "123456");
+    sender.sendCode("user@example.com", "123456", EmailPurpose.REGISTER);
 
     ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
     verify(mailSender).send(captor.capture());

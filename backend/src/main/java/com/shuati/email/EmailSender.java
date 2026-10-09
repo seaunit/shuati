@@ -2,5 +2,5 @@ package com.shuati.email;
 
 public interface EmailSender {
 
-  void sendRegisterCode(String email, String code);
+  void sendCode(String email, String code, EmailPurpose purpose);
 }
