@@ -110,25 +110,35 @@ GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
 
-# 交互读取 DirectMail SMTP 密码（输入不回显；直接回车即跳过）。
-# curl | bash 这类拿不到控制终端的环境会自动跳过，不会卡住部署。
+# 交互读取 DirectMail SMTP 密码（输入不回显；直接回车保留现有密码或为空）。
+# curl | bash 这类拿不到控制终端的环境会自动沿用现有配置，不会卡住部署。
 prompt_mail_password() {
+  local existing="$1"
   # 注意：没有控制终端时 /dev/tty 依然存在，-r/-w 也会通过，必须真正尝试打开
   if ! { : >/dev/tty; } 2>/dev/null; then
     # 走 stderr：stdout 会被调用方 $(...) 捕获成密码值
-    echo "[配置] 未检测到可交互终端，跳过 SMTP 密码输入" >&2
+    echo "[配置] 未检测到可交互终端，跳过 SMTP 密码输入（保留现有密码或为空）" >&2
     printf '%s' ""
     return 0
   fi
   printf '\n[配置] 阿里云 DirectMail 邮箱 SMTP 密码（账号 no-reply@mail.seaunit.site）\n' >/dev/tty
-  printf '[配置] 输入不会回显，直接回车可跳过：' >/dev/tty
+  if [ -n "$existing" ]; then
+    printf '[配置] 当前已设置密码（长度 %s）\n' "${#existing}" >/dev/tty
+  else
+    printf '[配置] 当前未设置密码\n' >/dev/tty
+  fi
+  printf '[配置] 输入不会回显；直接回车 = 保留现有密码或为空：' >/dev/tty
   local input=""
   IFS= read -rs input </dev/tty || input=""
   printf '\n' >/dev/tty
   if [ -z "$input" ]; then
-    printf '[配置] 已跳过 SMTP 密码输入\n' >/dev/tty
+    if [ -n "$existing" ]; then
+      printf '[配置] 已保留现有 SMTP 密码\n' >/dev/tty
+    else
+      printf '[配置] 未设置 SMTP 密码，保持为空\n' >/dev/tty
+    fi
   else
-    printf '[配置] SMTP 密码已记录，将写入 /etc/shuati/env\n' >/dev/tty
+    printf '[配置] SMTP 密码已更新，将写入 /etc/shuati/env\n' >/dev/tty
   fi
   printf '%s' "$input"
 }
@@ -145,15 +155,21 @@ set_env_var() {
 
 echo "==> 8/9 写入配置"
 
-# 优先级：环境变量 > 已有配置 > 交互输入。已有密码时不再重复打扰。
-MAIL_PASSWORD="${SHUATI_MAIL_PASSWORD:-}"
-if [ -z "$MAIL_PASSWORD" ] && [ -s "$ENV_DIR/env" ]; then
-  MAIL_PASSWORD="$(
+# 已有配置里的密码，用于「回车保留现有值」时回填
+EXISTING_MAIL_PASSWORD=""
+if [ -s "$ENV_DIR/env" ]; then
+  EXISTING_MAIL_PASSWORD="$(
     sed -n "s/^SHUATI_MAIL_PASSWORD='\\(.*\\)'$/\\1/p" "$ENV_DIR/env" | head -1
   )"
 fi
+
+# 优先级：环境变量 > 交互输入（回车沿用现有值）
+MAIL_PASSWORD="${SHUATI_MAIL_PASSWORD:-}"
 if [ -z "$MAIL_PASSWORD" ]; then
-  MAIL_PASSWORD="$(prompt_mail_password)"
+  MAIL_PASSWORD="$(prompt_mail_password "$EXISTING_MAIL_PASSWORD")"
+fi
+if [ -z "$MAIL_PASSWORD" ]; then
+  MAIL_PASSWORD="$EXISTING_MAIL_PASSWORD"
 fi
 
 if [ ! -s "$ENV_DIR/env" ]; then

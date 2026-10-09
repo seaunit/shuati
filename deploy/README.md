@@ -121,8 +121,8 @@ WAFFO_DRY_RUN=false
 ```
 
 **注册邮箱验证码**：`provision-ubuntu.sh` 会在写入配置前交互提示输入 SMTP 密码
-（输入不回显，直接回车可跳过）。下面的变量会被脚本自动写入 `/etc/shuati/env`，
-手工部署时按同样格式配置即可：
+（输入不回显，**直接回车 = 保留现有密码或为空**）。想换密码时，重跑脚本时输入新密码
+即可覆盖。下面的变量会被脚本自动写入 `/etc/shuati/env`，手工部署时按同样格式配置即可：
 
 ```bash
 SHUATI_MAIL_ENABLED=true
@@ -148,7 +148,7 @@ SHUATI_MAIL_GLOBAL_DAILY_LIMIT=2000
 DirectMail 发信域名必须完成 SPF、DKIM、DMARC 和 MX 验证。生产环境只把 SMTP 密码写入
 `/etc/shuati/env`，不要提交到 Git。
 
-跳过 SMTP 密码时脚本会打印告警，此时注册与找回密码不可用。补填方式：
+密码为空时脚本会打印告警，此时注册与找回密码不可用。补填方式：
 
 ```bash
 sudo sed -i "s|^SHUATI_MAIL_PASSWORD=.*|SHUATI_MAIL_PASSWORD='你的密码'|" /etc/shuati/env
