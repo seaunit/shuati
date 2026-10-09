@@ -8,6 +8,5 @@ public record RegisterRequest(
     @NotBlank(message = "请填写邮箱") @Email(message = "邮箱格式不正确") String email,
     @NotBlank(message = "请填写密码")
     @Size(min = 6, max = 64, message = "密码长度需为 6-64 位") String password,
-    String captchaTicket,
-    String captchaCode) {
+    @NotBlank(message = "请填写邮箱验证码") String emailCode) {
 }

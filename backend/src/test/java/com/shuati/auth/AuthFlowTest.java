@@ -11,8 +11,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shuati.captcha.CaptchaImageResponse;
 import com.shuati.captcha.CaptchaService;
 import com.shuati.captcha.CaptchaStore;
+import com.shuati.email.EmailVerificationProperties;
+import com.shuati.email.EmailVerificationService;
+import com.shuati.email.EmailVerificationStore;
+import com.shuati.email.EmailVerificationTestSupport;
 import jakarta.servlet.http.Cookie;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -47,6 +50,15 @@ class AuthFlowTest {
   @Autowired
   CaptchaStore captchaStore;
 
+  @Autowired
+  EmailVerificationStore emailVerificationStore;
+
+  @Autowired
+  EmailVerificationService emailVerificationService;
+
+  @Autowired
+  EmailVerificationProperties emailVerificationProperties;
+
   @Test
   void registerCreatesPointAccountAndAllowsMe() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
@@ -54,7 +66,7 @@ class AuthFlowTest {
     MvcResult registered = mvc.perform(post("/api/auth/register")
             .header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON)
-            .content(credentials(email, "secret123")))
+            .content(registerBody(email, "secret123")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value(200))
         .andExpect(jsonPath("$.data.role").value("USER"))
@@ -78,17 +90,23 @@ class AuthFlowTest {
     assertThat(((Number) account.get("monthly_quota")).intValue()).isEqualTo(50);
     assertThat(((Number) account.get("bonus_balance")).intValue()).isEqualTo(100);
     assertThat(((Number) account.get("lifetime_granted")).intValue()).isEqualTo(150);
+
+    Object emailVerifiedAt = jdbc.queryForObject(
+        "select email_verified_at from profiles where email = ?",
+        Object.class,
+        email);
+    assertThat(emailVerifiedAt).isNotNull();
   }
 
   @Test
   void duplicateEmailIsRejected() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
     mvc.perform(post("/api/auth/register").header("X-Requested-With", "ShuatiApp")
-            .contentType(MediaType.APPLICATION_JSON).content(credentials(email, "secret123")))
+            .contentType(MediaType.APPLICATION_JSON).content(registerBody(email, "secret123")))
         .andExpect(status().isOk());
 
     mvc.perform(post("/api/auth/register").header("X-Requested-With", "ShuatiApp")
-            .contentType(MediaType.APPLICATION_JSON).content(credentials(email, "secret123")))
+            .contentType(MediaType.APPLICATION_JSON).content(registerBody(email, "secret123")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("该邮箱已注册，请直接登录"));
   }
@@ -97,7 +115,7 @@ class AuthFlowTest {
   void wrongPasswordReturns401() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
     mvc.perform(post("/api/auth/register").header("X-Requested-With", "ShuatiApp")
-        .contentType(MediaType.APPLICATION_JSON).content(credentials(email, "secret123")));
+        .contentType(MediaType.APPLICATION_JSON).content(registerBody(email, "secret123")));
 
     mvc.perform(post("/api/auth/login").header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON).content(credentials(email, "wrong-pass")))
@@ -129,12 +147,26 @@ class AuthFlowTest {
   }
 
   @Test
-  void registerWithoutCaptchaIsRejected() throws Exception {
+  void registerWithoutEmailCodeIsRejected() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
     mvc.perform(post("/api/auth/register")
             .header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"email\":\"" + email + "\",\"password\":\"secret123\"}"))
+            .content("{\"email\":\"" + email + "\",\"password\":\"secret123\",\"emailCode\":\"\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("emailCode 请填写邮箱验证码"));
+  }
+
+  @Test
+  void registerWithWrongEmailCodeIsRejected() throws Exception {
+    String email = "t-" + UUID.randomUUID() + "@example.com";
+    seedEmailCode(email, "123456");
+    mvc.perform(post("/api/auth/register")
+            .header("X-Requested-With", "ShuatiApp")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email":"%s","password":"secret123","emailCode":"654321"}
+                """.formatted(email)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("验证码错误或已过期"));
   }
@@ -146,12 +178,29 @@ class AuthFlowTest {
     String code = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
         .path("code").asText();
 
-    Map<String, String> body = new HashMap<>();
+    Map<String, String> body = new java.util.LinkedHashMap<>();
     body.put("email", email);
     body.put("password", password);
     body.put("captchaTicket", captcha.ticket());
     body.put("captchaCode", code);
     return objectMapper.writeValueAsString(body);
+  }
+
+  private String registerBody(String email, String password) throws Exception {
+    String code = "123456";
+    seedEmailCode(email, code);
+    return """
+        {"email":"%s","password":"%s","emailCode":"%s"}
+        """.formatted(email, password, code);
+  }
+
+  private void seedEmailCode(String email, String code) {
+    EmailVerificationTestSupport.seed(
+        emailVerificationStore,
+        emailVerificationService,
+        emailVerificationProperties,
+        email,
+        code);
   }
 
   private int random(int bound) {
