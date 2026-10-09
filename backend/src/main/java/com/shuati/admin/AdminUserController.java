@@ -64,7 +64,11 @@ public class AdminUserController {
       if (password.length() < 6) {
         throw new ApiException(400, "密码至少 6 位");
       }
-      jdbc.update("update profiles set password_hash = ? where id = ?",
+      jdbc.update("""
+          update profiles
+             set password_hash = ?, session_version = session_version + 1
+           where id = ?
+          """,
           passwordEncoder.encode(password), id);
     }
     return ApiResponse.ok(null);
