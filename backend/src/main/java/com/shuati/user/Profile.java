@@ -33,6 +33,9 @@ public class Profile {
   @Column(nullable = false, length = 16)
   private String status = "ENABLED";
 
+  @Column(name = "email_verified_at")
+  private LocalDateTime emailVerifiedAt;
+
   @Column(name = "created_at", insertable = false, updatable = false)
   private LocalDateTime createdAt;
 

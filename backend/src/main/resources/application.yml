@@ -23,6 +23,16 @@ spring:
       password: ${SHUATI_REDIS_PASSWORD:}
       database: ${SHUATI_REDIS_DB:0}
       timeout: 3s
+  mail:
+    host: ${SHUATI_MAIL_HOST:}
+    port: ${SHUATI_MAIL_PORT:465}
+    username: ${SHUATI_MAIL_USERNAME:}
+    password: ${SHUATI_MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: ${SHUATI_MAIL_SSL:true}
+      mail.smtp.connectiontimeout: ${SHUATI_MAIL_CONNECT_TIMEOUT_MS:10000}
+      mail.smtp.timeout: ${SHUATI_MAIL_READ_TIMEOUT_MS:10000}
 
 server:
   port: 8080
@@ -66,3 +76,15 @@ shuati:
     # IP / 设备维度限流：每分钟最多申请次数
     ip-limit-per-minute: 20
     device-limit-per-minute: 20
+  email:
+    enabled: ${SHUATI_MAIL_ENABLED:false}
+    from: ${SHUATI_MAIL_FROM:}
+    from-name: ${SHUATI_MAIL_FROM_NAME:拾题}
+    secret: ${SHUATI_EMAIL_SECRET:}
+    code-ttl-seconds: ${SHUATI_MAIL_CODE_TTL_SECONDS:300}
+    cooldown-seconds: ${SHUATI_MAIL_COOLDOWN_SECONDS:60}
+    max-attempts: 5
+    email-daily-limit: ${SHUATI_MAIL_EMAIL_DAILY_LIMIT:10}
+    ip-hourly-limit: ${SHUATI_MAIL_IP_HOURLY_LIMIT:20}
+    device-daily-limit: ${SHUATI_MAIL_DEVICE_DAILY_LIMIT:30}
+    global-daily-limit: ${SHUATI_MAIL_GLOBAL_DAILY_LIMIT:2000}

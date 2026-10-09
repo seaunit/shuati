@@ -50,8 +50,9 @@ public class AdminBootstrap implements ApplicationRunner {
     }
     String id = UUID.randomUUID().toString();
     jdbc.update("""
-        insert into profiles (id, email, password_hash, nickname, role, status)
-        values (?, ?, ?, ?, 'ADMIN', 'ENABLED')
+        insert into profiles
+          (id, email, password_hash, nickname, role, status, email_verified_at)
+        values (?, ?, ?, ?, 'ADMIN', 'ENABLED', now(6))
         """, id, normalized, passwordEncoder.encode(password),
         normalized.substring(0, normalized.indexOf('@')));
     points.ensureAccount(id);

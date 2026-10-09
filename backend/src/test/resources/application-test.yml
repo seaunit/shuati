@@ -34,3 +34,15 @@ shuati:
     secret: test-captcha-secret
     ip-limit-per-minute: 5
     device-limit-per-minute: 5
+  email:
+    enabled: true
+    from: no-reply@example.com
+    from-name: 拾题测试
+    secret: test-email-secret
+    code-ttl-seconds: 300
+    cooldown-seconds: 60
+    max-attempts: 5
+    email-daily-limit: 10
+    ip-hourly-limit: 20
+    device-daily-limit: 30
+    global-daily-limit: 2000
