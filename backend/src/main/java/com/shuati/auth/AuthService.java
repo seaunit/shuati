@@ -48,7 +48,8 @@ public class AuthService {
     profiles.saveAndFlush(profile);
 
     pointAccounts.ensureAccount(profile.getId());
-    return new LoginResult(profile, jwtService.issue(profile.getId(), profile.getRole()));
+    return new LoginResult(profile, jwtService.issue(
+        profile.getId(), profile.getRole(), profile.getSessionVersion()));
   }
 
   @Transactional
@@ -69,7 +70,8 @@ public class AuthService {
 
     profile.setLastLoginAt(LocalDateTime.now(ZoneOffset.UTC));
     profiles.save(profile);
-    return new LoginResult(profile, jwtService.issue(profile.getId(), profile.getRole()));
+    return new LoginResult(profile, jwtService.issue(
+        profile.getId(), profile.getRole(), profile.getSessionVersion()));
   }
 
   private void verifyCaptcha(String ticket, String code) {

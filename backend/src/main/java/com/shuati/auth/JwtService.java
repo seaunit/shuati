@@ -26,10 +26,15 @@ public class JwtService {
   }
 
   public String issue(String userId, String role) {
+    return issue(userId, role, 0);
+  }
+
+  public String issue(String userId, String role, int sessionVersion) {
     Instant now = Instant.now();
     return Jwts.builder()
         .subject(userId)
         .claim("role", role)
+        .claim("sv", sessionVersion)
         .issuedAt(Date.from(now))
         .expiration(Date.from(now.plusSeconds(ttlSeconds)))
         .signWith(key)
@@ -43,12 +48,16 @@ public class JwtService {
           .build()
           .parseSignedClaims(token)
           .getPayload();
-      return Optional.of(new JwtPayload(claims.getSubject(), claims.get("role", String.class)));
+      Integer version = claims.get("sv", Integer.class);
+      return Optional.of(new JwtPayload(
+          claims.getSubject(),
+          claims.get("role", String.class),
+          version == null ? 0 : version));
     } catch (JwtException | IllegalArgumentException e) {
       return Optional.empty();
     }
   }
 
-  public record JwtPayload(String userId, String role) {
+  public record JwtPayload(String userId, String role, int sessionVersion) {
   }
 }

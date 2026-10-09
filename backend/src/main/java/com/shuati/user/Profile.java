@@ -36,6 +36,9 @@ public class Profile {
   @Column(name = "email_verified_at")
   private LocalDateTime emailVerifiedAt;
 
+  @Column(name = "session_version", nullable = false)
+  private int sessionVersion = 0;
+
   @Column(name = "created_at", insertable = false, updatable = false)
   private LocalDateTime createdAt;
 
