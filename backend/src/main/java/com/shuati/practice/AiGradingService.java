@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -20,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AiGradingService {
+
+  private static final Logger log = LoggerFactory.getLogger(AiGradingService.class);
 
   private final JdbcTemplate jdbc;
   private final AiClient ai;
@@ -72,6 +76,8 @@ public class AiGradingService {
       feedback.put("missed_points", toList(parsed.path("missed_points")));
       feedback.put("feedback", parsed.path("feedback").asText(""));
     } catch (Exception e) {
+      // 判分失败不阻断提交，降级为自评；但必须留下原因，否则线上无从排查
+      log.warn("AI 判分失败，已降级为自评 questionId={}", questionId, e);
       points.refundPoints(userId, intValue(charged.get("cost")), "AI_JUDGE_FAILED",
           "question", String.valueOf(questionId));
       ai.logUsage(userId, "JUDGE", "unknown", questionId, null, e.getMessage(),
@@ -158,11 +164,16 @@ public class AiGradingService {
           """, result.content(), questionId);
       return Map.of("explanation", result.content());
     } catch (Exception e) {
+      // 注意：本方法带 @Transactional，抛异常会把 ai_call_log 一起回滚，
+      // 所以这里必须写应用日志（journalctl 可见），否则线上看不到失败原因。
+      log.warn("AI 解析失败 questionId={}", questionId, e);
       points.refundPoints(userId, intValue(charged.get("cost")), "AI_EXPLAIN_FAILED",
           "question", String.valueOf(questionId));
       ai.logUsage(userId, "EXPLAIN", "unknown", questionId, null, e.getMessage(),
           System.currentTimeMillis() - start);
-      throw new ApiException(502, "AI 解析失败，请稍后重试");
+      String reason = e.getMessage() == null || e.getMessage().isBlank()
+          ? "未知错误" : e.getMessage();
+      throw new ApiException(502, "AI 解析失败：" + reason);
     }
   }
 
