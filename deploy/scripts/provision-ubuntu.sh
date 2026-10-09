@@ -115,6 +115,7 @@ if [ ! -s "$ENV_DIR/env" ]; then
   JWT_SECRET="$(openssl rand -hex 32)"
   APP_AES_SECRET="$(openssl rand 32 | base64 -w0)"
   CAPTCHA_SECRET="$(openssl rand -hex 32)"
+  EMAIL_SECRET="$(openssl rand -hex 32)"
   PAYMENTS_SECRET="$(openssl rand -hex 32)"
 
   umask 077
@@ -141,6 +142,26 @@ SHUATI_PAYMENTS_CURRENCY='CNY'
 SHUATI_PAYMENTS_SUBSCRIPTION_CURRENCY='USD'
 SHUATI_BOOTSTRAP_ADMIN_EMAIL='${ADMIN_EMAIL}'
 SHUATI_BOOTSTRAP_ADMIN_PASSWORD='${ADMIN_PASSWORD}'
+# 注册 / 找回密码邮箱验证码（阿里云 DirectMail）
+SHUATI_MAIL_ENABLED='true'
+SHUATI_MAIL_HOST='smtpdm.aliyun.com'
+SHUATI_MAIL_PORT=465
+SHUATI_MAIL_USERNAME='no-reply@mail.seaunit.site'
+# SMTP 密码必须手动填写，部署后写入真实值再重启 shuati
+SHUATI_MAIL_PASSWORD=''
+SHUATI_MAIL_FROM='no-reply@mail.seaunit.site'
+SHUATI_MAIL_FROM_NAME='拾题'
+SHUATI_EMAIL_SECRET='${EMAIL_SECRET}'
+SHUATI_MAIL_SSL=true
+SHUATI_MAIL_CONNECT_TIMEOUT_MS=10000
+SHUATI_MAIL_READ_TIMEOUT_MS=10000
+SHUATI_MAIL_WRITE_TIMEOUT_MS=10000
+SHUATI_MAIL_CODE_TTL_SECONDS=300
+SHUATI_MAIL_COOLDOWN_SECONDS=60
+SHUATI_MAIL_EMAIL_DAILY_LIMIT=10
+SHUATI_MAIL_IP_HOURLY_LIMIT=20
+SHUATI_MAIL_DEVICE_DAILY_LIMIT=30
+SHUATI_MAIL_GLOBAL_DAILY_LIMIT=2000
 EOF
 fi
 
@@ -169,6 +190,43 @@ JAVA_BASE_URL='http://127.0.0.1:8080'
 INTERNAL_SECRET='${PAYMENTS_SECRET_VALUE}'
 WAFFO_DRY_RUN=true
 EOF
+fi
+
+# 旧版 env 可能缺少邮件验证码配置：只补缺失的键，绝不覆盖已有值。
+# SMTP 密码必须手动填写，这里只留空占位。
+ensure_env_line() {
+  local key="$1" value="$2"
+  if ! grep -q "^${key}=" "$ENV_DIR/env"; then
+    printf "%s='%s'\n" "$key" "$value" >>"$ENV_DIR/env"
+    echo "[env] 补充缺失配置 ${key}"
+  fi
+}
+
+ensure_env_line SHUATI_MAIL_ENABLED true
+ensure_env_line SHUATI_MAIL_HOST smtpdm.aliyun.com
+ensure_env_line SHUATI_MAIL_PORT 465
+ensure_env_line SHUATI_MAIL_USERNAME no-reply@mail.seaunit.site
+ensure_env_line SHUATI_MAIL_PASSWORD ""
+ensure_env_line SHUATI_MAIL_FROM no-reply@mail.seaunit.site
+ensure_env_line SHUATI_MAIL_FROM_NAME 拾题
+ensure_env_line SHUATI_EMAIL_SECRET "$(openssl rand -hex 32)"
+ensure_env_line SHUATI_MAIL_SSL true
+ensure_env_line SHUATI_MAIL_CONNECT_TIMEOUT_MS 10000
+ensure_env_line SHUATI_MAIL_READ_TIMEOUT_MS 10000
+ensure_env_line SHUATI_MAIL_WRITE_TIMEOUT_MS 10000
+ensure_env_line SHUATI_MAIL_CODE_TTL_SECONDS 300
+ensure_env_line SHUATI_MAIL_COOLDOWN_SECONDS 60
+ensure_env_line SHUATI_MAIL_EMAIL_DAILY_LIMIT 10
+ensure_env_line SHUATI_MAIL_IP_HOURLY_LIMIT 20
+ensure_env_line SHUATI_MAIL_DEVICE_DAILY_LIMIT 30
+ensure_env_line SHUATI_MAIL_GLOBAL_DAILY_LIMIT 2000
+
+MAIL_PASSWORD_VALUE="$(
+  grep -E '^SHUATI_MAIL_PASSWORD=' "$ENV_DIR/env" \
+    | tail -1 | cut -d= -f2- | tr -d "'\""
+)"
+if [ -z "$MAIL_PASSWORD_VALUE" ]; then
+  echo "[env] 注意：SHUATI_MAIL_PASSWORD 仍为空，请在 /etc/shuati/env 填入 DirectMail SMTP 密码后执行 systemctl restart shuati"
 fi
 
 chown -R shuati:shuati "$ENV_DIR"
