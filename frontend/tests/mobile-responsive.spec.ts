@@ -164,6 +164,51 @@ test("rate limited send resumes countdown from server retry time", async ({ page
   await expect(page.getByRole("button", { name: /42 秒后重发/ })).toBeDisabled();
 });
 
+test("forgot password sends reset code and resets password", async ({ page }) => {
+  let resetPayload: Record<string, string> | null = null;
+
+  await page.route("**/captcha/image", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { ticket: "t1", imageBase64: "data:image/png;base64,AA==" },
+      },
+    }),
+  );
+  await page.route("**/api/auth/password-reset/email-code", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { cooldownSeconds: 60, expiresInSeconds: 300 },
+      },
+    }),
+  );
+  await page.route("**/api/auth/password-reset", async (route) => {
+    resetPayload = route.request().postDataJSON();
+    await route.fulfill({ json: { code: 200, message: "ok", data: null } });
+  });
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "忘记密码" }).click();
+  await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("reset@example.com");
+  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
+  await page.getByRole("button", { name: "发送验证码" }).click();
+  await page.getByPlaceholder("6 位数字").fill("123456");
+  await page.getByRole("textbox", { name: "新密码", exact: true }).fill("new-secret");
+  await page.getByRole("textbox", { name: "确认新密码", exact: true }).fill("new-secret");
+  await page.getByRole("button", { name: "重置密码" }).click();
+
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByText("密码已重置，请使用新密码登录")).toBeVisible();
+  expect(resetPayload).toEqual({
+    email: "reset@example.com",
+    emailCode: "123456",
+    newPassword: "new-secret",
+  });
+});
+
 test("stats table scrolls horizontally on mobile instead of being clipped", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

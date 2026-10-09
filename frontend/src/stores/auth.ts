@@ -58,6 +58,12 @@ export const useAuthStore = defineStore("auth", {
       });
       this.loaded = true;
     },
+    async resetPassword(email: string, emailCode: string, newPassword: string) {
+      await api<null>("/api/auth/password-reset", {
+        method: "POST",
+        body: JSON.stringify({ email, emailCode, newPassword }),
+      });
+    },
     async logout() {
       await api("/api/auth/logout", { method: "POST" });
       this.user = null;

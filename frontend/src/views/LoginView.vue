@@ -9,7 +9,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 
-const mode = ref<"login" | "register">("login");
+const mode = ref<"login" | "register" | "forgot">("login");
 const email = ref("");
 const password = ref("");
 const confirm = ref("");
@@ -22,6 +22,7 @@ const captchaLoading = ref(false);
 const emailCode = ref("");
 const cooldown = ref(0);
 const sendingCode = ref(false);
+const notice = ref("");
 let cooldownTimer: number | undefined;
 
 async function loadCaptcha() {
@@ -40,11 +41,13 @@ async function loadCaptcha() {
 
 async function submit() {
   error.value = "";
+  notice.value = "";
   if (!email.value.trim() || !password.value) {
     error.value = "请填写邮箱和密码";
     return;
   }
-  if (mode.value === "register" && password.value !== confirm.value) {
+  if ((mode.value === "register" || mode.value === "forgot")
+      && password.value !== confirm.value) {
     error.value = "两次输入的密码不一致";
     return;
   }
@@ -52,7 +55,8 @@ async function submit() {
     error.value = "请输入验证码";
     return;
   }
-  if (mode.value === "register" && !emailCode.value.trim()) {
+  if ((mode.value === "register" || mode.value === "forgot")
+      && !emailCode.value.trim()) {
     error.value = "请输入邮箱验证码";
     return;
   }
@@ -61,6 +65,18 @@ async function submit() {
     const captcha = { ticket: captchaTicket.value, code: captchaCode.value.trim() };
     if (mode.value === "login") {
       await auth.login(email.value.trim(), password.value, captcha);
+    } else if (mode.value === "forgot") {
+      await auth.resetPassword(
+        email.value.trim(),
+        emailCode.value.trim(),
+        password.value,
+      );
+      mode.value = "login";
+      password.value = "";
+      confirm.value = "";
+      emailCode.value = "";
+      notice.value = "密码已重置，请使用新密码登录";
+      return;
     } else {
       await auth.register(email.value.trim(), password.value, emailCode.value.trim());
     }
@@ -77,6 +93,7 @@ async function submit() {
 
 async function sendEmailCode() {
   error.value = "";
+  notice.value = "";
   const requestedEmail = email.value.trim();
   if (!requestedEmail) {
     error.value = "请先填写邮箱";
@@ -88,9 +105,12 @@ async function sendEmailCode() {
   }
 
   sendingCode.value = true;
+  const path = mode.value === "forgot"
+    ? "/api/auth/password-reset/email-code"
+    : "/api/auth/register/email-code";
   try {
     const data = await api<{ cooldownSeconds: number; expiresInSeconds: number }>(
-      "/api/auth/register/email-code",
+      path,
       {
         method: "POST",
         body: JSON.stringify({
@@ -186,11 +206,25 @@ watch(email, resetEmailCode);
             @click="
               mode = item.key as 'login' | 'register';
               error = '';
+              notice = '';
             "
           >
             {{ item.label }}
           </button>
         </div>
+
+        <button
+          v-if="mode !== 'forgot'"
+          type="button"
+          class="-mt-3 mb-5 block text-sm text-moss transition hover:text-moss/80"
+          @click="
+            mode = 'forgot';
+            error = '';
+            notice = '';
+          "
+        >
+          忘记密码
+        </button>
 
         <label class="mb-5 block">
           <span class="mb-1.5 block text-sm text-ink">邮箱</span>
@@ -203,7 +237,9 @@ watch(email, resetEmailCode);
         </label>
 
         <label class="mb-5 block">
-          <span class="mb-1.5 block text-sm text-ink">密码</span>
+          <span class="mb-1.5 block text-sm text-ink">
+            {{ mode === "forgot" ? "新密码" : "密码" }}
+          </span>
           <input
             v-model="password"
             type="password"
@@ -212,8 +248,10 @@ watch(email, resetEmailCode);
           />
         </label>
 
-        <label v-if="mode === 'register'" class="mb-5 block">
-          <span class="mb-1.5 block text-sm text-ink">确认密码</span>
+        <label v-if="mode === 'register' || mode === 'forgot'" class="mb-5 block">
+          <span class="mb-1.5 block text-sm text-ink">
+            {{ mode === "forgot" ? "确认新密码" : "确认密码" }}
+          </span>
           <input
             v-model="confirm"
             type="password"
@@ -254,7 +292,7 @@ watch(email, resetEmailCode);
           </div>
         </label>
 
-        <label v-if="mode === 'register'" class="mb-5 block">
+        <label v-if="mode === 'register' || mode === 'forgot'" class="mb-5 block">
           <span class="mb-1.5 block text-sm text-ink">邮箱验证码</span>
           <div class="flex items-center gap-3">
             <input
@@ -279,6 +317,9 @@ watch(email, resetEmailCode);
         <p v-if="error" class="mb-4 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">
           {{ error }}
         </p>
+        <p v-if="notice" class="mb-4 rounded-xl bg-moss/10 px-4 py-2.5 text-sm text-ink">
+          {{ notice }}
+        </p>
 
         <button
           type="submit"
@@ -289,7 +330,9 @@ watch(email, resetEmailCode);
             <Loader2 class="h-4 w-4 animate-spin" />
             请稍候…
           </template>
-          <template v-else>{{ mode === "login" ? "登录" : "注册并登录" }}</template>
+          <template v-else>
+            {{ mode === "login" ? "登录" : mode === "register" ? "注册并登录" : "重置密码" }}
+          </template>
         </button>
       </form>
 
