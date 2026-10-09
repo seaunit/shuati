@@ -120,6 +120,31 @@ INTERNAL_SECRET=与后端一致
 WAFFO_DRY_RUN=false
 ```
 
+**注册邮箱验证码**：将以下配置加入后端 `/etc/shuati/env`：
+
+```bash
+SHUATI_MAIL_ENABLED=true
+SHUATI_MAIL_HOST=smtpdm.aliyun.com
+SHUATI_MAIL_PORT=465
+SHUATI_MAIL_USERNAME=no-reply@mail.seaunit.site
+SHUATI_MAIL_PASSWORD=在DirectMail控制台设置的SMTP密码
+SHUATI_MAIL_FROM=no-reply@mail.seaunit.site
+SHUATI_MAIL_FROM_NAME=拾题
+SHUATI_EMAIL_SECRET=独立随机值
+SHUATI_MAIL_SSL=true
+SHUATI_MAIL_CONNECT_TIMEOUT_MS=10000
+SHUATI_MAIL_READ_TIMEOUT_MS=10000
+SHUATI_MAIL_CODE_TTL_SECONDS=300
+SHUATI_MAIL_COOLDOWN_SECONDS=60
+SHUATI_MAIL_EMAIL_DAILY_LIMIT=10
+SHUATI_MAIL_IP_HOURLY_LIMIT=20
+SHUATI_MAIL_DEVICE_DAILY_LIMIT=30
+SHUATI_MAIL_GLOBAL_DAILY_LIMIT=2000
+```
+
+DirectMail 发信域名必须完成 SPF、DKIM、DMARC 和 MX 验证。生产环境只把 SMTP 密码写入
+`/etc/shuati/env`，不要提交到 Git。
+
 两个文件都要限制权限：`sudo chmod 600 /etc/shuati/env /etc/shuati/payments.env && sudo chown shuati:shuati /etc/shuati/*`
 
 ## 4. 构建并上传
