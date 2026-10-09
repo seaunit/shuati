@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Leaf, Loader2 } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
@@ -19,6 +19,10 @@ const captchaTicket = ref("");
 const captchaImage = ref("");
 const captchaCode = ref("");
 const captchaLoading = ref(false);
+const emailCode = ref("");
+const cooldown = ref(0);
+const sendingCode = ref(false);
+let cooldownTimer: number | undefined;
 
 async function loadCaptcha() {
   captchaLoading.value = true;
@@ -44,8 +48,12 @@ async function submit() {
     error.value = "两次输入的密码不一致";
     return;
   }
-  if (!captchaCode.value.trim()) {
+  if (mode.value === "login" && !captchaCode.value.trim()) {
     error.value = "请输入验证码";
+    return;
+  }
+  if (mode.value === "register" && !emailCode.value.trim()) {
+    error.value = "请输入邮箱验证码";
     return;
   }
   loading.value = true;
@@ -54,7 +62,7 @@ async function submit() {
     if (mode.value === "login") {
       await auth.login(email.value.trim(), password.value, captcha);
     } else {
-      await auth.register(email.value.trim(), password.value, captcha);
+      await auth.register(email.value.trim(), password.value, emailCode.value.trim());
     }
     const next = typeof route.query.next === "string" ? route.query.next : "/app";
     await router.push(next);
@@ -67,8 +75,73 @@ async function submit() {
   }
 }
 
+async function sendEmailCode() {
+  error.value = "";
+  const requestedEmail = email.value.trim();
+  if (!requestedEmail) {
+    error.value = "请先填写邮箱";
+    return;
+  }
+  if (!captchaCode.value.trim()) {
+    error.value = "请先输入图中字符";
+    return;
+  }
+
+  sendingCode.value = true;
+  try {
+    const data = await api<{ cooldownSeconds: number; expiresInSeconds: number }>(
+      "/api/auth/register/email-code",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email: requestedEmail,
+          captchaTicket: captchaTicket.value,
+          captchaCode: captchaCode.value.trim(),
+        }),
+      },
+    );
+    if (email.value.trim() !== requestedEmail) {
+      return;
+    }
+    emailCode.value = "";
+    cooldown.value = data.cooldownSeconds;
+    if (cooldownTimer) window.clearInterval(cooldownTimer);
+    cooldownTimer = window.setInterval(() => {
+      cooldown.value -= 1;
+      if (cooldown.value <= 0) {
+        cooldown.value = 0;
+        window.clearInterval(cooldownTimer);
+      }
+    }, 1000);
+    await loadCaptcha();
+  } catch (e) {
+    if (email.value.trim() === requestedEmail) {
+      error.value = e instanceof Error ? e.message : "验证码发送失败";
+    }
+    await loadCaptcha();
+  } finally {
+    sendingCode.value = false;
+  }
+}
+
+function resetEmailCode() {
+  emailCode.value = "";
+  cooldown.value = 0;
+  if (cooldownTimer) {
+    window.clearInterval(cooldownTimer);
+    cooldownTimer = undefined;
+  }
+}
+
 onMounted(loadCaptcha);
-watch(mode, loadCaptcha);
+onUnmounted(() => {
+  if (cooldownTimer) window.clearInterval(cooldownTimer);
+});
+watch(mode, () => {
+  resetEmailCode();
+  loadCaptcha();
+});
+watch(email, resetEmailCode);
 </script>
 
 <template>
@@ -163,6 +236,28 @@ watch(mode, loadCaptcha);
               >
                 {{ captchaLoading ? "加载中" : "点击刷新" }}
               </span>
+            </button>
+          </div>
+        </label>
+
+        <label v-if="mode === 'register'" class="mb-5 block">
+          <span class="mb-1.5 block text-sm text-ink">邮箱验证码</span>
+          <div class="flex items-center gap-3">
+            <input
+              v-model="emailCode"
+              maxlength="6"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              class="w-full flex-1 rounded-xl border border-mist bg-paper px-4 py-2.5 tracking-widest outline-none transition focus:border-moss"
+              placeholder="6 位数字"
+            />
+            <button
+              type="button"
+              :disabled="cooldown > 0 || sendingCode"
+              class="shrink-0 rounded-xl border border-moss px-4 py-2.5 text-sm text-moss transition hover:bg-moss/10 disabled:opacity-50"
+              @click="sendEmailCode"
+            >
+              {{ cooldown > 0 ? `${cooldown} 秒后重发` : sendingCode ? "发送中…" : "发送验证码" }}
             </button>
           </div>
         </label>

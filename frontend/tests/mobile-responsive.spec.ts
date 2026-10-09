@@ -76,6 +76,67 @@ test("site favicon uses the Shuati leaf brand mark", async ({ page, request }) =
   expect(await response.text()).toContain("<svg");
 });
 
+test("registration sends email code and starts sixty second countdown", async ({ page }) => {
+  await page.route("**/captcha/image", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { ticket: "t1", imageBase64: "data:image/png;base64,AA==" },
+      },
+    }),
+  );
+  await page.route("**/api/auth/register/email-code", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { cooldownSeconds: 60, expiresInSeconds: 300 },
+      },
+    }),
+  );
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "注册", exact: true }).click();
+  await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("user@example.com");
+  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
+  await page.getByRole("button", { name: "发送验证码" }).click();
+
+  await expect(page.getByRole("button", { name: /60 秒后重发/ })).toBeDisabled();
+  await expect(page.getByPlaceholder("6 位数字")).toBeVisible();
+});
+
+test("changing email clears old code and countdown", async ({ page }) => {
+  await page.route("**/captcha/image", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { ticket: "t1", imageBase64: "data:image/png;base64,AA==" },
+      },
+    }),
+  );
+  await page.route("**/api/auth/register/email-code", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { cooldownSeconds: 60, expiresInSeconds: 300 },
+      },
+    }),
+  );
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "注册", exact: true }).click();
+  await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("first@example.com");
+  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
+  await page.getByRole("button", { name: "发送验证码" }).click();
+  await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("second@example.com");
+
+  await expect(page.getByPlaceholder("6 位数字")).toHaveValue("");
+  await expect(page.getByRole("button", { name: "发送验证码" })).toBeEnabled();
+});
+
 test("stats table scrolls horizontally on mobile instead of being clipped", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

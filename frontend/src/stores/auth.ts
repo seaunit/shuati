@@ -46,15 +46,14 @@ export const useAuthStore = defineStore("auth", {
     async register(
       email: string,
       password: string,
-      captcha: { ticket: string; code: string },
+      emailCode: string,
     ) {
       this.user = await api<User>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
           email,
           password,
-          captchaTicket: captcha.ticket,
-          captchaCode: captcha.code,
+          emailCode,
         }),
       });
       this.loaded = true;
