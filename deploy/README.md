@@ -146,6 +146,10 @@ SHUATI_MAIL_GLOBAL_DAILY_LIMIT=2000
 DirectMail 发信域名必须完成 SPF、DKIM、DMARC 和 MX 验证。生产环境只把 SMTP 密码写入
 `/etc/shuati/env`，不要提交到 Git。
 
+找回密码复用同一 DirectMail 配置，不需要新增 SMTP 变量。首次部署会自动执行
+Flyway `V10__session_version.sql`，为 `profiles` 增加 `session_version`。
+密码重置成功后该版本会递增，使所有旧 JWT 立即失效。
+
 两个文件都要限制权限：`sudo chmod 600 /etc/shuati/env /etc/shuati/payments.env && sudo chown shuati:shuati /etc/shuati/*`
 
 ## 4. 构建并上传
