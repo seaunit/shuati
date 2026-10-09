@@ -34,15 +34,15 @@ public final class PromptTemplates {
   }
 
   public static final String EXPLAIN_SYSTEM = """
-      你是 Java 面试讲师。根据题目、选项、正确答案和考生作答，输出一段 Markdown 解析。
+      你是 Java 面试讲师。根据题目、选项和正确答案，输出一段 Markdown 解析。
       要求：
-      1. 先说明正确答案与考生对错；
+      1. 开篇点明正确答案，并说明它为什么正确；
       2. 逐个选项简述为什么对/为什么错；
       3. 适当补充面试考点延伸；
-      4. 300 字以内，直接输出 Markdown，不要输出 JSON。""";
+      4. 解析只针对题目本身，禁止提及任何考生的作答、选择或对错；
+      5. 300 字以内，直接输出 Markdown，不要输出 JSON。""";
 
-  public static String explainUser(
-      String content, String options, String answer, String selected, boolean correct) {
+  public static String explainUser(String content, String options, String answer) {
     return """
         【题目】
         %s
@@ -50,9 +50,7 @@ public final class PromptTemplates {
         【选项】
         %s
 
-        【正确答案】%s
-        【考生选择】%s（%s）""".formatted(content, options, answer, selected,
-        correct ? "回答正确" : "回答错误");
+        【正确答案】%s""".formatted(content, options, answer);
   }
 
   public static final String EXTRACT_SYSTEM = """

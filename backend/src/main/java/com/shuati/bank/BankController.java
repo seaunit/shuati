@@ -52,4 +52,9 @@ public class BankController {
   public ApiResponse<Map<String, Object>> unitProgress(@PathVariable long id) {
     return ApiResponse.ok(bankService.unitProgress(id));
   }
+
+  @GetMapping("/api/progress/all")
+  public ApiResponse<Map<String, Object>> allProgress() {
+    return ApiResponse.ok(bankService.allProgress());
+  }
 }

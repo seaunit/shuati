@@ -121,8 +121,7 @@ public class AiGradingService {
   }
 
   @Transactional
-  public Map<String, Object> explanation(
-      String userId, long questionId, String selected, boolean correct) {
+  public Map<String, Object> explanation(String userId, long questionId) {
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select content, options, answer, explanation from question where id = ?", questionId);
     if (rows.isEmpty()) {
@@ -149,9 +148,7 @@ public class AiGradingService {
           PromptTemplates.explainUser(
               String.valueOf(question.get("content")),
               String.valueOf(question.get("options")),
-              String.valueOf(question.get("answer")),
-              selected == null ? "" : selected,
-              correct),
+              String.valueOf(question.get("answer"))),
           false);
       ai.logUsage(userId, "EXPLAIN", result.model(), questionId, result, null,
           System.currentTimeMillis() - start);

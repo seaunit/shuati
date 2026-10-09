@@ -3320,5 +3320,9 @@ FROM unit u
 JOIN soft_exam_import_guard g ON g.id = 1
 WHERE u.bank_id = @soft_bank_id AND u.name = '湖仓一体架构';
 
+-- 早期 AI 解析把「考生选择」一起喂给模型并按题目缓存，导致其他用户看到别人的作答结论。
+-- 这里清掉这批个性化缓存，让解析按新的「只针对题目」提示词重新生成。
+UPDATE question SET explanation = NULL WHERE explanation LIKE '%考生%';
+
 COMMIT;
 DROP TEMPORARY TABLE IF EXISTS soft_exam_import_guard;

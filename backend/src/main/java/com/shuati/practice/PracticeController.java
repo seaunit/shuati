@@ -77,11 +77,10 @@ public class PracticeController {
   @GetMapping("/api/practice/questions/{id}/explanation")
   // AI 解析同样花钱：同一用户每分钟最多 60 次
   @RateLimit(name = "ai:explain", limit = 60, windowSeconds = 60, scope = RateLimit.Scope.USER)
-  public ApiResponse<Map<String, Object>> explanation(
-      @PathVariable long id,
-      @org.springframework.web.bind.annotation.RequestParam(defaultValue = "") String selected,
-      @org.springframework.web.bind.annotation.RequestParam(defaultValue = "false") boolean correct) {
+  public ApiResponse<Map<String, Object>> explanation(@PathVariable long id) {
+    // 解析只针对题目本身（正确答案 + 逐项分析），因此可以安全地按题目共享缓存；
+    // 考生自己的对错由前端依据本地判定结果展示，避免把别人的作答写进缓存的解析里。
     return ApiResponse.ok(aiGradingService.explanation(
-        com.shuati.common.CurrentUser.id(), id, selected, correct));
+        com.shuati.common.CurrentUser.id(), id));
   }
 }

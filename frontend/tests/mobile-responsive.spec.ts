@@ -365,6 +365,56 @@ test("practice actions stay directly above the mobile navigation", async ({ page
   expect(position).toBe("fixed");
 });
 
+test("practice resumes from the first unanswered question", async ({ page }) => {
+  const question = (id: number) => ({
+    id,
+    unit_id: 1,
+    type: "SINGLE",
+    content: `第 ${id} 题题干`,
+    options: [{ key: "A", text: "选项 A" }],
+    difficulty: "MEDIUM",
+    images: null,
+    tags: null,
+    status: "ON",
+  });
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: [question(1), question(2), question(3)] },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  // 前两题已经作答过，续刷应该落到第 3 题
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 3, answered: 2, correct: 1, answeredIds: [1, 2] },
+      },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+
+  await expect(page.getByText("第 3 / 3 题")).toBeVisible();
+  await expect(page.getByText("已从上次进度继续")).toBeVisible();
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },

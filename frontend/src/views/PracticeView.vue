@@ -47,6 +47,7 @@ const explanationLoading = ref(false);
 const counts = ref({ answered: 0, correct: 0, partial: 0, wrong: 0 });
 const sessionId = ref<number | null>(null);
 const startedAt = ref(Date.now());
+const resumed = ref(false);
 
 const current = computed(() => questions.value[index.value]);
 const progress = computed(() =>
@@ -141,9 +142,7 @@ async function loadExplanation() {
   explanationLoading.value = true;
   try {
     const response = await api<{ explanation: string }>(
-      `/api/practice/questions/${current.value.id}/explanation?selected=${encodeURIComponent(
-        selected.value.join(""),
-      )}&correct=${result.value.verdict === "CORRECT"}`,
+      `/api/practice/questions/${current.value.id}/explanation`,
     );
     explanation.value = response.explanation;
     await billing.load();
@@ -191,6 +190,27 @@ async function finish() {
   router.push("/app");
 }
 
+// 续刷：跳过这个范围里已经作答过的题目，从第一道没做过的题接着来
+async function resumeProgress(unitId: number | null, bankId: number | null) {
+  try {
+    const url = unitId
+      ? `/api/progress/unit/${unitId}`
+      : bankId
+        ? `/api/progress/bank/${bankId}`
+        : "/api/progress/all";
+    const data = await api<{ answeredIds?: number[] }>(url);
+    const answered = new Set(data.answeredIds ?? []);
+    const nextIndex = questions.value.findIndex((item) => !answered.has(item.id));
+    if (nextIndex > 0) {
+      index.value = nextIndex;
+      resetState();
+      resumed.value = true;
+    }
+  } catch {
+    // 进度读取失败不影响正常练习，退化为从第一题开始
+  }
+}
+
 onMounted(async () => {
   const bankId = route.query.bankId ? Number(route.query.bankId) : null;
   const unitId = route.query.unitId ? Number(route.query.unitId) : null;
@@ -213,6 +233,7 @@ onMounted(async () => {
         }),
       });
       sessionId.value = session.id;
+      await resumeProgress(unitId, bankId);
     }
   } catch {
     questions.value = [];
@@ -234,6 +255,7 @@ onMounted(async () => {
           <p class="text-xs text-oat">
             第 {{ index + 1 }} / {{ questions.length }} 题 · {{ typeLabel(current.type) }}
           </p>
+          <p v-if="resumed" class="mt-1 text-xs text-moss">已从上次进度继续</p>
           <div class="mt-2 h-1.5 w-full max-w-64 overflow-hidden rounded-full bg-mist">
             <div class="h-full rounded-full bg-moss" :style="{ width: progress + '%' }" />
           </div>

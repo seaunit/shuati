@@ -33,8 +33,7 @@ class AiExplanationBillingTest {
     long questionId = createCachedQuestion();
 
     int before = intValue(points.entitlements(userId).get("available"));
-    Map<String, Object> response =
-        aiGradingService.explanation(userId, questionId, "A", false);
+    Map<String, Object> response = aiGradingService.explanation(userId, questionId);
 
     assertThat(response.get("explanation")).isEqualTo("已缓存的标准解析");
     assertThat(intValue(points.entitlements(userId).get("available"))).isEqualTo(before - 1);

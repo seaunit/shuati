@@ -139,6 +139,10 @@ public class BankService {
     return progressForUnitIds(List.of(unitId));
   }
 
+  public Map<String, Object> allProgress() {
+    return progressForUnitIds(visibleUnitIds());
+  }
+
   private List<Map<String, Object>> questionsByUnitIds(List<Long> unitIds, String mode) {
     if (unitIds.isEmpty()) {
       return List.of();
