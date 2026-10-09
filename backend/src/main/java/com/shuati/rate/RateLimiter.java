@@ -1,6 +1,7 @@
 package com.shuati.rate;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +25,12 @@ public class RateLimiter {
 
   /** @return true=放行，false=超出限制 */
   public boolean allow(String key, int limit, Duration window) {
+    return allowWithRetry(key, limit, window).allowed();
+  }
+
+  public Decision allowWithRetry(String key, int limit, Duration window) {
     if (limit <= 0) {
-      return true;
+      return new Decision(true, 0);
     }
     try {
       String redisKey = PREFIX + key;
@@ -33,12 +38,18 @@ public class RateLimiter {
       if (count != null && count == 1L) {
         redis.expire(redisKey, window);
       }
-      return count != null && count <= limit;
+      boolean allowed = count != null && count <= limit;
+      if (allowed) {
+        return new Decision(true, 0);
+      }
+      Long ttl = redis.getExpire(redisKey, TimeUnit.SECONDS);
+      long retryAfter = ttl == null || ttl < 1 ? window.getSeconds() : ttl;
+      return new Decision(false, retryAfter);
     } catch (Exception e) {
       // Redis 不可用时 fail-open：限流只是兜底防线，不应让整站 500。
       // 真正的安全边界（验证码校验）本身就依赖 Redis，会独立失败。
       log.warn("限流依赖的 Redis 不可用，本次放行：{}", e.getMessage());
-      return true;
+      return new Decision(true, 0);
     }
   }
 
@@ -52,5 +63,8 @@ public class RateLimiter {
     } catch (NumberFormatException e) {
       return 0L;
     }
+  }
+
+  public record Decision(boolean allowed, long retryAfterSeconds) {
   }
 }

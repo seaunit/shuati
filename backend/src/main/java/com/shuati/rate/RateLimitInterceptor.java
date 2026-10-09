@@ -41,8 +41,10 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     // 1) 全局兜底（只兜业务接口，静态资源不在此列）
     if (properties.getGlobalPerMinute() > 0
         && (path.startsWith("/api/") || path.startsWith("/captcha/"))) {
-      if (!rateLimiter.allow("global:ip:" + ip, properties.getGlobalPerMinute(), ONE_MINUTE)) {
-        throw new ApiException(429, "请求过于频繁，请稍后再试");
+      RateLimiter.Decision global = rateLimiter.allowWithRetry(
+          "global:ip:" + ip, properties.getGlobalPerMinute(), ONE_MINUTE);
+      if (!global.allowed()) {
+        throw tooMany(global);
       }
     }
 
@@ -62,17 +64,28 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     boolean needUser = annotation.scope() == RateLimit.Scope.USER
         || annotation.scope() == RateLimit.Scope.IP_AND_USER;
 
-    if (needIp && !rateLimiter.allow(
-        annotation.name() + ":ip:" + ip, annotation.limit(), window)) {
-      throw new ApiException(429, "请求过于频繁，请稍后再试");
+    if (needIp) {
+      RateLimiter.Decision ipDecision = rateLimiter.allowWithRetry(
+          annotation.name() + ":ip:" + ip, annotation.limit(), window);
+      if (!ipDecision.allowed()) {
+        throw tooMany(ipDecision);
+      }
     }
     // 未登录时 USER 维度退化为 IP，避免匿名请求绕过
     String userKey = userId == null ? "ip:" + ip : "user:" + userId;
-    if (needUser && !rateLimiter.allow(
-        annotation.name() + ":" + userKey, annotation.limit(), window)) {
-      throw new ApiException(429, "请求过于频繁，请稍后再试");
+    if (needUser) {
+      RateLimiter.Decision userDecision = rateLimiter.allowWithRetry(
+          annotation.name() + ":" + userKey, annotation.limit(), window);
+      if (!userDecision.allowed()) {
+        throw tooMany(userDecision);
+      }
     }
     return true;
+  }
+
+  private ApiException tooMany(RateLimiter.Decision decision) {
+    long seconds = Math.max(1, decision.retryAfterSeconds());
+    return new ApiException(429, "请求过于频繁，请 " + seconds + " 秒后重试", seconds);
   }
 
   private String currentUserId() {

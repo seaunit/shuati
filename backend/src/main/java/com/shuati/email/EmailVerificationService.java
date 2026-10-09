@@ -41,7 +41,9 @@ public class EmailVerificationService {
 
     String emailHash = emailHash(normalized);
     if (!store.acquireCooldown(emailHash, properties.cooldownSeconds())) {
-      throw new ApiException(429, "验证码发送过于频繁，请稍后再试");
+      long seconds = store.remainingCooldownSeconds(emailHash);
+      throw new ApiException(
+          429, "验证码发送过于频繁，请 " + seconds + " 秒后重试", seconds);
     }
 
     LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
@@ -63,17 +65,16 @@ public class EmailVerificationService {
         Duration.ofDays(1));
 
     String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
-    store.saveCode(emailHash, codeHash(normalized, code), properties.codeTtlSeconds());
+    String codeHash = codeHash(normalized, code);
+    String nonce = store.saveCode(emailHash, codeHash, properties.codeTtlSeconds());
     try {
       sender.sendRegisterCode(normalized, code);
       return new SendResult(properties.cooldownSeconds(), properties.codeTtlSeconds());
     } catch (ApiException e) {
-      store.deleteCode(emailHash);
-      store.deleteCooldown(emailHash);
+      store.deleteAttempt(emailHash, codeHash, nonce);
       throw e;
     } catch (Exception e) {
-      store.deleteCode(emailHash);
-      store.deleteCooldown(emailHash);
+      store.deleteAttempt(emailHash, codeHash, nonce);
       throw new ApiException(503, "验证码邮件发送失败，请稍后重试");
     }
   }
@@ -101,8 +102,11 @@ public class EmailVerificationService {
   }
 
   private void checkLimit(String key, int limit, Duration window) {
-    if (!rateLimiter.allow(key, limit, window)) {
-      throw new ApiException(429, "验证码发送过于频繁，请稍后再试");
+    RateLimiter.Decision decision = rateLimiter.allowWithRetry(key, limit, window);
+    if (!decision.allowed()) {
+      long seconds = Math.max(1, decision.retryAfterSeconds());
+      throw new ApiException(
+          429, "验证码发送过于频繁，请 " + seconds + " 秒后重试", seconds);
     }
   }
 

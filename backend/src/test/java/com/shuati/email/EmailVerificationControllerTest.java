@@ -1,6 +1,8 @@
 package com.shuati.email;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -78,5 +80,38 @@ class EmailVerificationControllerTest {
                 {"email":"%s","captchaTicket":"%s","captchaCode":"%s"}
                 """.formatted(email, captcha.ticket(), code)))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void repeatedSendReturnsRetryAfter() throws Exception {
+    String email = "cooldown-" + UUID.randomUUID() + "@example.com";
+
+    send(email, "9.9.9.11", "device-z");
+    CaptchaImageResponse captcha = captchaService.generate("9.9.9.12", "device-z2");
+    String code = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
+        .path("code").asText();
+
+    mvc.perform(post("/api/auth/register/email-code")
+            .header("X-Requested-With", "ShuatiApp")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email":"%s","captchaTicket":"%s","captchaCode":"%s"}
+                """.formatted(email, captcha.ticket(), code)))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(header().exists("Retry-After"))
+        .andExpect(jsonPath("$.message", containsString("秒后重试")));
+  }
+
+  private void send(String email, String ip, String device) throws Exception {
+    CaptchaImageResponse captcha = captchaService.generate(ip, device);
+    String code = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
+        .path("code").asText();
+    mvc.perform(post("/api/auth/register/email-code")
+            .header("X-Requested-With", "ShuatiApp")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email":"%s","captchaTicket":"%s","captchaCode":"%s"}
+                """.formatted(email, captcha.ticket(), code)))
+        .andExpect(status().isOk());
   }
 }

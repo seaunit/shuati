@@ -47,4 +47,15 @@ class RateLimiterTest {
     assertThat(rateLimiter.allow("disabled:" + UUID.randomUUID(), 0, Duration.ofMinutes(1)))
         .isTrue();
   }
+
+  @Test
+  void rejectedDecisionIncludesRetryAfterSeconds() {
+    String key = "retry:" + UUID.randomUUID();
+    Duration window = Duration.ofSeconds(30);
+
+    assertThat(rateLimiter.allowWithRetry(key, 1, window).allowed()).isTrue();
+    RateLimiter.Decision denied = rateLimiter.allowWithRetry(key, 1, window);
+    assertThat(denied.allowed()).isFalse();
+    assertThat(denied.retryAfterSeconds()).isBetween(1L, 30L);
+  }
 }

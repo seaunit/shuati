@@ -64,4 +64,18 @@ class EmailVerificationStoreTest {
     }
     assertThat(store.verify(emailHash, "hash-2", 5).ok()).isFalse();
   }
+
+  @Test
+  void staleAttemptCannotDeleteNewerCodeOrCooldown() {
+    String emailHash = "stale-" + UUID.randomUUID();
+    String firstNonce = store.saveCode(emailHash, "first-hash", 300);
+    store.acquireCooldown(emailHash, 60);
+
+    String secondNonce = store.saveCode(emailHash, "second-hash", 300);
+    store.acquireCooldown(emailHash, 60);
+
+    assertThat(store.deleteAttempt(emailHash, "first-hash", firstNonce)).isFalse();
+    assertThat(store.verify(emailHash, "second-hash", 5).ok()).isTrue();
+    assertThat(secondNonce).isNotBlank();
+  }
 }

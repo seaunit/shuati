@@ -1,6 +1,8 @@
 package com.shuati.rate;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -54,6 +56,7 @@ class RateLimitTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content(LOGIN_BODY))
         .andExpect(status().isTooManyRequests())
-        .andExpect(jsonPath("$.message").value("请求过于频繁，请稍后再试"));
+        .andExpect(header().exists("Retry-After"))
+        .andExpect(jsonPath("$.message", containsString("秒后重试")));
   }
 }

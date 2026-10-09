@@ -104,24 +104,38 @@ async function sendEmailCode() {
       return;
     }
     emailCode.value = "";
-    cooldown.value = data.cooldownSeconds;
-    if (cooldownTimer) window.clearInterval(cooldownTimer);
-    cooldownTimer = window.setInterval(() => {
-      cooldown.value -= 1;
-      if (cooldown.value <= 0) {
-        cooldown.value = 0;
-        window.clearInterval(cooldownTimer);
-      }
-    }, 1000);
+    startCooldown(data.cooldownSeconds);
     await loadCaptcha();
   } catch (e) {
     if (email.value.trim() === requestedEmail) {
-      error.value = e instanceof Error ? e.message : "验证码发送失败";
+      const message = e instanceof Error ? e.message : "验证码发送失败";
+      error.value = message;
+      const seconds = Number(message.match(/请\s*(\d+)\s*秒后/)?.[1] ?? 0);
+      if (seconds > 0) {
+        startCooldown(seconds);
+      }
     }
     await loadCaptcha();
   } finally {
     sendingCode.value = false;
   }
+}
+
+function startCooldown(seconds: number) {
+  cooldown.value = Math.max(0, seconds);
+  if (cooldownTimer) window.clearInterval(cooldownTimer);
+  if (cooldown.value <= 0) {
+    cooldownTimer = undefined;
+    return;
+  }
+  cooldownTimer = window.setInterval(() => {
+    cooldown.value -= 1;
+    if (cooldown.value <= 0) {
+      cooldown.value = 0;
+      window.clearInterval(cooldownTimer);
+      cooldownTimer = undefined;
+    }
+  }, 1000);
 }
 
 function resetEmailCode() {

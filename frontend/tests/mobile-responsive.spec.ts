@@ -137,6 +137,33 @@ test("changing email clears old code and countdown", async ({ page }) => {
   await expect(page.getByRole("button", { name: "发送验证码" })).toBeEnabled();
 });
 
+test("rate limited send resumes countdown from server retry time", async ({ page }) => {
+  await page.route("**/captcha/image", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { ticket: "t1", imageBase64: "data:image/png;base64,AA==" },
+      },
+    }),
+  );
+  await page.route("**/api/auth/register/email-code", (route) =>
+    route.fulfill({
+      status: 429,
+      headers: { "Retry-After": "42" },
+      json: { code: 429, message: "验证码发送过于频繁，请 42 秒后重试", data: null },
+    }),
+  );
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "注册", exact: true }).click();
+  await page.getByRole("textbox", { name: "邮箱", exact: true }).fill("limited@example.com");
+  await page.getByPlaceholder("请输入图中字符").fill("AB3D");
+  await page.getByRole("button", { name: "发送验证码" }).click();
+
+  await expect(page.getByRole("button", { name: /42 秒后重发/ })).toBeDisabled();
+});
+
 test("stats table scrolls horizontally on mobile instead of being clipped", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

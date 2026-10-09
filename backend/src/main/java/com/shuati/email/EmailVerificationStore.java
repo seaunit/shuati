@@ -3,6 +3,8 @@ package com.shuati.email;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -36,6 +38,21 @@ public class EmailVerificationStore {
       return {'MISMATCH', entry.attempts}
       """, List.class);
 
+  private static final DefaultRedisScript<Long> DELETE_ATTEMPT_SCRIPT =
+      new DefaultRedisScript<>("""
+          local value = redis.call('GET', KEYS[1])
+          if not value then
+            return 0
+          end
+          local entry = cjson.decode(value)
+          if entry.codeHash == ARGV[1] and entry.nonce == ARGV[2] then
+            redis.call('DEL', KEYS[1])
+            redis.call('DEL', KEYS[2])
+            return 1
+          end
+          return 0
+          """, Long.class);
+
   private final StringRedisTemplate redis;
   private final ObjectMapper objectMapper;
 
@@ -44,10 +61,12 @@ public class EmailVerificationStore {
         cooldownKey(emailHash), "1", Duration.ofSeconds(seconds)));
   }
 
-  public void saveCode(String emailHash, String codeHash, int ttlSeconds) {
+  public String saveCode(String emailHash, String codeHash, int ttlSeconds) {
     try {
-      String json = objectMapper.writeValueAsString(new CodeEntry(codeHash, 0));
+      String nonce = UUID.randomUUID().toString();
+      String json = objectMapper.writeValueAsString(new CodeEntry(codeHash, 0, nonce));
       redis.opsForValue().set(codeKey(emailHash), json, Duration.ofSeconds(ttlSeconds));
+      return nonce;
     } catch (Exception e) {
       throw new IllegalStateException("邮箱验证码写入 Redis 失败", e);
     }
@@ -59,6 +78,20 @@ public class EmailVerificationStore {
 
   public void deleteCooldown(String emailHash) {
     redis.delete(cooldownKey(emailHash));
+  }
+
+  public long remainingCooldownSeconds(String emailHash) {
+    Long ttl = redis.getExpire(cooldownKey(emailHash), TimeUnit.SECONDS);
+    return ttl == null || ttl < 1 ? 1 : ttl;
+  }
+
+  public boolean deleteAttempt(String emailHash, String codeHash, String nonce) {
+    Long deleted = redis.execute(
+        DELETE_ATTEMPT_SCRIPT,
+        List.of(codeKey(emailHash), cooldownKey(emailHash)),
+        codeHash,
+        nonce);
+    return deleted != null && deleted == 1L;
   }
 
   public VerifyResult verify(String emailHash, String submittedHash, int maxAttempts) {
@@ -88,6 +121,6 @@ public class EmailVerificationStore {
   public record VerifyResult(boolean ok, int attempts, boolean locked) {
   }
 
-  private record CodeEntry(String codeHash, int attempts) {
+  private record CodeEntry(String codeHash, int attempts, String nonce) {
   }
 }

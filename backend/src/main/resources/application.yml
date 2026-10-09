@@ -33,6 +33,7 @@ spring:
       mail.smtp.ssl.enable: ${SHUATI_MAIL_SSL:true}
       mail.smtp.connectiontimeout: ${SHUATI_MAIL_CONNECT_TIMEOUT_MS:10000}
       mail.smtp.timeout: ${SHUATI_MAIL_READ_TIMEOUT_MS:10000}
+      mail.smtp.writetimeout: ${SHUATI_MAIL_WRITE_TIMEOUT_MS:10000}
 
 server:
   port: 8080
@@ -46,6 +47,10 @@ management:
     web:
       exposure:
         include: health
+  health:
+    mail:
+      # 邮件发送可用性不参与应用 readiness；未配置 SMTP 时不能被健康检查阻断部署。
+      enabled: false
 
 shuati:
   payments:
