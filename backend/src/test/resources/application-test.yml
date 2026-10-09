@@ -16,6 +16,11 @@ spring:
       database: 1
       timeout: 3s
 
+management:
+  health:
+    mail:
+      enabled: false
+
 shuati:
   rate-limit:
     # 测试默认关掉，避免用例互相影响；限流本身由 RateLimitTest 单独验证
