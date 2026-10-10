@@ -10,8 +10,9 @@
 # - 本脚本不会导入 Supabase 业务数据，也不会覆盖已有 /etc/shuati/env。
 # - 首次部署默认用 HTTP + 公网 IP，所以 SHUATI_COOKIE_SECURE=false；
 #   域名与 HTTPS 配好后再改为 true。
-# - 支付侧车先写占位私钥，待 Waffo 真实密钥写入 /etc/shuati/payments.env
-#   后重启 shuati-payments 即可。
+# - Waffo 支付：商户/店铺/商品 ID 由脚本写好，私钥在部署时交互输入
+#   （也可用 WAFFO_PRIVATE_KEY_BASE64 或 WAFFO_PRIVATE_KEY_FILE 传入）。
+#   拿到私钥就自动打开 SHUATI_PAYMENTS_ENABLED；跳过则保持关闭。
 # ============================================================
 set -Eeuo pipefail
 
@@ -155,14 +156,52 @@ prompt_mail_password() {
   printf '%s' "$input"
 }
 
-# 覆盖或追加单个 env 变量（保持单引号写法，只动这一行）
-set_env_var() {
-  local key="$1" value="$2" tmp="$ENV_DIR/env.tmp"
+# 覆盖或追加单个变量（保持单引号写法，只动这一行）
+set_file_var() {
+  local file="$1" key="$2" value="$3"
+  [ -f "$file" ] || : >"$file"
+  local tmp="${file}.tmp"
   awk -v key="$key" -v val="$value" -v q="'" '
     $0 ~ "^" key "=" { print key "=" q val q; done = 1; next }
     { print }
     END { if (!done) print key "=" q val q }
-  ' "$ENV_DIR/env" >"$tmp" && mv "$tmp" "$ENV_DIR/env"
+  ' "$file" >"$tmp" && mv "$tmp" "$file"
+}
+
+set_env_var() {
+  set_file_var "$ENV_DIR/env" "$1" "$2"
+}
+
+# 交互读取 Waffo 私钥（输入不回显；直接回车保留现有私钥或为空）。
+# 私钥只进 /etc/shuati/payments.env，绝不写进仓库。
+prompt_waffo_private_key() {
+  local existing="$1"
+  if ! { : >/dev/tty; } 2>/dev/null; then
+    echo "[配置] 未检测到可交互终端，跳过 Waffo 私钥输入（保留现有私钥或为空）" >&2
+    printf '%s' ""
+    return 0
+  fi
+  printf '\n[配置] Waffo Pancake 私钥（RSA，用于请求签名）\n' >/dev/tty
+  if [ -n "$existing" ]; then
+    printf '[配置] 当前已设置（长度 %s）\n' "${#existing}" >/dev/tty
+  else
+    printf '[配置] 当前未设置\n' >/dev/tty
+  fi
+  printf '[配置] 粘贴单行 base64（本机执行：cat private.pem | base64 | tr -d "\\n"）\n' >/dev/tty
+  printf '[配置] 输入不会回显；直接回车 = 保留现有私钥或为空：' >/dev/tty
+  local input=""
+  IFS= read -rs input </dev/tty || input=""
+  printf '\n' >/dev/tty
+  if [ -z "$input" ]; then
+    if [ -n "$existing" ]; then
+      printf '[配置] 已保留现有 Waffo 私钥\n' >/dev/tty
+    else
+      printf '[配置] 未设置 Waffo 私钥，在线支付将保持关闭\n' >/dev/tty
+    fi
+  else
+    printf '[配置] Waffo 私钥已更新\n' >/dev/tty
+  fi
+  printf '%s' "$input"
 }
 
 echo "==> 8/9 写入配置"
@@ -238,31 +277,95 @@ SHUATI_MAIL_GLOBAL_DAILY_LIMIT=2000
 EOF
 fi
 
-if [ ! -s "$ENV_DIR/payments.env" ]; then
+# ---------------------------------------------------------------
+# Waffo Pancake 支付配置
+# 商户 ID / 店铺 ID / 商品 ID 是公开标识；私钥是敏感信息，
+# 只从环境变量、本地 PEM 文件或交互输入获取，绝不写进仓库。
+# ---------------------------------------------------------------
+PAYMENTS_ENV_FILE="$ENV_DIR/payments.env"
+
+# 老版本用 openssl 生成的占位私钥，不能当成真实配置沿用
+PLACEHOLDER_KEY_FILE="$ENV_DIR/waffo-placeholder.pem"
+PLACEHOLDER_B64=""
+if [ -f "$PLACEHOLDER_KEY_FILE" ]; then
+  PLACEHOLDER_B64="$(base64 -w0 "$PLACEHOLDER_KEY_FILE" 2>/dev/null || true)"
+fi
+
+EXISTING_WAFFO_KEY=""
+if [ -s "$PAYMENTS_ENV_FILE" ]; then
+  EXISTING_WAFFO_KEY="$(
+    sed -n "s/^WAFFO_PRIVATE_KEY_BASE64='\\(.*\\)'$/\\1/p" "$PAYMENTS_ENV_FILE" | head -1
+  )"
+  if [ -z "$EXISTING_WAFFO_KEY" ]; then
+    EXISTING_WAFFO_KEY="$(
+      sed -n "s/^WAFFO_PRIVATE_KEY='\\(.*\\)'$/\\1/p" "$PAYMENTS_ENV_FILE" | head -1
+    )"
+  fi
+fi
+WAFFO_PLACEHOLDER_DETECTED=0
+if [ -n "$EXISTING_WAFFO_KEY" ] && [ "$EXISTING_WAFFO_KEY" = "$PLACEHOLDER_B64" ]; then
+  echo "[配置] 现有 Waffo 私钥是部署占位值，已忽略，需要填入真实私钥"
+  EXISTING_WAFFO_KEY=""
+  WAFFO_PLACEHOLDER_DETECTED=1
+fi
+
+# 优先级：环境变量 > 本地 PEM 文件 > 交互输入 > 已有配置
+WAFFO_KEY="${WAFFO_PRIVATE_KEY_BASE64:-}"
+if [ -z "$WAFFO_KEY" ] && [ -n "${WAFFO_PRIVATE_KEY_FILE:-}" ] \
+    && [ -r "${WAFFO_PRIVATE_KEY_FILE}" ]; then
+  WAFFO_KEY="$(base64 -w0 "$WAFFO_PRIVATE_KEY_FILE")"
+  echo "[配置] 已从 ${WAFFO_PRIVATE_KEY_FILE} 读取 Waffo 私钥"
+fi
+if [ -z "$WAFFO_KEY" ]; then
+  WAFFO_KEY="$(prompt_waffo_private_key "$EXISTING_WAFFO_KEY")"
+fi
+if [ -z "$WAFFO_KEY" ]; then
+  WAFFO_KEY="$EXISTING_WAFFO_KEY"
+fi
+
+# 共享密钥必须 Java 与侧车一致：优先复用 env，其次侧车配置，最后随机生成
+PAYMENTS_SECRET_VALUE=""
+if [ -s "$ENV_DIR/env" ]; then
   PAYMENTS_SECRET_VALUE="$(
     sed -n "s/^SHUATI_PAYMENTS_SECRET='\\(.*\\)'$/\\1/p" "$ENV_DIR/env" | head -1
   )"
-  if [ -z "$PAYMENTS_SECRET_VALUE" ]; then
-    PAYMENTS_SECRET_VALUE="$(openssl rand -hex 32)"
-  fi
+fi
+if [ -z "$PAYMENTS_SECRET_VALUE" ] && [ -s "$PAYMENTS_ENV_FILE" ]; then
+  PAYMENTS_SECRET_VALUE="$(
+    sed -n "s/^INTERNAL_SECRET='\\(.*\\)'$/\\1/p" "$PAYMENTS_ENV_FILE" | head -1
+  )"
+fi
+if [ -z "$PAYMENTS_SECRET_VALUE" ]; then
+  PAYMENTS_SECRET_VALUE="$(openssl rand -hex 32)"
+fi
 
-  PLACEHOLDER_KEY="$ENV_DIR/waffo-placeholder.pem"
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$PLACEHOLDER_KEY"
-  PLACEHOLDER_B64="$(base64 -w0 "$PLACEHOLDER_KEY")"
+umask 077
+set_file_var "$PAYMENTS_ENV_FILE" WAFFO_MERCHANT_ID \
+  "${WAFFO_MERCHANT_ID:-MER_7PGKvFIiNnnwwEO5RsJLTR}"
+set_file_var "$PAYMENTS_ENV_FILE" WAFFO_STORE_ID \
+  "${WAFFO_STORE_ID:-STO_06yfSw5FByRGGzjlMVXC1n}"
+set_file_var "$PAYMENTS_ENV_FILE" WAFFO_ENV "${WAFFO_ENV:-test}"
+set_file_var "$PAYMENTS_ENV_FILE" WAFFO_CURRENCY "${WAFFO_CURRENCY:-CNY}"
+set_file_var "$PAYMENTS_ENV_FILE" WAFFO_PRODUCT_MAP \
+  "${WAFFO_PRODUCT_MAP:-PACK:pack_9=PROD_4LHpKOgDrQpNhyvA9WbYb1,PACK:pack_29=PROD_0UeAGdjEDeZlXpwk4jrdPc,PACK:pack_99=PROD_6wWViUIARdoV9cIRdq4xbU}"
+set_file_var "$PAYMENTS_ENV_FILE" PORT 8090
+set_file_var "$PAYMENTS_ENV_FILE" JAVA_BASE_URL "http://127.0.0.1:8080"
+set_file_var "$PAYMENTS_ENV_FILE" INTERNAL_SECRET "$PAYMENTS_SECRET_VALUE"
+set_file_var "$PAYMENTS_ENV_FILE" WAFFO_DRY_RUN "${WAFFO_DRY_RUN:-false}"
+if [ -n "$WAFFO_KEY" ]; then
+  set_file_var "$PAYMENTS_ENV_FILE" WAFFO_PRIVATE_KEY_BASE64 "$WAFFO_KEY"
+elif [ "$WAFFO_PLACEHOLDER_DETECTED" -eq 1 ]; then
+  # 清掉遗留的占位私钥，避免以后误以为已经配置过
+  set_file_var "$PAYMENTS_ENV_FILE" WAFFO_PRIVATE_KEY_BASE64 ""
+fi
 
-  umask 077
-  cat >"$ENV_DIR/payments.env" <<EOF
-WAFFO_MERCHANT_ID='MER_0000000000000000000000'
-WAFFO_PRIVATE_KEY_BASE64='${PLACEHOLDER_B64}'
-WAFFO_ENV='test'
-WAFFO_STORE_ID='STO_0000000000000000000000'
-WAFFO_CURRENCY='CNY'
-WAFFO_PRODUCT_MAP=
-PORT=8090
-JAVA_BASE_URL='http://127.0.0.1:8080'
-INTERNAL_SECRET='${PAYMENTS_SECRET_VALUE}'
-WAFFO_DRY_RUN=true
-EOF
+# Java 侧：密钥对齐；只有拿到真实私钥才打开在线支付开关
+set_env_var SHUATI_PAYMENTS_SECRET "$PAYMENTS_SECRET_VALUE"
+set_env_var SHUATI_PAYMENTS_URL "http://127.0.0.1:8090"
+if [ -n "$WAFFO_KEY" ]; then
+  set_env_var SHUATI_PAYMENTS_ENABLED true
+else
+  set_env_var SHUATI_PAYMENTS_ENABLED false
 fi
 
 # 旧版 env 可能缺少邮件验证码配置：只补缺失的键，绝不覆盖已有值。
@@ -382,5 +485,12 @@ echo "密码：${ADMIN_PASSWORD}"
 echo
 echo "当前是 HTTP + IP 临时模式，SHUATI_COOKIE_SECURE=${COOKIE_SECURE}"
 echo "域名与证书配好后，把 /etc/shuati/env 改成 SHUATI_COOKIE_SECURE=true 并重启 shuati。"
-echo "Waffo 真实密钥配置在 /etc/shuati/payments.env，配置后重启 shuati-payments。"
+if [ -n "$WAFFO_KEY" ]; then
+  echo "在线支付：已启用（Waffo ${WAFFO_ENV:-test} 环境，Waffo 密钥在 /etc/shuati/payments.env）"
+  echo "自检：cd /opt/shuati/payments && sudo -u shuati npm run smoke"
+else
+  echo "在线支付：未启用（未提供 Waffo 私钥）"
+  echo "补配：把真实私钥 base64 写进 /etc/shuati/payments.env 的 WAFFO_PRIVATE_KEY_BASE64，"
+  echo "      再把 /etc/shuati/env 的 SHUATI_PAYMENTS_ENABLED 改成 true，然后重启两个服务。"
+fi
 echo "=================================================="

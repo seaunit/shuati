@@ -107,18 +107,48 @@ SHUATI_PAYMENTS_CURRENCY=CNY
 SHUATI_COOKIE_SECURE=true
 ```
 
-**支付侧车** `/etc/shuati/payments.env`：
+**支付侧车** `/etc/shuati/payments.env`：这一份**由脚本自动生成**，不需要手填。
+商户 ID、店铺 ID、商品映射（3 个点数包）都是公开标识，已内置在
+`provision-ubuntu.sh` 里；`INTERNAL_SECRET` 会自动生成并同步写入后端
+`SHUATI_PAYMENTS_SECRET`，两边永远一致。
+
+只有**私钥**需要在部署时交互输入（输入不回显，**直接回车 = 保留现有私钥或为空**）：
+
+```
+[配置] Waffo Pancake 私钥（RSA，用于请求签名）
+[配置] 当前未设置
+[配置] 粘贴单行 base64（本机执行：cat private.pem | base64 | tr -d "\n"）
+[配置] 输入不会回显；直接回车 = 保留现有私钥或为空：
+```
+
+拿到私钥时脚本会自动把 `SHUATI_PAYMENTS_ENABLED` 置为 `true`；跳过则保持 `false`，
+并在部署结束时提示补配方法。也可以免交互传入：
 
 ```bash
-WAFFO_MERCHANT_ID=MER_...
+# 方式一：直接给 base64
+sudo WAFFO_PRIVATE_KEY_BASE64="$(cat private.pem | base64 | tr -d '\n')" bash deploy/scripts/provision-ubuntu.sh
+# 方式二：给 PEM 文件路径，脚本自己转 base64
+sudo WAFFO_PRIVATE_KEY_FILE=/root/waffo-private-key.pem bash deploy/scripts/provision-ubuntu.sh
+```
+
+生成后的 `/etc/shuati/payments.env` 长这样（私钥不落仓库）：
+
+```bash
+WAFFO_MERCHANT_ID=MER_7PGKvFIiNnnwwEO5RsJLTR
 WAFFO_PRIVATE_KEY_BASE64=...
 WAFFO_ENV=test
-WAFFO_STORE_ID=STO_...
-WAFFO_PRODUCT_MAP=...
+WAFFO_STORE_ID=STO_06yfSw5FByRGGzjlMVXC1n
+WAFFO_PRODUCT_MAP=PACK:pack_9=PROD_...,PACK:pack_29=PROD_...,PACK:pack_99=PROD_...
 PORT=8090
 JAVA_BASE_URL=http://127.0.0.1:8080
 INTERNAL_SECRET=与后端一致
 WAFFO_DRY_RUN=false
+```
+
+支付启用后可在服务器自检（真实创建一次测试收银台，不写库、不改商品）：
+
+```bash
+cd /opt/shuati/payments && sudo -u shuati npm run smoke
 ```
 
 **注册邮箱验证码**：`provision-ubuntu.sh` 会在写入配置前交互提示输入 SMTP 密码
