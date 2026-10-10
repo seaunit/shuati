@@ -142,11 +142,17 @@ onMounted(() => {
     >
       <RouterView />
 
-      <footer class="mt-10 border-t border-mist pt-4 text-center text-xs text-oat lg:text-left">
+      <footer
+        class="mt-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-mist pt-4 text-xs text-oat lg:justify-start"
+      >
         <RouterLink to="/terms" class="transition hover:text-moss">服务条款</RouterLink>
-        <span class="mx-1.5">·</span>
         <RouterLink to="/privacy" class="transition hover:text-moss">隐私政策</RouterLink>
-        <span class="mx-1.5">·</span>
+        <span>
+          客服邮箱
+          <a class="text-moss transition hover:text-moss/80" href="mailto:sealevel666@163.com">
+            sealevel666@163.com
+          </a>
+        </span>
         <span>© 2026 拾题</span>
       </footer>
     </main>

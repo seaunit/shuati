@@ -321,6 +321,12 @@ watch(email, resetEmailCode);
         与
         <RouterLink to="/privacy" class="text-moss transition hover:text-moss/80">《隐私政策》</RouterLink>
       </p>
+      <p class="mt-2 text-center text-xs text-oat">
+        客服邮箱：
+        <a class="text-moss transition hover:text-moss/80" href="mailto:sealevel666@163.com">
+          sealevel666@163.com
+        </a>
+      </p>
     </div>
   </main>
 </template>

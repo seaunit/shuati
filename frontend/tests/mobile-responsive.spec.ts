@@ -807,6 +807,11 @@ test("every app page exposes the legal links in the footer", async ({ page }) =>
   await page.goto("/app");
   await expect(page.getByRole("link", { name: "服务条款" }).first()).toHaveAttribute("href", "/terms");
   await expect(page.getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
+  await expect(page.getByText("客服邮箱")).toBeVisible();
+  await expect(page.getByRole("link", { name: "sealevel666@163.com" })).toHaveAttribute(
+    "href",
+    "mailto:sealevel666@163.com",
+  );
 
   // 从页脚真的能点进去
   await page.getByRole("link", { name: "隐私政策" }).click();
