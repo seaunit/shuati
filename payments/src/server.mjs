@@ -127,7 +127,11 @@ async function handleWebhook(req, res) {
 
   let event;
   try {
-    event = sdk.verifyWebhook(raw.toString("utf-8"), String(signature), { environment });
+    // 刻意不传 environment：SDK 会先试生产公钥、失败再回退测试公钥，
+    // 因此测试与生产两条 webhook 共用一个回调地址都能验签通过。
+    // 一旦指定 environment，另一环境的事件会被直接判为签名无效（401）——
+    // 测试和生产各注册了一条 webhook 指向本地址，所以这里必须两边都认。
+    event = sdk.verifyWebhook(raw.toString("utf-8"), String(signature));
   } catch (e) {
     console.warn("[payments] webhook 验签失败：", e.message);
     json(res, 401, { ok: false, message: "invalid signature" });
