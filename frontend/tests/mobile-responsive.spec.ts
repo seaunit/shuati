@@ -555,6 +555,97 @@ test("stored explanation shows after answering and can be regenerated", async ({
   await expect(page.getByText("重新生成的解析内容")).toBeVisible();
 });
 
+test("clicking anywhere on a point pack card starts checkout", async ({ page }) => {
+  let orderPayload: Record<string, unknown> | null = null;
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/plans", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          plans: [],
+          packs: [
+            {
+              code: "pack_9",
+              name: "轻量加量包",
+              price_cents: 900,
+              points: 400,
+              bonus_points: 0,
+              currency: "CNY",
+            },
+          ],
+          rules: [],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          entitlements: {
+            planCode: "free",
+            planName: "免费版",
+            monthlyQuota: 50,
+            monthlyLeft: 50,
+            bonusBalance: 100,
+            available: 150,
+          },
+          ledger: [],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/orders", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { code: 200, message: "ok", data: [] } });
+      return;
+    }
+    orderPayload = route.request().postDataJSON();
+    await route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          id: "o1",
+          kind: "PACK",
+          item_code: "pack_9",
+          amount_cents: 900,
+          points: 400,
+          checkoutUrl: "https://checkout.example.com/s/abc",
+        },
+      },
+    });
+  });
+  // 收银台会在新标签页打开，必须用 context 级路由才能拦到弹窗的请求
+  await page.context().route("https://checkout.example.com/**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<html>checkout stub</html>" }),
+  );
+
+  await page.goto("/app/pricing");
+
+  const popupPromise = page.waitForEvent("popup");
+  // 点卡片正文（不是金额徽章）也应能触发下单
+  await page.getByRole("button", { name: /轻量加量包/ }).click();
+  const popup = await popupPromise;
+
+  await expect(page.getByText("已打开收银台，完成支付后会自动开通。")).toBeVisible();
+  expect(orderPayload).toMatchObject({ kind: "PACK", itemCode: "pack_9" });
+  expect(popup.url()).toContain("checkout.example.com");
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },

@@ -255,24 +255,23 @@ onMounted(() => {
     <section>
       <h2 class="mb-4 font-medium text-ink">加量包</h2>
       <div class="grid gap-4 sm:grid-cols-3">
-        <div
+        <button
           v-for="pack in packs"
           :key="pack.code"
-          class="flex items-center justify-between gap-4 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5"
+          type="button"
+          class="flex w-full cursor-pointer items-center justify-between gap-4 rounded-2xl border border-mist bg-white/70 p-4 text-left transition hover:border-moss hover:bg-moss/5 disabled:cursor-not-allowed disabled:opacity-60 sm:p-5"
+          :disabled="busy !== ''"
+          @click="buy('PACK', pack.code)"
         >
           <div>
             <p class="font-medium text-ink">{{ pack.name }}</p>
             <p class="mt-1 text-sm text-oat">{{ pack.points + pack.bonus_points }} 点</p>
             <p class="mt-0.5 text-xs text-oat">点数长期有效，不随周期重置</p>
           </div>
-          <button
-            class="shrink-0 rounded-xl border border-ink px-3 py-1.5 text-sm text-ink transition hover:bg-ink hover:text-white disabled:opacity-50"
-            :disabled="busy !== ''"
-            @click="buy('PACK', pack.code)"
-          >
-            {{ money(pack.price_cents, pack.currency) }}
-          </button>
-        </div>
+          <span class="shrink-0 rounded-xl border border-ink px-3 py-1.5 text-sm text-ink transition">
+            {{ busy === "PACK:" + pack.code ? "提交中…" : money(pack.price_cents, pack.currency) }}
+          </span>
+        </button>
       </div>
     </section>
 
