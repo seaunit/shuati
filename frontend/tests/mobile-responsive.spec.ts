@@ -479,6 +479,82 @@ test("practice resumes from the first unanswered question", async ({ page }) => 
   await expect(page.getByText("已从上次进度继续")).toBeVisible();
 });
 
+test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 1,
+            unit_id: 1,
+            type: "SINGLE",
+            content: "解析库测试题干",
+            options: [{ key: "A", text: "选项 A" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: "解析库里的解析内容",
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 1, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+  await page.route("**/api/practice/submit-choice", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { recordId: 1, verdict: "CORRECT", score: 10, correctAnswer: "A" },
+      },
+    }),
+  );
+  await page.route("**/api/practice/questions/1/explanation*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { explanation: "重新生成的解析内容" } },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+
+  // 未作答前不应该剧透解析（解析里含正确答案）
+  await expect(page.getByText("解析库里的解析内容")).toBeHidden();
+
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+
+  // 作答后直接带出解析库内容，无需点 AI 解析
+  await expect(page.getByText("来自解析库")).toBeVisible();
+  await expect(page.getByText("解析库里的解析内容")).toBeVisible();
+
+  // 再次点击＝重新生成并覆盖展示
+  await page.getByRole("button", { name: "重新生成解析" }).click();
+  await expect(page.getByText("本次 AI 解析")).toBeVisible();
+  await expect(page.getByText("重新生成的解析内容")).toBeVisible();
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },

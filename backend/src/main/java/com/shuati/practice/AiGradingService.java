@@ -129,7 +129,7 @@ public class AiGradingService {
   @Transactional
   public Map<String, Object> explanation(String userId, long questionId) {
     List<Map<String, Object>> rows = jdbc.queryForList(
-        "select content, options, answer, explanation from question where id = ?", questionId);
+        "select content, options, answer from question where id = ?", questionId);
     if (rows.isEmpty()) {
       throw new ApiException(404, "题目不存在");
     }
@@ -142,12 +142,8 @@ public class AiGradingService {
           + " 点，当前可用 " + charged.get("available") + " 点。可在「套餐与点数」升级套餐或购买加量包。");
     }
 
-    Object existing = question.get("explanation");
-    if (existing != null && !String.valueOf(existing).isBlank()) {
-      // 缓存命中不调用 AI，但“查看 AI 解析”仍按一次解析计费并写入流水。
-      return Map.of("explanation", existing);
-    }
-
+    // 解析库（question.explanation）只用于刷题时直接带出，不在这里复用：
+    // 用户再次点击「AI 解析」就是要重新生成，所以每次都调用模型并覆盖旧解析。
     long start = System.currentTimeMillis();
     try {
       AiClient.AiResult result = ai.chat("EXPLAIN", PromptTemplates.EXPLAIN_SYSTEM,
@@ -158,10 +154,8 @@ public class AiGradingService {
           false);
       ai.logUsage(userId, "EXPLAIN", result.model(), questionId, result, null,
           System.currentTimeMillis() - start);
-      jdbc.update("""
-          update question set explanation = ?
-           where id = ? and (explanation is null or explanation = '')
-          """, result.content(), questionId);
+      jdbc.update("update question set explanation = ? where id = ?",
+          result.content(), questionId);
       return Map.of("explanation", result.content());
     } catch (Exception e) {
       // 注意：本方法带 @Transactional，抛异常会把 ai_call_log 一起回滚，

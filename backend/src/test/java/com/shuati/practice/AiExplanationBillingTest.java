@@ -1,7 +1,11 @@
 package com.shuati.practice;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
+import com.shuati.ai.AiClient;
 import com.shuati.billing.PointAccountService;
 import java.util.Map;
 import java.util.UUID;
@@ -10,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 @ActiveProfiles("test")
@@ -26,18 +31,29 @@ class AiExplanationBillingTest {
   @Autowired
   JdbcTemplate jdbc;
 
+  @MockitoBean
+  AiClient ai;
+
   @Test
-  void cachedExplanationStillChargesAndWritesLedger() {
+  void clickingExplainAgainRegeneratesAndOverwritesLibraryEntry() {
+    when(ai.chat(anyString(), anyString(), anyString(), anyBoolean()))
+        .thenReturn(new AiClient.AiResult("重新生成的解析内容", "test-model", 10, 20, 30));
+
     String userId = createUser();
     points.ensureAccount(userId);
-    long questionId = createCachedQuestion();
+    long questionId = createQuestionWithStoredExplanation();
 
     int before = intValue(points.entitlements(userId).get("available"));
     Map<String, Object> response = aiGradingService.explanation(userId, questionId);
 
-    assertThat(response.get("explanation")).isEqualTo("已缓存的标准解析");
-    assertThat(intValue(points.entitlements(userId).get("available"))).isEqualTo(before - 1);
+    // 再次点击「AI 解析」＝重新生成，不能被解析库里的旧内容挡住
+    assertThat(response.get("explanation")).isEqualTo("重新生成的解析内容");
+    assertThat(jdbc.queryForObject(
+        "select explanation from question where id = ?", String.class, questionId))
+        .isEqualTo("重新生成的解析内容");
 
+    // 仍然按次扣点并写流水
+    assertThat(intValue(points.entitlements(userId).get("available"))).isEqualTo(before - 1);
     Integer ledgerCount = jdbc.queryForObject("""
         select count(*) from point_ledger
          where user_id = ? and reason = 'AI_EXPLAIN' and ref_type = 'question' and ref_id = ?
@@ -45,7 +61,7 @@ class AiExplanationBillingTest {
     assertThat(ledgerCount).isEqualTo(1);
   }
 
-  private long createCachedQuestion() {
+  private long createQuestionWithStoredExplanation() {
     String bankName = "AI解析计费测试-" + UUID.randomUUID();
     jdbc.update("insert into bank (name, is_default, owner_id) values (?, 0, null)", bankName);
     Long bankId = jdbc.queryForObject(

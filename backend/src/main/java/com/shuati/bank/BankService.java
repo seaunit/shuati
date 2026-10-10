@@ -150,7 +150,7 @@ public class BankService {
     }
     String placeholders = String.join(",", unitIds.stream().map(id -> "?").toList());
     List<Map<String, Object>> rows = jdbc.queryForList("""
-        select id, unit_id, type, content, options, difficulty, images, tags, status
+        select id, unit_id, type, content, options, difficulty, images, tags, status, explanation
           from question
          where status = 'ON' and unit_id in (%s)
          order by id asc

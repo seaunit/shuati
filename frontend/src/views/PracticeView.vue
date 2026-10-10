@@ -21,6 +21,8 @@ interface Question {
   images: string[] | null;
   tags: string[] | null;
   status: string;
+  // 解析库内容：题目已有解析时直接带出来，无需再点 AI 解析
+  explanation: string | null;
 }
 
 const route = useRoute();
@@ -44,6 +46,9 @@ const result = ref<{
 } | null>(null);
 const explanation = ref("");
 const explanationLoading = ref(false);
+const explanationError = ref("");
+// 是否是题库解析库里已有的解析（点「重新生成」后变为本次生成）
+const explanationFromLibrary = ref(false);
 const counts = ref({ answered: 0, correct: 0, partial: 0, wrong: 0 });
 const sessionId = ref<number | null>(null);
 const startedAt = ref(Date.now());
@@ -83,7 +88,9 @@ function resetState() {
   selected.value = [];
   textAnswer.value = "";
   result.value = null;
-  explanation.value = "";
+  explanationError.value = "";
+  explanation.value = current.value?.explanation ?? "";
+  explanationFromLibrary.value = !!current.value?.explanation;
   startedAt.value = Date.now();
 }
 
@@ -140,14 +147,17 @@ async function submit() {
 async function loadExplanation() {
   if (!current.value || !result.value) return;
   explanationLoading.value = true;
+  explanationError.value = "";
   try {
     const response = await api<{ explanation: string }>(
       `/api/practice/questions/${current.value.id}/explanation`,
     );
     explanation.value = response.explanation;
+    explanationFromLibrary.value = false;
     await billing.load();
   } catch (e) {
-    explanation.value = e instanceof Error ? e.message : "解析失败";
+    // 重新生成失败时保留解析库里原有的解析，只提示错误
+    explanationError.value = e instanceof Error ? e.message : "解析失败";
   } finally {
     explanationLoading.value = false;
   }
@@ -234,6 +244,8 @@ onMounted(async () => {
       });
       sessionId.value = session.id;
       await resumeProgress(unitId, bankId);
+      // 首页进入时把当前题的解析库内容同步到界面上
+      resetState();
     }
   } catch {
     questions.value = [];
@@ -324,8 +336,15 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="explanation" class="mt-4 rounded-xl border border-mist bg-white p-4">
-          <MarkdownText :text="explanation" />
+        <div
+          v-if="result && (explanation || explanationError)"
+          class="mt-4 rounded-xl border border-mist bg-white p-4"
+        >
+          <p v-if="explanation" class="mb-2 text-xs text-oat">
+            {{ explanationFromLibrary ? "来自解析库" : "本次 AI 解析" }}
+          </p>
+          <MarkdownText v-if="explanation" :text="explanation" />
+          <p v-if="explanationError" class="text-sm text-rose">{{ explanationError }}</p>
         </div>
       </article>
 
@@ -344,13 +363,13 @@ onMounted(async () => {
         <div class="flex min-w-0 items-center justify-end gap-2">
           <button
             v-if="result"
-            class="flex shrink-0 items-center gap-1 rounded-xl border border-moss px-3 py-2.5 text-sm text-moss transition hover:bg-moss/10 sm:px-4"
-            :disabled="explanationLoading || !!explanation"
+            class="flex shrink-0 items-center gap-1 rounded-xl border border-moss px-3 py-2.5 text-sm text-moss transition hover:bg-moss/10 disabled:opacity-50 sm:px-4"
+            :disabled="explanationLoading"
             @click="loadExplanation"
           >
             <Loader2 v-if="explanationLoading" class="h-4 w-4 animate-spin" />
             <Sparkles v-else class="h-4 w-4" />
-            AI 解析
+            {{ explanation ? "重新生成解析" : "AI 解析" }}
           </button>
           <button
             v-if="!result"
