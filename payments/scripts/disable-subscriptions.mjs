@@ -11,9 +11,9 @@ if (existsSync(envPath)) {
 }
 
 const { client, productIdOf, environment } = await import("../src/waffo.mjs");
-const { CATALOG } = await import("../src/catalog.mjs");
+const { LEGACY_SUBSCRIPTIONS } = await import("../src/catalog.mjs");
 
-const targets = CATALOG.filter((i) => i.type === "subscription");
+const targets = LEGACY_SUBSCRIPTIONS;
 console.log(`环境=${environment}，下架 ${targets.length} 个订阅商品…\n`);
 
 for (const item of targets) {

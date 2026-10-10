@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node src/server.mjs",
-    "setup": "node scripts/setup-catalog.mjs"
+    "setup": "node scripts/setup-catalog.mjs",
+    "smoke": "node scripts/smoke-checkout.mjs"
   },
   "dependencies": {
     "@waffo/pancake-ts": "^0.25.0"
