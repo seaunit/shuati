@@ -11,9 +11,10 @@ public class AsyncConfig {
   @Bean("importExecutor")
   public Executor importExecutor() {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(2);
-    executor.setMaxPoolSize(4);
-    executor.setQueueCapacity(50);
+    // 解析任务全局串行：线程池只有 1 个线程，省 CPU / 内存 / AI 并发额度
+    executor.setCorePoolSize(1);
+    executor.setMaxPoolSize(1);
+    executor.setQueueCapacity(10);
     executor.setThreadNamePrefix("import-");
     executor.initialize();
     return executor;

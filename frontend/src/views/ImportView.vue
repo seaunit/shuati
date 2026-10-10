@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { Loader2, Upload } from "lucide-vue-next";
 import { api } from "@/api/client";
 
@@ -33,10 +33,16 @@ const fileName = ref("");
 const base64 = ref("");
 const busy = ref(false);
 const notice = ref("");
+const noticeError = ref("");
 const tasks = ref<ImportTask[]>([]);
 const currentTask = ref<ImportTask | null>(null);
 const selected = ref<number[]>([]);
 let pollTimer: number | null = null;
+
+// 解析任务全局串行：自己已有任务在跑时就先别让我提交
+const hasRunningTask = computed(() =>
+  tasks.value.some((task) => task.status === "PENDING" || task.status === "RUNNING"),
+);
 
 async function loadTasks() {
   try {
@@ -61,11 +67,16 @@ function onFile(event: Event) {
 
 async function submit() {
   if (!bankName.value.trim()) {
-    notice.value = "请填写题库名称";
+    noticeError.value = "请填写题库名称";
+    return;
+  }
+  if (hasRunningTask.value) {
+    noticeError.value = "已有解析任务正在进行中，请等它完成或失败后再提交新任务";
     return;
   }
   busy.value = true;
   notice.value = "";
+  noticeError.value = "";
   try {
     const body: Record<string, unknown> = {
       kind: kind.value,
@@ -86,7 +97,7 @@ async function submit() {
     await loadTasks();
     await openTask(response.taskId);
   } catch (e) {
-    notice.value = e instanceof Error ? e.message : "创建任务失败";
+    noticeError.value = e instanceof Error ? e.message : "创建任务失败";
   } finally {
     busy.value = false;
   }
@@ -124,6 +135,7 @@ function stopPolling() {
 async function confirmImport() {
   if (!currentTask.value) return;
   busy.value = true;
+  noticeError.value = "";
   try {
     await api(`/api/import/task/${currentTask.value.id}/import`, {
       method: "POST",
@@ -132,7 +144,7 @@ async function confirmImport() {
     notice.value = "已提交导入，正在写入题库…";
     startPolling(currentTask.value.id);
   } catch (e) {
-    notice.value = e instanceof Error ? e.message : "导入失败";
+    noticeError.value = e instanceof Error ? e.message : "导入失败";
   } finally {
     busy.value = false;
   }
@@ -206,13 +218,17 @@ onMounted(loadTasks);
 
         <button
           class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm text-white transition hover:bg-ink/90 disabled:opacity-60"
-          :disabled="busy"
+          :disabled="busy || hasRunningTask"
           @click="submit"
         >
           <Loader2 v-if="busy" class="h-4 w-4 animate-spin" />
-          开始解析
+          {{ hasRunningTask ? "有任务解析中…" : "开始解析" }}
         </button>
         <p v-if="notice" class="mt-3 rounded-xl bg-moss/10 px-4 py-2.5 text-sm text-ink">{{ notice }}</p>
+        <p v-if="noticeError" class="mt-3 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">{{ noticeError }}</p>
+        <p v-else-if="hasRunningTask" class="mt-3 text-xs text-oat">
+          同一时间只解析一个任务，等当前任务完成或失败后即可提交下一个。
+        </p>
       </section>
 
       <section class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">

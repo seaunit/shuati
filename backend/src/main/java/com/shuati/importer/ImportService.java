@@ -17,6 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -29,9 +30,12 @@ import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.jsoup.Jsoup;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImportService {
@@ -43,6 +47,35 @@ public class ImportService {
   private final Json json;
   private final AiClient ai;
   private final PointAccountService points;
+
+  /** 提交检查与落库共用一把锁，避免两个请求同时通过「有没有任务在跑」的检查 */
+  private final Object importLock = new Object();
+
+  /**
+   * 服务重启后，之前处于 PENDING / RUNNING 的任务已经不可能继续执行；
+   * 不清理的话「全局单任务」会把这些任务当成仍在进行，导致再也提交不了新任务。
+   */
+  @EventListener(ApplicationReadyEvent.class)
+  public void failOrphanedTasksOnStartup() {
+    int affected = jdbc.update("""
+        update import_task
+           set status = 'FAILED', error = '服务重启导致任务中断，请重新提交'
+         where status in ('PENDING', 'RUNNING')
+        """);
+    if (affected > 0) {
+      log.warn("启动清理：{} 个解析任务因服务重启被标记为失败", affected);
+    }
+  }
+
+  /** 全局同时只允许一个解析任务在跑，省服务器资源 */
+  private void requireNoRunningTask() {
+    Integer running = jdbc.queryForObject("""
+        select count(*) from import_task where status in ('PENDING', 'RUNNING')
+        """, Integer.class);
+    if (running != null && running > 0) {
+      throw new ApiException(409, "已有解析任务正在进行中，请等它完成或失败后再提交新任务");
+    }
+  }
 
   public Map<String, Object> createTask(String userId, Map<String, Object> body) {
     String kind = String.valueOf(body.getOrDefault("kind", ""));
@@ -76,11 +109,14 @@ public class ImportService {
     }
 
     String taskId = UUID.randomUUID().toString();
-    jdbc.update("""
-        insert into import_task
-          (id, user_id, kind, phase, status, bank_name, bank_description, source_text, source_name)
-        values (?, ?, ?, 'PARSE', 'PENDING', ?, ?, ?, ?)
-        """, taskId, userId, kind, bankName, description, sourceText, sourceName);
+    synchronized (importLock) {
+      requireNoRunningTask();
+      jdbc.update("""
+          insert into import_task
+            (id, user_id, kind, phase, status, bank_name, bank_description, source_text, source_name)
+          values (?, ?, ?, 'PARSE', 'PENDING', ?, ?, ?, ?)
+          """, taskId, userId, kind, bankName, description, sourceText, sourceName);
+    }
 
     return Map.of("taskId", taskId);
   }

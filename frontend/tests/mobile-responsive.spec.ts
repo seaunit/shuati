@@ -646,6 +646,48 @@ test("clicking anywhere on a point pack card starts checkout", async ({ page }) 
   expect(popup.url()).toContain("checkout.example.com");
 });
 
+test("import is blocked while another task is still running", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/import/list", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: "t-running",
+            kind: "text",
+            phase: "PARSE",
+            status: "RUNNING",
+            progress: 40,
+            total_chunks: 5,
+            done_chunks: 2,
+            bank_name: "正在解析的题库",
+            error: null,
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("/app/import");
+
+  const button = page.getByRole("button", { name: "有任务解析中…" });
+  await expect(button).toBeDisabled();
+  await expect(page.getByText("同一时间只解析一个任务")).toBeVisible();
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },
