@@ -141,6 +141,14 @@ onMounted(() => {
       class="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 overflow-x-hidden px-4 pb-28 pt-5 sm:px-5 lg:min-h-screen lg:p-8"
     >
       <RouterView />
+
+      <footer class="mt-10 border-t border-mist pt-4 text-center text-xs text-oat lg:text-left">
+        <RouterLink to="/terms" class="transition hover:text-moss">服务条款</RouterLink>
+        <span class="mx-1.5">·</span>
+        <RouterLink to="/privacy" class="transition hover:text-moss">隐私政策</RouterLink>
+        <span class="mx-1.5">·</span>
+        <span>© 2026 拾题</span>
+      </footer>
     </main>
 
     <nav

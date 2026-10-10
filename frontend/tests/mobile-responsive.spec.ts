@@ -787,6 +787,32 @@ test("legal pages are public and linked from the login footer", async ({ page })
   await expect(page.getByRole("heading", { name: "服务条款" })).toBeVisible();
 });
 
+test("every app page exposes the legal links in the footer", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+
+  await page.goto("/app");
+  await expect(page.getByRole("link", { name: "服务条款" }).first()).toHaveAttribute("href", "/terms");
+  await expect(page.getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
+
+  // 从页脚真的能点进去
+  await page.getByRole("link", { name: "隐私政策" }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },

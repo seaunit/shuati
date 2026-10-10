@@ -60,6 +60,12 @@ defineProps<{
           本页内容如有疑问，请联系我们：
           <a class="text-moss transition hover:text-moss/80" href="mailto:sealevel666@163.com">sealevel666@163.com</a>
         </p>
+        <p class="mt-2 text-xs text-oat">
+          相关：
+          <RouterLink to="/terms" class="text-moss transition hover:text-moss/80">服务条款</RouterLink>
+          <span class="mx-1.5">·</span>
+          <RouterLink to="/privacy" class="text-moss transition hover:text-moss/80">隐私政策</RouterLink>
+        </p>
       </article>
     </div>
   </main>
