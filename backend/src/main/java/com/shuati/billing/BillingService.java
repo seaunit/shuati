@@ -176,20 +176,28 @@ public class BillingService {
       throw new ApiException(404, "订单不存在");
     }
     Map<String, Object> order = rows.get(0);
-    if ("PAID".equals(order.get("status"))) {
-      if (idempotent) {
-        return;
-      }
-      throw new ApiException(400, "订单已结算，请勿重复操作");
-    }
-
     String normalizedAction = action == null ? "PAID" : action.toUpperCase();
     if ("CANCELLED".equals(normalizedAction)) {
+      // 已支付/已退款的订单不能直接取消：那等于把点数白送出去，要走退款流程
+      if (!"PENDING".equals(String.valueOf(order.get("status")))) {
+        throw new ApiException(400, "订单已支付，如需退款请使用退款流程");
+      }
       jdbc.update("update subscription_order set status = 'CANCELLED' where id = ?", orderId);
       return;
     }
     if (!"PAID".equals(normalizedAction)) {
       throw new ApiException(400, "不支持的结算操作");
+    }
+    // 只有 PENDING 才发货。已支付/已退款订单再收到支付事件时必须忽略，
+    // 否则退款后又来一次 order.completed 会把点数重新发一遍。
+    String status = String.valueOf(order.get("status"));
+    if (!"PENDING".equals(status)) {
+      if (idempotent) {
+        return;
+      }
+      throw new ApiException(400, "PAID".equals(status)
+          ? "订单已结算，请勿重复操作"
+          : "订单状态为 " + status + "，无法结算");
     }
 
     String userId = String.valueOf(order.get("user_id"));
@@ -211,9 +219,74 @@ public class BillingService {
 
   public List<Map<String, Object>> allOrders(int limit) {
     return json.normalize(jdbc.queryForList("""
-        select id, user_id, kind, item_code, period, amount_cents, points, status, created_at, paid_at
+        select id, user_id, kind, item_code, period, amount_cents, points, status, created_at, paid_at,
+               refunded_at, refunded_cents, refund_clawed_points
           from subscription_order order by created_at desc limit ?
         """, Math.max(1, Math.min(limit, 200))), Set.of());
+  }
+
+  /**
+   * 退款成功后的处理：标记订单退款，并扣回当初发放的点数。
+   *
+   * <p>幂等：同一个订单重复收到退款事件时直接返回，不会扣第二次。
+   * 点数已被消费时只扣剩余的，差额记在订单备注并返回，便于人工跟进。
+   *
+   * @param refundedCents 渠道实际退款金额（分），可为 null
+   * @param reason        退款原因，可为 null
+   */
+  @Transactional
+  public Map<String, Object> refundOrder(String orderId, Integer refundedCents, String reason) {
+    List<Map<String, Object>> rows = jdbc.queryForList(
+        "select * from subscription_order where id = ? for update", orderId);
+    if (rows.isEmpty()) {
+      throw new ApiException(404, "订单不存在");
+    }
+    Map<String, Object> order = rows.get(0);
+    Map<String, Object> result = new LinkedHashMap<>();
+    if (order.get("refunded_at") != null) {
+      result.put("alreadyRefunded", true);
+      result.put("clawedBack", intValue(order.get("refund_clawed_points")));
+      return result;
+    }
+
+    String userId = String.valueOf(order.get("user_id"));
+    boolean paid = "PAID".equals(String.valueOf(order.get("status")));
+    int orderPoints = intValue(order.get("points"));
+
+    int clawed = 0;
+    if (paid && orderPoints > 0) {
+      clawed = points.clawBackBonusPoints(
+          userId, orderPoints, "REFUND_CLAWBACK", "order", orderId);
+      if (clawed < orderPoints) {
+        log.warn("退款扣点不足：订单 {} 应扣 {} 点，实际扣回 {} 点，差额 {} 点（点数可能已被消费）",
+            orderId, orderPoints, clawed, orderPoints - clawed);
+      }
+    }
+
+    String note = "退款：" + (reason == null || reason.isBlank() ? "渠道未提供原因" : reason)
+        + "；扣回点数 " + clawed + "/" + orderPoints;
+    jdbc.update("""
+        update subscription_order
+           set status = 'REFUNDED', refunded_at = now(6), refunded_cents = ?,
+               refund_clawed_points = ?, note = concat(coalesce(note, ''), ?, '\n')
+         where id = ?
+        """, refundedCents, clawed, note, orderId);
+
+    // 退款后重新计算「最近购买的加量包」，避免界面还显示已退掉的那个包名
+    jdbc.update("""
+        update point_account pa
+           set last_pack_code = (
+             select o.item_code from subscription_order o
+              where o.user_id = pa.user_id and o.kind = 'PACK' and o.status = 'PAID'
+              order by o.paid_at desc limit 1
+           )
+         where pa.user_id = ?
+        """, userId);
+
+    result.put("alreadyRefunded", false);
+    result.put("clawedBack", clawed);
+    result.put("expected", orderPoints);
+    return result;
   }
 
   public Map<String, Object> adminSummary() {

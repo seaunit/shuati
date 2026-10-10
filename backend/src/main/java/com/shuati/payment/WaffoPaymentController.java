@@ -29,6 +29,9 @@ public class WaffoPaymentController {
       "subscription.activated",
       "subscription.payment_succeeded");
 
+  /** 退款成功：需要扣回该订单发放的点数 */
+  private static final String REFUND_SUCCEEDED = "refund.succeeded";
+
   private final BillingService billingService;
 
   @Value("${shuati.payments.internal-secret:}")
@@ -46,6 +49,12 @@ public class WaffoPaymentController {
     if (orderId.isBlank()) {
       throw new ApiException(400, "缺少 orderId");
     }
+    if (REFUND_SUCCEEDED.equals(eventType)) {
+      Map<String, Object> result = billingService.refundOrder(
+          orderId, centsOf(body.get("refundedAmount")), stringOf(body.get("refundReason")));
+      log.info("Waffo 退款完成，订单已标记退款并扣回点数：{} {}", orderId, result);
+      return ApiResponse.ok(null);
+    }
     if (!PAID_EVENTS.contains(eventType)) {
       // 退款、取消、逾期等事件只记录，不在这里发货
       log.info("收到无需发货的支付事件：{} order={}", eventType, orderId);
@@ -55,5 +64,29 @@ public class WaffoPaymentController {
     billingService.settleOrder(orderId, "PAID", true);
     log.info("Waffo 支付到账，订单已结算：{} {}", orderId, eventType);
     return ApiResponse.ok(null);
+  }
+
+  /** "9.00" -> 900。解析不了就返回 null（只影响对账展示，不影响扣点）。 */
+  private Integer centsOf(Object amount) {
+    if (amount == null) {
+      return null;
+    }
+    String raw = String.valueOf(amount).trim();
+    if (raw.isEmpty()) {
+      return null;
+    }
+    try {
+      return new java.math.BigDecimal(raw)
+          .movePointRight(2)
+          .setScale(0, java.math.RoundingMode.HALF_UP)
+          .intValueExact();
+    } catch (ArithmeticException | NumberFormatException e) {
+      log.warn("无法解析退款金额：{}", raw);
+      return null;
+    }
+  }
+
+  private String stringOf(Object value) {
+    return value == null ? null : String.valueOf(value);
   }
 }

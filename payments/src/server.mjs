@@ -169,6 +169,9 @@ async function handleWebhook(req, res) {
         mode: event.mode,
         amount: data.amount,
         currency: data.currency,
+        // 退款事件：refundedAmount 是展示金额字符串（如 "9.00"），换算成分由 Java 侧负责
+        refundedAmount: data.refundedAmount ?? data.amount ?? null,
+        refundReason: data.refundReason ?? null,
       }),
     });
     // 404 = 本地查不到该订单（例如后台的测试事件），回 200 让平台停止重试

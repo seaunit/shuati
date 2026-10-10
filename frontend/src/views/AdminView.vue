@@ -727,7 +727,12 @@ watch(tab, refresh);
               <td class="px-5 py-2.5">{{ order.kind }}</td>
               <td class="px-3 py-2.5">{{ order.item_code }}</td>
               <td class="px-3 py-2.5 text-right">¥{{ (order.amount_cents / 100).toFixed(2) }}</td>
-              <td class="px-3 py-2.5">{{ order.status }}</td>
+              <td class="px-3 py-2.5">
+                {{ order.status }}
+                <span v-if="order.refund_clawed_points" class="text-xs text-oat">
+                  ·扣回 {{ order.refund_clawed_points }} 点
+                </span>
+              </td>
               <td class="px-5 py-2.5 text-right">
                 <template v-if="order.status === 'PENDING'">
                   <button class="mr-2 text-xs text-moss" @click="settleOrder(order.id, 'PAID')">已收款</button>

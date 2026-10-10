@@ -198,6 +198,37 @@ public class PointAccountService {
     ledger(userId, points, "BONUS", balanceOf(account(userId)), reason, refType, refId, null);
   }
 
+  /**
+   * 退款时扣回当初发放的点数（只从赠送/购买的 bonus 余额里扣）。
+   *
+   * <p>用户可能已经把点数花掉，所以实际扣回数可能小于应扣数；本方法返回实际扣回的点数，
+   * 差额由调用方记录并人工跟进，绝不把余额扣成负数。
+   *
+   * @return 实际扣回的点数
+   */
+  @Transactional
+  public int clawBackBonusPoints(
+      String userId, int points, String reason, String refType, String refId) {
+    if (points <= 0) {
+      return 0;
+    }
+    Map<String, Object> account = lockedAccount(userId);
+    if (account.isEmpty()) {
+      return 0;
+    }
+    int deducted = Math.min(Math.max(intValue(account.get("bonus_balance")), 0), points);
+    if (deducted <= 0) {
+      return 0;
+    }
+    jdbc.update("""
+        update point_account
+           set bonus_balance = bonus_balance - ?
+         where user_id = ?
+        """, deducted, userId);
+    ledger(userId, -deducted, "BONUS", balanceOf(account(userId)), reason, refType, refId, null);
+    return deducted;
+  }
+
   @Transactional
   public void applyPlan(String userId, String planCode, LocalDateTime expiresAt) {
     Map<String, Object> plan = jdbc.queryForMap("select * from plan where code = ?", planCode);
