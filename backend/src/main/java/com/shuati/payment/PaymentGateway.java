@@ -1,6 +1,7 @@
 package com.shuati.payment;
 
 import com.shuati.common.ApiException;
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -43,6 +44,20 @@ public class PaymentGateway {
 
   public boolean isEnabled() {
     return enabled;
+  }
+
+  /**
+   * 启动时把支付开关状态写进日志，便于线上一条命令确认：
+   * {@code journalctl -u shuati | grep 在线支付}
+   */
+  @PostConstruct
+  void logEnabledState() {
+    if (enabled) {
+      log.info("在线支付已启用：支付侧车 {}", baseUrl);
+    } else {
+      log.warn("在线支付未启用：下单不会返回收银台地址"
+          + "（需 SHUATI_PAYMENTS_ENABLED=true 且 SHUATI_PAYMENTS_URL 非空）");
+    }
   }
 
   /** 供 Java 内部拼 Waffo 商品编码：PLAN 带周期，PACK 不带 */
