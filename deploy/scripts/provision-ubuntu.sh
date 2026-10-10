@@ -30,7 +30,19 @@ ENV_DIR="/etc/shuati"
 DB_NAME="shuati"
 DB_USER="shuati"
 ADMIN_EMAIL="${SHUATI_BOOTSTRAP_ADMIN_EMAIL:-shuati.admin@gmail.com}"
-ADMIN_PASSWORD="${SHUATI_BOOTSTRAP_ADMIN_PASSWORD:-Shuati@2026}"
+# 管理员初始口令不设公共默认值（避免仓库里出现真实生产口令）：
+# 环境变量 > 已有 /etc/shuati/env > 随机生成并在部署结束时打印
+ADMIN_PASSWORD="${SHUATI_BOOTSTRAP_ADMIN_PASSWORD:-}"
+if [ -z "$ADMIN_PASSWORD" ] && [ -s "$ENV_DIR/env" ]; then
+  ADMIN_PASSWORD="$(
+    sed -n "s/^SHUATI_BOOTSTRAP_ADMIN_PASSWORD='\\(.*\\)'$/\\1/p" "$ENV_DIR/env" | head -1
+  )"
+fi
+ADMIN_PASSWORD_GENERATED=0
+if [ -z "$ADMIN_PASSWORD" ]; then
+  ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)"
+  ADMIN_PASSWORD_GENERATED=1
+fi
 COOKIE_SECURE="${SHUATI_COOKIE_SECURE:-false}"
 
 echo "==> 1/9 安装系统依赖"
@@ -283,6 +295,11 @@ ensure_env_line SHUATI_MAIL_GLOBAL_DAILY_LIMIT 2000
 # 老部署里 SMTP 密码还是空值时，用本次输入的值补上；已有非空值不会被改动
 if [ -n "$MAIL_PASSWORD" ]; then
   set_env_var SHUATI_MAIL_PASSWORD "$MAIL_PASSWORD"
+fi
+
+# 本次随机生成的管理员口令写回 env（老部署缺该键时也会补上）
+if [ "$ADMIN_PASSWORD_GENERATED" -eq 1 ]; then
+  set_env_var SHUATI_BOOTSTRAP_ADMIN_PASSWORD "$ADMIN_PASSWORD"
 fi
 
 MAIL_PASSWORD_VALUE="$(

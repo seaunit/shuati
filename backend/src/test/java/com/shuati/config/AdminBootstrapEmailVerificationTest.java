@@ -17,6 +17,7 @@ class AdminBootstrapEmailVerificationTest {
 
   private static final String ADMIN_EMAIL =
       "bootstrap-" + UUID.randomUUID() + "@example.com";
+  private static final String ADMIN_PASSWORD = UUID.randomUUID().toString();
 
   @Autowired
   JdbcTemplate jdbc;
@@ -24,7 +25,7 @@ class AdminBootstrapEmailVerificationTest {
   @DynamicPropertySource
   static void bootstrapProperties(DynamicPropertyRegistry registry) {
     registry.add("SHUATI_BOOTSTRAP_ADMIN_EMAIL", () -> ADMIN_EMAIL);
-    registry.add("SHUATI_BOOTSTRAP_ADMIN_PASSWORD", () -> "Bootstrap@2026");
+    registry.add("SHUATI_BOOTSTRAP_ADMIN_PASSWORD", () -> ADMIN_PASSWORD);
   }
 
   @Test

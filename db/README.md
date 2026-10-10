@@ -4,7 +4,7 @@
 
 - 来源：Supabase 项目 `cfagbcceyajkfqlrajvk`（PostgreSQL 17.6），迁移时项目已从 paused 状态恢复。
 - 目标：本机 MySQL 8.4，数据库名 `shuati`。
-- 连接：`root` / `Root@2026`，`127.0.0.1:3306`。
+- 连接：`127.0.0.1:3306`，用户 `root`，口令从环境变量 `SHUATI_DB_PASSWORD` 读取（仓库不放真实口令）。
 
 ## 目录
 
@@ -23,23 +23,25 @@
 
 ```powershell
 $mysql = 'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe'
+# 先设置本机 MySQL 口令，不要写进仓库
+$env:SHUATI_DB_PASSWORD = '你的本机 MySQL 口令'
 
-& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 `
+& $mysql -u root --password=$env:SHUATI_DB_PASSWORD --default-character-set=utf8mb4 `
   --execute="source E:/CodexProject/shuati2/db/mysql/00_create_database.sql"
 
-& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
+& $mysql -u root --password=$env:SHUATI_DB_PASSWORD --default-character-set=utf8mb4 shuati `
   --execute="source E:/CodexProject/shuati2/db/mysql/01_schema.sql"
 
-& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
+& $mysql -u root --password=$env:SHUATI_DB_PASSWORD --default-character-set=utf8mb4 shuati `
   --execute="source E:/CodexProject/shuati2/db/_supabase_raw/02_data.sql"
 
-& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
+& $mysql -u root --password=$env:SHUATI_DB_PASSWORD --default-character-set=utf8mb4 shuati `
   --execute="source E:/CodexProject/shuati2/db/mysql/03_billing_seed.sql"
 
-& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
+& $mysql -u root --password=$env:SHUATI_DB_PASSWORD --default-character-set=utf8mb4 shuati `
   --execute="source E:/CodexProject/shuati2/db/mysql/soft_exam.sql"
 
-& $mysql -u root --password=Root@2026 --default-character-set=utf8mb4 shuati `
+& $mysql -u root --password=$env:SHUATI_DB_PASSWORD --default-character-set=utf8mb4 shuati `
   --execute="source E:/CodexProject/shuati2/db/mysql/99_verify.sql"
 ```
 
