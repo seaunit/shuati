@@ -755,6 +755,38 @@ test("parse result supports select all / none / invert", async ({ page }) => {
   await expect(page.getByText("2 / 3 道题")).toBeVisible();
 });
 
+test("legal pages are public and linked from the login footer", async ({ page }) => {
+  // 未登录：/api/me 返回 401，合规页面仍必须能直接打开
+  await page.route("**/api/me", (route) =>
+    route.fulfill({ status: 401, json: { code: 401, message: "请先登录", data: null } }),
+  );
+  await page.route("**/captcha/image", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { ticket: "t1", imageBase64: "data:image/png;base64,AA==" },
+      },
+    }),
+  );
+
+  await page.goto("/terms");
+  await expect(page).toHaveURL(/\/terms$/);
+  await expect(page.getByRole("heading", { name: "服务条款" })).toBeVisible();
+  await expect(page.getByText("点数长期有效", { exact: false })).toBeVisible();
+
+  await page.goto("/privacy");
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole("heading", { name: "隐私政策" })).toBeVisible();
+  await expect(page.getByText("Waffo Pancake", { exact: false })).toBeVisible();
+
+  // 登录页底部那行「使用规则」现在指向真实页面
+  await page.goto("/login");
+  await page.getByRole("link", { name: "《服务条款》" }).click();
+  await expect(page).toHaveURL(/\/terms$/);
+  await expect(page.getByRole("heading", { name: "服务条款" })).toBeVisible();
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },

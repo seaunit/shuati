@@ -315,7 +315,12 @@ watch(email, resetEmailCode);
         </button>
       </form>
 
-      <p class="mt-6 text-center text-xs text-oat">注册即表示你已阅读并同意使用规则</p>
+      <p class="mt-6 text-center text-xs leading-relaxed text-oat">
+        注册即表示你已阅读并同意
+        <RouterLink to="/terms" class="text-moss transition hover:text-moss/80">《服务条款》</RouterLink>
+        与
+        <RouterLink to="/privacy" class="text-moss transition hover:text-moss/80">《隐私政策》</RouterLink>
+      </p>
     </div>
   </main>
 </template>

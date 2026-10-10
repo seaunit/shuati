@@ -10,6 +10,9 @@ const router = createRouter({
       component: () => import("@/views/LoginView.vue"),
       meta: { public: true },
     },
+    // 合规页面：公开可访问，不需要登录（Waffo 生产审核会检查）
+    { path: "/terms", component: () => import("@/views/TermsView.vue") },
+    { path: "/privacy", component: () => import("@/views/PrivacyView.vue") },
     {
       path: "/app",
       component: () => import("@/layouts/AppLayout.vue"),
