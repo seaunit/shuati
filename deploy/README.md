@@ -117,7 +117,8 @@ SHUATI_COOKIE_SECURE=true
 ```
 [配置] Waffo Pancake 私钥（RSA，用于请求签名）
 [配置] 当前未设置
-[配置] 粘贴单行 base64（本机执行：cat private.pem | base64 | tr -d "\n"）
+[配置] 打开私钥文件，把里面的内容整段复制粘贴进来即可
+[配置] （PEM 原文，或文件里那一整串 base64 都行，两种都会自动识别）
 [配置] 输入不会回显；直接回车 = 保留现有私钥或为空：
 ```
 
@@ -125,9 +126,9 @@ SHUATI_COOKIE_SECURE=true
 并在部署结束时提示补配方法。也可以免交互传入：
 
 ```bash
-# 方式一：直接给 base64
-sudo WAFFO_PRIVATE_KEY_BASE64="$(cat private.pem | base64 | tr -d '\n')" bash deploy/scripts/provision-ubuntu.sh
-# 方式二：给 PEM 文件路径，脚本自己转 base64
+# 方式一：直接给私钥文件内容（PEM 文本或一整串 base64 都行）
+sudo WAFFO_PRIVATE_KEY_BASE64="$(cat private.pem)" bash deploy/scripts/provision-ubuntu.sh
+# 方式二：给私钥文件路径，脚本自己读（服务器上不用长期留这个文件）
 sudo WAFFO_PRIVATE_KEY_FILE=/root/waffo-private-key.pem bash deploy/scripts/provision-ubuntu.sh
 ```
 

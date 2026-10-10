@@ -187,7 +187,8 @@ prompt_waffo_private_key() {
   else
     printf '[配置] 当前未设置\n' >/dev/tty
   fi
-  printf '[配置] 粘贴单行 base64（本机执行：cat private.pem | base64 | tr -d "\\n"）\n' >/dev/tty
+  printf '[配置] 打开私钥文件，把里面的内容整段复制粘贴进来即可\n' >/dev/tty
+  printf '[配置] （PEM 原文，或文件里那一整串 base64 都行，两种都会自动识别）\n' >/dev/tty
   printf '[配置] 输入不会回显；直接回车 = 保留现有私钥或为空：' >/dev/tty
   local input=""
   IFS= read -rs input </dev/tty || input=""
