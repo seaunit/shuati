@@ -219,4 +219,8 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(
     `[payments] listening on 127.0.0.1:${PORT} env=${environment} dryRun=${DRY_RUN} webhookEvents=${Object.keys(WebhookEventType).length}`,
   );
+  console.log(
+    "[payments] 注意：收银台实际走测试还是生产，由 WAFFO_PRIVATE_KEY 对应的密钥决定；"
+      + `WAFFO_ENV=${environment} 只作为标签与顾客会话用，不改变收银台环境`,
+  );
 });
