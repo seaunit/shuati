@@ -44,6 +44,21 @@ const hasRunningTask = computed(() =>
   tasks.value.some((task) => task.status === "PENDING" || task.status === "RUNNING"),
 );
 
+const allIndexes = computed(() => (currentTask.value?.items ?? []).map((_, index) => index));
+
+function selectAll() {
+  selected.value = [...allIndexes.value];
+}
+
+function selectNone() {
+  selected.value = [];
+}
+
+function invertSelection() {
+  const chosen = new Set(selected.value);
+  selected.value = allIndexes.value.filter((index) => !chosen.has(index));
+}
+
 async function loadTasks() {
   try {
     tasks.value = await api<ImportTask[]>("/api/import/list");
@@ -242,18 +257,49 @@ onMounted(loadTasks);
             </span>
           </p>
           <p v-if="currentTask.error" class="mt-2 whitespace-pre-wrap text-xs text-rose">{{ currentTask.error }}</p>
-          <div v-if="currentTask.items?.length" class="mt-4 max-h-96 space-y-2 overflow-y-auto pr-1">
-            <label
-              v-for="(item, index) in currentTask.items"
-              :key="index"
-              class="flex gap-3 rounded-xl border border-mist bg-paper p-3 text-sm"
-            >
-              <input v-model="selected" type="checkbox" :value="index" class="mt-1" />
-              <span class="min-w-0">
-                <span class="text-xs text-oat">{{ item.unit }} · {{ item.type }}</span>
-                <span class="mt-1 block whitespace-pre-wrap text-ink">{{ item.content }}</span>
-              </span>
-            </label>
+          <div v-if="currentTask.items?.length" class="mt-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs text-oat">
+                已选 <span class="font-medium text-ink">{{ selected.length }}</span> /
+                {{ allIndexes.length }} 道题
+              </p>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="rounded-lg border border-mist bg-white/70 px-2.5 py-1 text-xs text-ink transition hover:border-moss"
+                  @click="selectAll"
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-mist bg-white/70 px-2.5 py-1 text-xs text-ink transition hover:border-moss"
+                  @click="selectNone"
+                >
+                  全不选
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-mist bg-white/70 px-2.5 py-1 text-xs text-ink transition hover:border-moss"
+                  @click="invertSelection"
+                >
+                  反选
+                </button>
+              </div>
+            </div>
+            <div class="mt-2 max-h-96 space-y-2 overflow-y-auto pr-1">
+              <label
+                v-for="(item, index) in currentTask.items"
+                :key="index"
+                class="flex gap-3 rounded-xl border border-mist bg-paper p-3 text-sm"
+              >
+                <input v-model="selected" type="checkbox" :value="index" class="mt-1" />
+                <span class="min-w-0">
+                  <span class="text-xs text-oat">{{ item.unit }} · {{ item.type }}</span>
+                  <span class="mt-1 block whitespace-pre-wrap text-ink">{{ item.content }}</span>
+                </span>
+              </label>
+            </div>
           </div>
           <button
             v-if="currentTask.phase === 'READY'"

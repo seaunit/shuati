@@ -688,6 +688,73 @@ test("import is blocked while another task is still running", async ({ page }) =
   await expect(page.getByText("同一时间只解析一个任务")).toBeVisible();
 });
 
+test("parse result supports select all / none / invert", async ({ page }) => {
+  const task = {
+    id: "t1",
+    kind: "text",
+    phase: "READY",
+    status: "COMPLETED",
+    progress: 100,
+    total_chunks: 1,
+    done_chunks: 1,
+    bank_name: "产品",
+    error: null,
+    items: [
+      { unit: "文档概述", type: "SINGLE", content: "第一题", answer: "A" },
+      { unit: "文档概述", type: "SINGLE", content: "第二题", answer: "B" },
+      { unit: "文档概述", type: "MULTI", content: "第三题", answer: "CD" },
+    ],
+  };
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/import/list", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ ...task, items: undefined }],
+      },
+    }),
+  );
+  await page.route("**/api/import/task/t1", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: task } }),
+  );
+
+  await page.goto("/app/import");
+  await page.getByRole("button", { name: /产品/ }).click();
+
+  // 打开任务默认全选
+  await expect(page.getByText("3 / 3 道题")).toBeVisible();
+  const importButton = page.getByRole("button", { name: /导入选中的/ });
+  await expect(importButton).toBeEnabled();
+
+  await page.getByRole("button", { name: "全不选" }).click();
+  await expect(page.getByText("0 / 3 道题")).toBeVisible();
+  await expect(importButton).toBeDisabled();
+
+  await page.getByRole("button", { name: "全选" }).click();
+  await expect(page.getByText("3 / 3 道题")).toBeVisible();
+
+  await page.getByRole("button", { name: "反选" }).click();
+  await expect(page.getByText("0 / 3 道题")).toBeVisible();
+
+  // 勾一题再反选 => 剩两题
+  await page.getByRole("checkbox").first().check();
+  await page.getByRole("button", { name: "反选" }).click();
+  await expect(page.getByText("2 / 3 道题")).toBeVisible();
+});
+
 test.describe("desktop layout", () => {
   test.use({
     viewport: { width: 1440, height: 900 },
