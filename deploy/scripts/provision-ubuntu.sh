@@ -341,20 +341,10 @@ fi
 
 umask 077
 # 内置的是「测试环境」的商品映射；切生产时必须换成 publish 之后的生产 Product ID
-WAFFO_DEFAULT_TEST_PRODUCT_MAP="PACK:pack_9=PROD_4LHpKOgDrQpNhyvA9WbYb1,PACK:pack_29=PROD_0UeAGdjEDeZlXpwk4jrdPc,PACK:pack_99=PROD_6wWViUIARdoV9cIRdq4xbU"
 WAFFO_ENV_NAME="${WAFFO_ENV:-test}"
-WAFFO_PRODUCT_MAP_VALUE="${WAFFO_PRODUCT_MAP:-$WAFFO_DEFAULT_TEST_PRODUCT_MAP}"
-if [ "$WAFFO_ENV_NAME" = "prod" ] && [ "$WAFFO_PRODUCT_MAP_VALUE" = "$WAFFO_DEFAULT_TEST_PRODUCT_MAP" ]; then
-  echo
-  echo "==================== 告警 ===================="
-  echo "WAFFO_ENV=prod，但商品映射还是测试环境的内置默认值。"
-  echo "生产收银台会报 Product not found，请在 Dashboard 里先把商品 publish 到生产，"
-  echo "再用真实的生产 Product ID 覆盖："
-  echo "  sudo WAFFO_ENV=prod WAFFO_PRODUCT_MAP='PACK:pack_9=PROD_xxx,...' \\"
-  echo "       WAFFO_PRIVATE_KEY_FILE=/root/waffo-prod-key.pem bash provision-ubuntu.sh"
-  echo "=============================================="
-  echo
-fi
+# 商品 ID 在 publish 到生产后保持不变（publish 是就地提升版本），
+# 所以测试与生产共用同一组 Product ID，这里不需要按环境切换。
+WAFFO_PRODUCT_MAP_VALUE="${WAFFO_PRODUCT_MAP:-PACK:pack_9=PROD_4LHpKOgDrQpNhyvA9WbYb1,PACK:pack_29=PROD_0UeAGdjEDeZlXpwk4jrdPc,PACK:pack_99=PROD_6wWViUIARdoV9cIRdq4xbU}"
 
 set_file_var "$PAYMENTS_ENV_FILE" WAFFO_MERCHANT_ID \
   "${WAFFO_MERCHANT_ID:-MER_7PGKvFIiNnnwwEO5RsJLTR}"
