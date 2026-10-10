@@ -4,6 +4,9 @@ import LegalDocument, { type LegalSection } from "@/components/LegalDocument.vue
 const sections: LegalSection[] = [
   {
     title: "一、我们收集哪些信息",
+    paragraphs: [
+      "「拾题」（站点：seaunit.site）由运营主体梁海平提供，梁海平是本服务的个人信息处理者，负责本政策所述的信息处理活动。",
+    ],
     bullets: [
       "账号信息：邮箱、密码（以不可逆哈希方式存储，我们无法还原）、昵称、注册时间。",
       "学习数据：练习记录、答题结果与得分、错题，以及您自建的题库和上传/粘贴的内容。",

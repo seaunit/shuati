@@ -57,7 +57,8 @@ defineProps<{
         </div>
 
         <p class="mt-8 border-t border-mist pt-4 text-xs leading-relaxed text-oat">
-          本页内容如有疑问，请联系我们：<span class="text-ink/80">【请填写：对外联系邮箱】</span>
+          本页内容如有疑问，请联系我们：
+          <a class="text-moss transition hover:text-moss/80" href="mailto:sealevel666@163.com">sealevel666@163.com</a>
         </p>
       </article>
     </div>
