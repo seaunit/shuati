@@ -29,6 +29,7 @@ public class AiGradingService {
   private final AiClient ai;
   private final PointAccountService points;
   private final Json json;
+  private final ExplanationSaveQueue explanationQueue;
 
   @Transactional
   public Map<String, Object> submitEssay(
@@ -126,7 +127,12 @@ public class AiGradingService {
     return response;
   }
 
-  @Transactional
+  /**
+   * 注意：这里刻意<b>不加</b> {@code @Transactional}。AI 调用是秒级的，如果整个方法在一个事务里，
+   * 就会在 AI 调用期间一直占着数据库连接，并且锁住该用户的点数账户行
+   * （{@link PointAccountService#consumePoints} 里有 {@code SELECT ... FOR UPDATE}），
+   * 几个人同时点解析就可能把连接池占满。所以扣点各自成短事务，落库交给 MQ。
+   */
   public Map<String, Object> explanation(String userId, long questionId) {
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select content, options, answer from question where id = ?", questionId);
@@ -152,14 +158,19 @@ public class AiGradingService {
               String.valueOf(question.get("options")),
               String.valueOf(question.get("answer"))),
           false);
-      ai.logUsage(userId, "EXPLAIN", result.model(), questionId, result, null,
-          System.currentTimeMillis() - start);
-      jdbc.update("update question set explanation = ? where id = ?",
-          result.content(), questionId);
+      long duration = System.currentTimeMillis() - start;
+
+      // 解析结果先返回给用户，落库交给 MQ 异步做；投递失败就同步写，保证结果不丢
+      boolean queued = explanationQueue.publish(new ExplanationSaveEvent(
+          questionId, userId, result.content(), result.model(),
+          result.promptTokens(), result.completionTokens(), duration));
+      if (!queued) {
+        ai.logUsage(userId, "EXPLAIN", result.model(), questionId, result, null, duration);
+        jdbc.update("update question set explanation = ? where id = ?",
+            result.content(), questionId);
+      }
       return Map.of("explanation", result.content());
     } catch (Exception e) {
-      // 注意：本方法带 @Transactional，抛异常会把 ai_call_log 一起回滚，
-      // 所以这里必须写应用日志（journalctl 可见），否则线上看不到失败原因。
       log.warn("AI 解析失败 questionId={}", questionId, e);
       points.refundPoints(userId, intValue(charged.get("cost")), "AI_EXPLAIN_FAILED",
           "question", String.valueOf(questionId));

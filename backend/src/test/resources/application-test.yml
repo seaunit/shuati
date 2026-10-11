@@ -18,6 +18,10 @@ spring:
       timeout: 3s
 
 shuati:
+  explain-queue:
+    # 测试里默认走同步写库，保证断言在同一个事务内就能看到结果；
+    # 异步链路由 ExplanationQueueTest 单独打开开关验证。
+    enabled: false
   rate-limit:
     # 测试默认关掉，避免用例互相影响；限流本身由 RateLimitTest 单独验证
     enabled: false

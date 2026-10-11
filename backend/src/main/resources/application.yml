@@ -53,6 +53,12 @@ management:
       enabled: false
 
 shuati:
+  explain-queue:
+    # 解析结果落库改走 Redis Streams 异步消费：结果先返回给用户，写库在后台做。
+    # 投递失败会自动退化成本次同步写库，不会丢解析结果。
+    enabled: true
+    # 消费者轮询间隔（毫秒）
+    poll-ms: 2000
   payments:
     # 是否启用在线支付（启用后下单会调用 Node 支付侧车创建 Waffo 收银台）
     enabled: ${SHUATI_PAYMENTS_ENABLED:false}
