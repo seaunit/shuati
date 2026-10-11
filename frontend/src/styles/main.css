@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #3f4a5a;
-  --color-paper: #faf7f2;
-  --color-mist: #eef1ee;
-  --color-moss: #7d9b76;
-  --color-rose: #c98a8a;
-  --color-sand: #e9dfd0;
-  --color-oat: #b9a68b;
+  /* 白纸黑字：正文近黑、背景纯白，仅保留一个克制的品牌绿作为强调色 */
+  --color-ink: #17181a;   /* 正文与主标题 */
+  --color-paper: #ffffff; /* 页面底色 */
+  --color-mist: #e9ebee;  /* 分隔线、浅灰面（标签栏 / 表头 / 结果块） */
+  --color-moss: #2f6b45;  /* 品牌绿：加深到在白色上可读，白字按钮也够对比 */
+  --color-rose: #b42318;  /* 错误 / 危险 */
+  --color-sand: #e9ebee;  /* 徽章底色（中性灰，不再偏暖） */
+  --color-oat: #6b7280;   /* 次要文字：暖褐改中性灰，对比度提到 4.8:1 */
 }
 
 :root {
@@ -23,10 +24,8 @@ body,
 body {
   margin: 0;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 18% 12%, rgba(201, 138, 138, 0.1), transparent 38%),
-    radial-gradient(circle at 82% 20%, rgba(125, 155, 118, 0.1), transparent 36%),
-    var(--color-paper);
+  /* 去掉原来的暖色光晕，纯白底 */
+  background: var(--color-paper);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
 }
