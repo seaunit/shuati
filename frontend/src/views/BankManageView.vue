@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { Check, Loader2, Pencil, Plus, Trash2, X } from "lucide-vue-next";
+import { Check, Loader2, Pencil, Plus, Trash2, Upload, X } from "lucide-vue-next";
 import { api } from "@/api/client";
 
 interface Bank {
@@ -20,13 +20,29 @@ interface Unit {
   off_count: number;
 }
 
+interface Option {
+  key: string;
+  text: string;
+}
+
 interface Question {
   id: number;
   unit_id: number;
   type: string;
   content: string;
   status: string;
+  difficulty?: string | null;
+  options?: Option[] | null;
+  answer?: string | null;
+  key_points?: string[] | null;
+  explanation?: string | null;
+  tags?: string[] | null;
 }
+
+type QuestionType = "SINGLE" | "MULTI" | "SHORT";
+
+const OPTION_KEYS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+const MAX_OPTIONS = 8;
 
 const route = useRoute();
 const bankId = Number(route.params.id);
@@ -46,17 +62,46 @@ const editingUnitId = ref<number | null>(null);
 const editingUnitName = ref("");
 const questionFilter = ref<"ALL" | "ON" | "OFF">("ALL");
 
+// 「新建空题库」：建完直接进它的维护页，接着就能导入或手工加题
+const creatingBank = ref(false);
+const newBankName = ref("");
+
+// 手工题目表单：新增与编辑共用，编辑时记下题目 id
+const formOpen = ref(false);
+const editingQuestionId = ref<number | null>(null);
+const formError = ref("");
+const form = ref({
+  unitId: null as number | null,
+  type: "SINGLE" as QuestionType,
+  content: "",
+  options: ["", "", "", ""] as string[],
+  selected: [] as string[],
+  answer: "",
+  keyPoints: "",
+  difficulty: "MEDIUM" as "EASY" | "MEDIUM" | "HARD",
+  explanation: "",
+  tags: "",
+});
+
 const unitNameById = computed(() => {
   const map = new Map<number, string>();
   units.value.forEach((unit) => map.set(unit.id, unit.name));
   return map;
 });
 
+const needsOptions = computed(() => form.value.type !== "SHORT");
+
 function typeLabel(type: string) {
   if (type === "SINGLE") return "单选";
   if (type === "MULTI") return "多选";
   if (type === "SHORT") return "简答";
   return type;
+}
+
+function difficultyLabel(value: string | null | undefined) {
+  if (value === "EASY") return "简单";
+  if (value === "HARD") return "困难";
+  return "中等";
 }
 
 function fail(e: unknown, fallback: string) {
@@ -96,6 +141,29 @@ async function load() {
     fail(e, "加载失败");
   } finally {
     loading.value = false;
+  }
+}
+
+async function createEmptyBank() {
+  const name = newBankName.value.trim();
+  if (!name) {
+    noticeError.value = "请填写题库名称";
+    return;
+  }
+  busy.value = true;
+  noticeError.value = "";
+  try {
+    const created = await api<{ id: number }>("/api/manage/banks", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    creatingBank.value = false;
+    newBankName.value = "";
+    window.location.href = `/app/banks/${created.id}`;
+  } catch (e) {
+    fail(e, "新建题库失败");
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -220,6 +288,178 @@ async function changeFilter(value: "ALL" | "ON" | "OFF") {
   await loadQuestions().catch((e) => fail(e, "加载题目失败"));
 }
 
+function resetForm() {
+  form.value = {
+    unitId: units.value[0]?.id ?? null,
+    type: "SINGLE",
+    content: "",
+    options: ["", "", "", ""],
+    selected: [],
+    answer: "",
+    keyPoints: "",
+    difficulty: "MEDIUM",
+    explanation: "",
+    tags: "",
+  };
+  formError.value = "";
+}
+
+function openCreateForm() {
+  if (units.value.length === 0) {
+    noticeError.value = "请先新建一个单元，题目要挂在单元下面";
+    return;
+  }
+  editingQuestionId.value = null;
+  resetForm();
+  formOpen.value = true;
+  noticeError.value = "";
+}
+
+function openEditForm(question: Question) {
+  editingQuestionId.value = question.id;
+  const type = (question.type as QuestionType) ?? "SINGLE";
+  const options = (question.options ?? []).map((item) => item.text);
+  resetForm();
+  form.value.unitId = question.unit_id;
+  form.value.type = type;
+  form.value.content = question.content ?? "";
+  if (type !== "SHORT") {
+    // 空行补足到至少 4 个输入框，方便继续加选项
+    form.value.options = [...options, "", "", "", ""].slice(0, Math.max(4, options.length));
+  }
+  form.value.selected = (question.answer ?? "").split("").filter(Boolean);
+  form.value.answer = type === "SHORT" ? (question.answer ?? "") : "";
+  form.value.keyPoints = (question.key_points ?? []).join("\n");
+  form.value.difficulty = (question.difficulty as "EASY" | "MEDIUM" | "HARD") ?? "MEDIUM";
+  form.value.explanation = question.explanation ?? "";
+  form.value.tags = (question.tags ?? []).join(", ");
+  formOpen.value = true;
+  noticeError.value = "";
+}
+
+function closeForm() {
+  formOpen.value = false;
+  editingQuestionId.value = null;
+  formError.value = "";
+}
+
+function setQuestionType(type: QuestionType) {
+  form.value.type = type;
+  formError.value = "";
+}
+
+function addOption() {
+  if (form.value.options.length >= MAX_OPTIONS) return;
+  form.value.options.push("");
+}
+
+function removeOption(index: number) {
+  if (form.value.options.length <= 2) return;
+  const key = OPTION_KEYS[index];
+  form.value.options.splice(index, 1);
+  form.value.selected = form.value.selected.filter((item) => item !== key);
+}
+
+function toggleAnswer(key: string) {
+  if (form.value.type === "SINGLE") {
+    form.value.selected = [key];
+    return;
+  }
+  form.value.selected = form.value.selected.includes(key)
+    ? form.value.selected.filter((item) => item !== key)
+    : [...form.value.selected, key].sort();
+}
+
+function buildPayload() {
+  const content = form.value.content.trim();
+  if (form.value.unitId === null) {
+    formError.value = "请选择所属单元";
+    return null;
+  }
+  if (!content) {
+    formError.value = "题干不能为空";
+    return null;
+  }
+  const payload: Record<string, unknown> = {
+    unitId: form.value.unitId,
+    type: form.value.type,
+    content,
+    difficulty: form.value.difficulty,
+    explanation: form.value.explanation.trim(),
+    tags: form.value.tags
+      .split(/[,，]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  };
+  if (form.value.type === "SHORT") {
+    const answer = form.value.answer.trim();
+    const keyPoints = form.value.keyPoints
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!answer) {
+      formError.value = "简答题要填参考答案";
+      return null;
+    }
+    if (keyPoints.length === 0) {
+      formError.value = "简答题要填评分要点，一行一条";
+      return null;
+    }
+    payload.answer = answer;
+    payload.keyPoints = keyPoints;
+    payload.options = null;
+  } else {
+    const options = form.value.options.map((item) => item.trim());
+    // 默认给了 4 个输入框，末尾没填的直接丢掉；中间留空才算填错
+    while (options.length > 2 && options[options.length - 1] === "") {
+      options.pop();
+    }
+    if (options.some((item) => !item)) {
+      formError.value = "选项内容不能留空，没用的选项请删掉";
+      return null;
+    }
+    if (options.length < 2) {
+      formError.value = "选择题至少要有两个选项";
+      return null;
+    }
+    if (form.value.selected.length === 0) {
+      formError.value = "请选择正确答案";
+      return null;
+    }
+    payload.answer = form.value.selected.join("");
+    payload.options = options.map((text, index) => ({ key: OPTION_KEYS[index], text }));
+    payload.keyPoints = null;
+  }
+  formError.value = "";
+  return payload;
+}
+
+async function submitQuestion() {
+  const payload = buildPayload();
+  if (!payload) return;
+  busy.value = true;
+  notice.value = "";
+  noticeError.value = "";
+  try {
+    if (editingQuestionId.value === null) {
+      await api("/api/manage/questions", { method: "POST", body: JSON.stringify(payload) });
+      notice.value = "题目已新增";
+    } else {
+      await api(`/api/manage/questions/${editingQuestionId.value}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      notice.value = "题目已保存";
+    }
+    closeForm();
+    await Promise.all([loadQuestions(), loadUnits()]);
+  } catch (e) {
+    fail(e, "保存题目失败");
+  } finally {
+    busy.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -227,7 +467,7 @@ onMounted(load);
   <div class="w-full">
     <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
-        <h1 class="text-2xl font-semibold tracking-tight text-ink">题库维护</h1>
+        <h1 class="text-2xl font-semibold tracking-tight text-ink">题库管理</h1>
         <p class="mt-1 truncate text-sm text-oat">
           {{ bank?.name ?? "…" }}
           <span v-if="bank?.is_public" class="ml-1 rounded-md bg-mist px-1.5 py-0.5 text-xs">
@@ -284,10 +524,66 @@ onMounted(load);
             删除题库
           </button>
         </div>
+
+        <div class="mt-5 border-t border-mist pt-4">
+          <h3 class="text-sm font-medium text-ink">新建空题库</h3>
+          <p class="mt-1 text-xs text-oat">
+            建好之后就能往里面导入题目，或者手工新增题目。
+          </p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <template v-if="creatingBank">
+              <input
+                v-model="newBankName"
+                placeholder="新题库名称"
+                class="min-w-0 flex-1 rounded-xl border border-mist bg-paper px-4 py-2 text-sm outline-none focus:border-moss"
+                @keyup.enter="createEmptyBank"
+              />
+              <button
+                class="shrink-0 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
+                :disabled="busy"
+                @click="createEmptyBank"
+              >
+                创建
+              </button>
+              <button
+                class="shrink-0 rounded-xl border border-mist px-4 py-2 text-sm text-ink transition hover:border-moss"
+                @click="creatingBank = false; newBankName = '';"
+              >
+                取消
+              </button>
+            </template>
+            <button
+              v-else
+              class="flex items-center gap-1.5 rounded-xl border border-moss px-4 py-2 text-sm text-moss transition hover:bg-moss/10"
+              @click="creatingBank = true"
+            >
+              <Plus class="h-4 w-4" />
+              新建空题库
+            </button>
+          </div>
+        </div>
       </section>
 
       <section class="mt-6 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
-        <h2 class="mb-3 font-medium text-ink">单元</h2>
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 class="font-medium text-ink">单元</h2>
+          <div class="flex flex-wrap gap-2">
+            <RouterLink
+              :to="`/app/import?bankId=${bankId}`"
+              class="flex items-center gap-1.5 rounded-xl border border-moss px-3 py-2 text-sm text-moss transition hover:bg-moss/10"
+            >
+              <Upload class="h-4 w-4" />
+              导入题目
+            </RouterLink>
+            <button
+              class="flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm text-white transition hover:bg-ink/90"
+              @click="openCreateForm"
+            >
+              <Plus class="h-4 w-4" />
+              新增题目
+            </button>
+          </div>
+        </div>
         <div class="flex flex-wrap gap-2">
           <input
             v-model="newUnitName"
@@ -359,6 +655,209 @@ onMounted(load);
         </div>
       </section>
 
+      <section v-if="formOpen" class="mt-6 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="font-medium text-ink">
+            {{ editingQuestionId === null ? "新增题目" : "编辑题目" }}
+          </h2>
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg border border-mist text-oat transition hover:border-rose hover:text-rose"
+            title="关闭"
+            @click="closeForm"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block">
+            <span class="mb-1.5 block text-sm text-ink">所属单元</span>
+            <select
+              v-model="form.unitId"
+              class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
+            >
+              <option :value="null">请选择单元…</option>
+              <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
+            </select>
+          </label>
+          <div>
+            <span class="mb-1.5 block text-sm text-ink">题型</span>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="item in [
+                  { key: 'SINGLE', label: '单选' },
+                  { key: 'MULTI', label: '多选' },
+                  { key: 'SHORT', label: '简答' },
+                ]"
+                :key="item.key"
+                type="button"
+                class="rounded-xl border px-3 py-2 text-sm transition"
+                :class="
+                  form.type === item.key
+                    ? 'border-moss bg-moss/10 text-moss'
+                    : 'border-mist bg-white/70 text-ink/75 hover:border-moss/60'
+                "
+                @click="setQuestionType(item.key as 'SINGLE' | 'MULTI' | 'SHORT')"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <label class="mt-3 block">
+          <span class="mb-1.5 block text-sm text-ink">题干</span>
+          <textarea
+            v-model="form.content"
+            rows="4"
+            class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
+            placeholder="支持 Markdown 语法"
+          />
+        </label>
+
+        <div v-if="needsOptions" class="mt-3">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="text-sm text-ink">选项与答案</span>
+            <button
+              type="button"
+              class="flex items-center gap-1 rounded-lg border border-mist px-2.5 py-1 text-xs text-ink transition hover:border-moss disabled:opacity-50"
+              :disabled="form.options.length >= MAX_OPTIONS"
+              @click="addOption"
+            >
+              <Plus class="h-3.5 w-3.5" />
+              增加选项
+            </button>
+          </div>
+          <div class="space-y-2">
+            <div
+              v-for="(_, index) in form.options"
+              :key="index"
+              class="flex items-center gap-2 rounded-xl border border-mist bg-paper px-3 py-2"
+            >
+              <button
+                type="button"
+                :aria-label="`选项 ${OPTION_KEYS[index]}`"
+                :aria-pressed="form.selected.includes(OPTION_KEYS[index])"
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs transition"
+                :class="
+                  form.selected.includes(OPTION_KEYS[index])
+                    ? 'border-moss bg-moss/15 font-medium text-moss'
+                    : 'border-mist bg-white text-oat hover:border-moss'
+                "
+                :title="`把 ${OPTION_KEYS[index]} 设为正确答案`"
+                @click="toggleAnswer(OPTION_KEYS[index])"
+              >
+                {{ OPTION_KEYS[index] }}
+              </button>
+              <input
+                v-model="form.options[index]"
+                :placeholder="`选项 ${OPTION_KEYS[index]} 内容`"
+                class="min-w-0 flex-1 rounded-lg border border-mist bg-white px-3 py-1.5 text-sm outline-none focus:border-moss"
+              />
+              <button
+                type="button"
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-mist text-rose transition hover:border-rose disabled:opacity-40"
+                :disabled="form.options.length <= 2"
+                title="删除该选项"
+                @click="removeOption(index)"
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+          <p class="mt-2 text-xs text-oat">
+            点选项前面的字母设为正确答案{{ form.type === "MULTI" ? "，多选可点多个" : "" }}。当前答案：{{
+              form.selected.join("") || "未选"
+            }}
+          </p>
+        </div>
+
+        <div v-else class="mt-3 grid gap-3">
+          <label class="block">
+            <span class="mb-1.5 block text-sm text-ink">参考答案</span>
+            <textarea
+              v-model="form.answer"
+              rows="3"
+              class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
+              placeholder="用于 AI 批改时对照的参考答案"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm text-ink">评分要点（一行一条）</span>
+            <textarea
+              v-model="form.keyPoints"
+              rows="4"
+              class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
+              placeholder="例如：说明了索引的作用"
+            />
+          </label>
+        </div>
+
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <span class="mb-1.5 block text-sm text-ink">难度</span>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="item in [
+                  { key: 'EASY', label: '简单' },
+                  { key: 'MEDIUM', label: '中等' },
+                  { key: 'HARD', label: '困难' },
+                ]"
+                :key="item.key"
+                type="button"
+                class="rounded-xl border px-3 py-2 text-sm transition"
+                :class="
+                  form.difficulty === item.key
+                    ? 'border-moss bg-moss/10 text-moss'
+                    : 'border-mist bg-white/70 text-ink/75 hover:border-moss/60'
+                "
+                @click="form.difficulty = item.key as 'EASY' | 'MEDIUM' | 'HARD'"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+          <label class="block">
+            <span class="mb-1.5 block text-sm text-ink">标签（可选，逗号分隔）</span>
+            <input
+              v-model="form.tags"
+              class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
+            />
+          </label>
+        </div>
+
+        <label class="mt-3 block">
+          <span class="mb-1.5 block text-sm text-ink">解析（可选）</span>
+          <textarea
+            v-model="form.explanation"
+            rows="3"
+            class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
+          />
+        </label>
+
+        <p v-if="formError" class="mt-3 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">
+          {{ formError }}
+        </p>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button
+            class="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
+            :disabled="busy"
+            @click="submitQuestion"
+          >
+            <Loader2 v-if="busy" class="h-4 w-4 animate-spin" />
+            <Check v-else class="h-4 w-4" />
+            {{ editingQuestionId === null ? "保存题目" : "保存修改" }}
+          </button>
+          <button
+            class="rounded-xl border border-mist px-4 py-2 text-sm text-ink transition hover:border-moss"
+            @click="closeForm"
+          >
+            取消
+          </button>
+        </div>
+      </section>
+
       <section class="mt-6 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 class="font-medium text-ink">题目</h2>
@@ -393,7 +892,10 @@ onMounted(load);
             <span class="shrink-0 rounded-md bg-mist px-1.5 py-0.5 text-xs text-oat">
               {{ typeLabel(question.type) }}
             </span>
-            <span class="min-w-0 flex-1 truncate text-sm text-ink">{{ question.content }}</span>
+            <span class="shrink-0 text-xs text-oat">{{ difficultyLabel(question.difficulty) }}</span>
+            <span class="min-w-0 flex-1 basis-full truncate text-sm text-ink sm:basis-auto">
+              {{ question.content }}
+            </span>
             <span class="shrink-0 text-xs text-oat">
               {{ unitNameById.get(question.unit_id) ?? "—" }}
             </span>
@@ -403,6 +905,13 @@ onMounted(load);
             >
               {{ question.status === "ON" ? "已上架" : "已下架" }}
             </span>
+            <button
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-mist text-ink transition hover:border-moss"
+              title="编辑题目"
+              @click="openEditForm(question)"
+            >
+              <Pencil class="h-3.5 w-3.5" />
+            </button>
             <button
               class="shrink-0 rounded-lg border border-mist px-2 py-1 text-xs text-ink transition hover:border-moss"
               @click="toggleQuestion(question)"

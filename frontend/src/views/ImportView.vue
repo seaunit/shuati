@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { Loader2, Upload } from "lucide-vue-next";
 import { api } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
@@ -33,6 +34,9 @@ interface Bank {
 }
 
 const auth = useAuthStore();
+const route = useRoute();
+// 从题库管理页进来时带着 ?bankId=，这时直接锁定到那个题库，不用再选
+const lockedBankId = Number(route.query.bankId) || null;
 const kind = ref<"text" | "url" | "doc">("text");
 const bankName = ref("");
 const bankDescription = ref("");
@@ -47,6 +51,7 @@ const tasks = ref<ImportTask[]>([]);
 const currentTask = ref<ImportTask | null>(null);
 const selected = ref<number[]>([]);
 const banks = ref<Bank[]>([]);
+const banksLoaded = ref(false);
 // 解析结果的去向：新建题库，或导入到已有题库
 const importMode = ref<"new" | "existing">("new");
 const targetBankId = ref<number | null>(null);
@@ -59,11 +64,32 @@ const importableBanks = computed(() =>
   ),
 );
 
+const lockedBank = computed(() =>
+  lockedBankId === null ? null : (importableBanks.value.find((bank) => bank.id === lockedBankId) ?? null),
+);
+// 带了 bankId 但那个题库不在可导入列表里（后台可能已经被删或者不是自己的）
+const lockedBankMissing = computed(
+  () => lockedBankId !== null && banksLoaded.value && lockedBank.value === null,
+);
+
 async function loadBanks() {
   try {
     banks.value = await api<Bank[]>("/api/banks");
   } catch {
     banks.value = [];
+  } finally {
+    banksLoaded.value = true;
+  }
+  applyLockedBank();
+}
+
+function applyLockedBank() {
+  if (!lockedBank.value) return;
+  importMode.value = "existing";
+  targetBankId.value = lockedBank.value.id;
+  // 任务名沿用题库名，历史任务列表里能看出这批题导去了哪
+  if (!bankName.value.trim()) {
+    bankName.value = lockedBank.value.name;
   }
 }
 
@@ -145,10 +171,14 @@ async function submit() {
 async function openTask(taskId: string) {
   currentTask.value = await api<ImportTask>(`/api/import/task/${taskId}`);
   selected.value = (currentTask.value.items ?? []).map((_, index) => index);
-  // 任务没写题库名、又确实有可导入的题库时，默认按「导入到已有题库」预选，省一次点击
-  importMode.value =
-    !currentTask.value.bank_name?.trim() && importableBanks.value.length > 0 ? "existing" : "new";
-  targetBankId.value = importMode.value === "existing" ? importableBanks.value[0].id : null;
+  if (lockedBank.value) {
+    applyLockedBank();
+  } else {
+    // 任务没写题库名、又确实有可导入的题库时，默认按「导入到已有题库」预选，省一次点击
+    importMode.value =
+      !currentTask.value.bank_name?.trim() && importableBanks.value.length > 0 ? "existing" : "new";
+    targetBankId.value = importMode.value === "existing" ? importableBanks.value[0].id : null;
+  }
   startPolling(taskId);
 }
 
@@ -177,6 +207,10 @@ function stopPolling() {
 
 async function confirmImport() {
   if (!currentTask.value) return;
+  if (lockedBankMissing.value) {
+    noticeError.value = "要导入的题库不存在，或你没有权限往里加题";
+    return;
+  }
   if (importMode.value === "existing" && !targetBankId.value) {
     noticeError.value = "请选择要导入到的题库";
     return;
@@ -213,8 +247,11 @@ onMounted(() => {
 <template>
   <div class="w-full">
     <header class="mb-6">
-      <h1 class="text-2xl font-semibold tracking-tight text-ink">导入题库</h1>
-      <p class="mt-1 text-sm text-oat">文档、正文或网页链接，AI 解析成可刷的题库</p>
+      <h1 class="text-2xl font-semibold tracking-tight text-ink">导入题目</h1>
+      <p class="mt-1 text-sm text-oat">
+        <template v-if="lockedBank">解析后导入到「{{ lockedBank.name }}」</template>
+        <template v-else>文档、正文或网页链接，AI 解析成可刷的题库</template>
+      </p>
     </header>
 
     <div class="grid gap-6 lg:grid-cols-2">
@@ -235,23 +272,40 @@ onMounted(() => {
           </button>
         </div>
 
-        <label class="mb-4 block">
-          <span class="mb-1.5 block text-sm text-ink">
-            题库名称<span class="text-oat">（解析后导入到已有题库时可留空）</span>
-          </span>
-          <input
-            v-model="bankName"
-            class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
-            placeholder="例如：软考真题"
-          />
-        </label>
-        <label class="mb-4 block">
-          <span class="mb-1.5 block text-sm text-ink">描述（可选）</span>
-          <input
-            v-model="bankDescription"
-            class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
-          />
-        </label>
+        <div
+          v-if="lockedBank"
+          class="mb-4 rounded-xl border border-moss/30 bg-moss/10 px-4 py-2.5 text-sm text-ink"
+        >
+          导入到：<span class="font-medium">{{ lockedBank.name }}</span>
+          <RouterLink :to="`/app/banks/${lockedBank.id}`" class="ml-2 text-moss hover:text-moss/80">
+            返回题库管理
+          </RouterLink>
+        </div>
+        <p
+          v-else-if="lockedBankMissing"
+          class="mb-4 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose"
+        >
+          要导入的题库不存在，或你没有往它里面加题的权限。
+        </p>
+        <template v-else>
+          <label class="mb-4 block">
+            <span class="mb-1.5 block text-sm text-ink">
+              题库名称<span class="text-oat">（解析后导入到已有题库时可留空）</span>
+            </span>
+            <input
+              v-model="bankName"
+              class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
+              placeholder="例如：软考真题"
+            />
+          </label>
+          <label class="mb-4 block">
+            <span class="mb-1.5 block text-sm text-ink">描述（可选）</span>
+            <input
+              v-model="bankDescription"
+              class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
+            />
+          </label>
+        </template>
 
         <textarea
           v-if="kind === 'text'"
@@ -350,7 +404,10 @@ onMounted(() => {
             class="mt-4 rounded-xl border border-mist bg-paper p-3"
           >
             <p class="text-xs text-oat">导入到</p>
-            <div class="mt-2 flex flex-wrap gap-2">
+            <p v-if="lockedBank" class="mt-1.5 text-sm font-medium text-ink">
+              {{ lockedBank.name }}
+            </p>
+            <div v-if="!lockedBank" class="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 class="rounded-lg border px-3 py-1.5 text-xs transition"
@@ -381,7 +438,7 @@ onMounted(() => {
               </button>
             </div>
             <select
-              v-if="importMode === 'existing'"
+              v-if="!lockedBank && importMode === 'existing'"
               v-model="targetBankId"
               class="mt-2 w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
             >
@@ -390,7 +447,7 @@ onMounted(() => {
                 {{ bank.name }}<template v-if="bank.is_public">（公共题库）</template>
               </option>
             </select>
-            <p v-if="importMode === 'existing'" class="mt-1.5 text-xs text-oat">
+            <p v-if="!lockedBank && importMode === 'existing'" class="mt-1.5 text-xs text-oat">
               {{
                 importableBanks.length === 0
                   ? "你还没有自己的题库；公共题库只有管理员能往里加题。"

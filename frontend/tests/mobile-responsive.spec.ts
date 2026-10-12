@@ -947,7 +947,7 @@ test("bank maintenance page can add and rename units", async ({ page }) => {
 
   await page.goto("/app/banks/11");
 
-  await expect(page.getByRole("heading", { name: "题库维护" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "题库管理" })).toBeVisible();
   await expect(page.getByText("第一章")).toBeVisible();
   await expect(page.getByText("3 题")).toBeVisible();
 
@@ -961,6 +961,119 @@ test("bank maintenance page can add and rename units", async ({ page }) => {
   await page.getByLabel("单元名称").fill("第一章（改）");
   await page.getByTitle("保存").click();
   expect(renames).toBe(1);
+});
+
+test("import page locks onto the bank it was opened from", async ({ page }) => {
+  let payload: Record<string, unknown> | null = null;
+  await mockImportReadyTask(page, "USER", (p) => {
+    payload = p;
+  });
+
+  // 从题库管理页点「导入题目」进来时带着 bankId，导入去向直接锁死
+  await page.goto("/app/import?bankId=11");
+  await expect(page.getByText("导入到：")).toBeVisible();
+  await expect(page.locator("select")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /未命名任务/ }).click();
+  await page.getByRole("button", { name: /导入选中的/ }).click();
+  expect(payload).toMatchObject({ targetBankId: 11 });
+});
+
+test("bank management page imports into the bank and adds questions by hand", async ({ page }) => {
+  await mockBankList(page, "USER");
+  let created: Record<string, unknown> | null = null;
+
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: null, is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "第一章", sort: 0, question_count: 0, off_count: 0 }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/questions*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  await page.route("**/api/manage/questions", (route) => {
+    created = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: { id: 99 } } });
+  });
+
+  await page.goto("/app/banks/11");
+  await expect(page.getByRole("heading", { name: "题库管理" })).toBeVisible();
+
+  // 导入题目留在题库管理里，跳转时把目标题库一起带上
+  await expect(page.getByRole("link", { name: "导入题目" })).toHaveAttribute(
+    "href",
+    "/app/import?bankId=11",
+  );
+
+  // 手工新增一道单选题：填空、点选项字母设成答案、保存
+  await page.getByRole("button", { name: "新增题目" }).click();
+  await page.getByPlaceholder("支持 Markdown 语法").fill("下面哪个是索引的作用？");
+  await page.getByPlaceholder("选项 A 内容").fill("加快查询");
+  await page.getByPlaceholder("选项 B 内容").fill("加快写入");
+  await page.getByTitle("把 A 设为正确答案").click();
+  await page.getByRole("button", { name: "保存题目" }).click();
+
+  expect(created).toMatchObject({
+    unitId: 21,
+    type: "SINGLE",
+    content: "下面哪个是索引的作用？",
+    answer: "A",
+    options: [
+      { key: "A", text: "加快查询" },
+      { key: "B", text: "加快写入" },
+    ],
+  });
+});
+
+test("sidebar no longer carries the standalone import entry", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.goto("/app");
+
+  await page.getByRole("button", { name: "打开更多菜单" }).click();
+  await expect(page.getByRole("link", { name: "套餐与点数" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "导入题库" })).toHaveCount(0);
+});
+
+test("empty bank list still lets the account create the first bank", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  let created: Record<string, unknown> | null = null;
+  await page.route("**/api/manage/banks", (route) => {
+    created = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: { id: 11 } } });
+  });
+
+  await page.goto("/app");
+  await page.getByPlaceholder("新题库名称").fill("我的题库");
+  await page.getByRole("button", { name: "新建题库" }).click();
+
+  expect(created).toMatchObject({ name: "我的题库" });
 });
 
 test("legal pages are public and linked from the login footer", async ({ page }) => {

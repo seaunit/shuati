@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -230,6 +231,68 @@ public class BankManageController {
     return ApiResponse.ok(json.normalize(rows, QUESTION_JSON));
   }
 
+  /** 手工新增题目（AI 解析之外的另一条录入路径） */
+  @PostMapping("/api/manage/questions")
+  public ApiResponse<Map<String, Object>> createQuestion(@RequestBody Map<String, Object> body) {
+    long unitId = longValue(body.get("unitId"));
+    if (unitId == 0) {
+      throw new ApiException(400, "请先选择单元");
+    }
+    requireManage(bankIdOfUnit(unitId));
+    String type = string(body.get("type")).toUpperCase();
+    String content = string(body.get("content")).trim();
+    String answer = string(body.get("answer")).trim();
+    if (content.isEmpty()) {
+      throw new ApiException(400, "题干不能为空");
+    }
+    validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
+
+    KeyHolder keyHolder = new GeneratedKeyHolder();
+    jdbc.update(connection -> {
+      var ps = connection.prepareStatement("""
+          insert into question
+            (unit_id, type, content, options, answer, key_points, difficulty, explanation, tags, status)
+          values (?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, cast(? as json), 'ON')
+          """, new String[]{"id"});
+      ps.setLong(1, unitId);
+      ps.setString(2, type);
+      ps.setString(3, content);
+      ps.setString(4, writeJson(body.get("options")));
+      ps.setString(5, answer);
+      ps.setString(6, writeJson(body.get("keyPoints")));
+      ps.setString(7, normalizeDifficulty(body.get("difficulty")));
+      ps.setString(8, body.get("explanation") == null ? null : string(body.get("explanation")));
+      ps.setString(9, writeJson(body.get("tags") == null ? List.of() : body.get("tags")));
+      return ps;
+    }, keyHolder);
+    long id = keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
+    return ApiResponse.ok(Map.of("id", id));
+  }
+
+  @PutMapping("/api/manage/questions/{id}")
+  public ApiResponse<Void> updateQuestion(
+      @PathVariable long id, @RequestBody Map<String, Object> body) {
+    requireManage(bankIdOfQuestion(id));
+    String type = string(body.get("type")).toUpperCase();
+    String content = string(body.get("content")).trim();
+    String answer = string(body.get("answer")).trim();
+    if (content.isEmpty()) {
+      throw new ApiException(400, "题干不能为空");
+    }
+    validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
+    jdbc.update("""
+        update question
+           set type = ?, content = ?, options = cast(? as json), answer = ?,
+               key_points = cast(? as json), difficulty = ?, explanation = ?,
+               tags = cast(? as json)
+         where id = ?
+        """, type, content, writeJson(body.get("options")), answer,
+        writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
+        body.get("explanation") == null ? null : string(body.get("explanation")),
+        writeJson(body.get("tags") == null ? List.of() : body.get("tags")), id);
+    return ApiResponse.ok(null);
+  }
+
   @PatchMapping("/api/manage/questions/{id}/status")
   public ApiResponse<Void> questionStatus(
       @PathVariable long id, @RequestBody Map<String, Object> body) {
@@ -309,6 +372,41 @@ public class BankManageController {
 
   private String string(Object value) {
     return value == null ? "" : String.valueOf(value);
+  }
+
+  private void validateQuestion(String type, Object options, String answer, Object keyPoints) {
+    if (!List.of("SINGLE", "MULTI", "SHORT").contains(type)) {
+      throw new ApiException(400, "题型不正确");
+    }
+    if (answer.isEmpty()) {
+      throw new ApiException(400, "答案不能为空");
+    }
+    if (("SINGLE".equals(type) || "MULTI".equals(type))
+        && !(options instanceof List<?> list && !list.isEmpty())) {
+      throw new ApiException(400, "选择题必须提供选项");
+    }
+    if ("SINGLE".equals(type) && answer.length() != 1) {
+      throw new ApiException(400, "单选题答案只能是一个选项");
+    }
+    if ("SHORT".equals(type) && !(keyPoints instanceof List<?> list && !list.isEmpty())) {
+      throw new ApiException(400, "简答题必须提供评分要点");
+    }
+  }
+
+  private String normalizeDifficulty(Object value) {
+    String difficulty = string(value).toUpperCase();
+    return List.of("EASY", "MEDIUM", "HARD").contains(difficulty) ? difficulty : "MEDIUM";
+  }
+
+  private String writeJson(Object value) {
+    if (value == null) {
+      return null;
+    }
+    try {
+      return json.objectMapper().writeValueAsString(value);
+    } catch (Exception e) {
+      return null;
+    }
   }
 
   private int intValue(Object value) {

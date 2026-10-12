@@ -149,6 +149,25 @@ onMounted(async () => {
     <div v-else-if="banks.length === 0" class="rounded-2xl border border-mist bg-white/70 p-10 text-center">
       <BookOpen class="mx-auto h-8 w-8 text-oat" />
       <p class="mt-3 text-sm text-oat">还没有可练习的题库</p>
+      <div v-if="!isGuest" class="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <input
+          v-model="newBankName"
+          placeholder="新题库名称"
+          class="w-40 rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+          @keyup.enter="createBank"
+        />
+        <button
+          class="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
+          :disabled="actionBusy"
+          @click="createBank"
+        >
+          <Plus class="h-4 w-4" />
+          新建题库
+        </button>
+      </div>
+      <p v-if="!isGuest" class="mt-2 text-xs text-oat">
+        建好空题库后，可以在题库管理里导入题目或手工新增题目
+      </p>
     </div>
 
     <template v-else>
