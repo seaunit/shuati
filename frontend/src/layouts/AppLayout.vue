@@ -16,6 +16,7 @@ const nav = computed(() => [
   { href: "/app/practice", label: "刷题", icon: "practice" },
   { href: "/app/wrong-book", label: "错题本", icon: "wrong-book" },
   { href: "/app/stats", label: "统计", icon: "stats" },
+  ...(auth.user ? [{ href: "/app/banks", label: "题库管理", icon: "banks" }] : []),
   { href: "/app/pricing", label: "套餐与点数", icon: "pricing" },
   ...(auth.isAdmin ? [{ href: "/app/admin", label: "后台管理", icon: "admin" }] : []),
 ]);

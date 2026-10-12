@@ -1047,6 +1047,60 @@ test("sidebar no longer carries the standalone import entry", async ({ page }) =
   await expect(page.getByRole("link", { name: "导入题库" })).toHaveCount(0);
 });
 
+test("signed-in accounts get a bank management entry and page", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 11,
+            name: "我的题库",
+            description: "冲刺用",
+            is_public: false,
+            unit_count: 2,
+            question_count: 10,
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("/app/banks");
+  await expect(page.getByRole("heading", { name: "题库管理" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /我的题库/ })).toHaveAttribute(
+    "href",
+    "/app/banks/11",
+  );
+
+  // 普通账号也能在导航里看到入口（手机端收在「更多」里）
+  await page.getByRole("button", { name: "打开更多菜单" }).click();
+  await expect(page.getByRole("link", { name: "题库管理" })).toBeVisible();
+});
+
+test("empty bank management list offers creating the first bank", async ({ page }) => {
+  await mockBankList(page, "USER");
+  let created: Record<string, unknown> | null = null;
+  await page.route("**/api/manage/banks", (route) => {
+    if (route.request().method() === "POST") {
+      created = route.request().postDataJSON();
+      return route.fulfill({ json: { code: 200, message: "ok", data: { id: 11 } } });
+    }
+    return route.fulfill({ json: { code: 200, message: "ok", data: [] } });
+  });
+
+  await page.goto("/app/banks");
+  await expect(page.getByText("还没有自己的题库")).toBeVisible();
+
+  await page.getByRole("button", { name: "新建空题库" }).first().click();
+  await page.getByPlaceholder("例如：计算机网络-冲刺").fill("我的题库");
+  await page.getByRole("button", { name: "创建" }).click();
+
+  expect(created).toMatchObject({ name: "我的题库" });
+});
+
 test("empty bank list still lets the account create the first bank", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

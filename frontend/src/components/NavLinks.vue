@@ -5,6 +5,7 @@ import {
   Dumbbell,
   BookX,
   BarChart3,
+  Library,
   Settings,
   Coins,
   type LucideIcon,
@@ -25,6 +26,7 @@ const icons: Record<string, LucideIcon> = {
   practice: Dumbbell,
   "wrong-book": BookX,
   stats: BarChart3,
+  banks: Library,
   pricing: Coins,
   admin: Settings,
 };
