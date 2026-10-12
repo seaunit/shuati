@@ -755,6 +755,100 @@ test("parse result supports select all / none / invert", async ({ page }) => {
   await expect(page.getByText("2 / 3 道题")).toBeVisible();
 });
 
+async function mockImportReadyTask(
+  page: import("@playwright/test").Page,
+  role: "USER" | "ADMIN",
+  onImport: (payload: Record<string, unknown> | null) => void,
+) {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role, status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  // 普通用户拿到的列表只含自己的题库 + 公共题库
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          { id: 11, name: "我的题库", is_public: false, owner_id: "u" },
+          { id: 12, name: "软考真题", is_public: true, owner_id: null },
+        ],
+      },
+    }),
+  );
+  const task = {
+    id: "t1",
+    kind: "text",
+    phase: "READY",
+    status: "COMPLETED",
+    progress: 100,
+    total_chunks: 1,
+    done_chunks: 1,
+    bank_name: "",
+    error: null,
+  };
+  await page.route("**/api/import/list", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [task] } }),
+  );
+  await page.route("**/api/import/task/t1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          ...task,
+          items: [{ unit: "文档概述", type: "SINGLE", content: "第一题", answer: "A" }],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/import/task/t1/import", async (route) => {
+    onImport(route.request().postDataJSON());
+    await route.fulfill({ json: { code: 200, message: "ok", data: null } });
+  });
+}
+
+test("import can target an existing bank, public bank hidden from normal users", async ({ page }) => {
+  let payload: Record<string, unknown> | null = null;
+  await mockImportReadyTask(page, "USER", (p) => {
+    payload = p;
+  });
+
+  await page.goto("/app/import");
+  await page.getByRole("button", { name: /未命名任务/ }).click();
+
+  // 任务没填题库名，默认落到「导入到已有题库」
+  const options = page.locator("select option");
+  await expect(options).toContainText(["请选择题库…", "我的题库"]);
+  await expect(page.getByText("软考真题")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /导入选中的/ }).click();
+  expect(payload).toMatchObject({ targetBankId: 11 });
+});
+
+test("admin can also import into a public bank", async ({ page }) => {
+  let payload: Record<string, unknown> | null = null;
+  await mockImportReadyTask(page, "ADMIN", (p) => {
+    payload = p;
+  });
+
+  await page.goto("/app/import");
+  await page.getByRole("button", { name: /未命名任务/ }).click();
+
+  await page.locator("select").selectOption({ label: "软考真题（公共题库）" });
+  await page.getByRole("button", { name: /导入选中的/ }).click();
+  expect(payload).toMatchObject({ targetBankId: 12 });
+});
+
 test("legal pages are public and linked from the login footer", async ({ page }) => {
   // 未登录：/api/me 返回 401，合规页面仍必须能直接打开
   await page.route("**/api/me", (route) =>

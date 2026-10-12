@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { Loader2, Upload } from "lucide-vue-next";
 import { api } from "@/api/client";
+import { useAuthStore } from "@/stores/auth";
 
 interface ImportItem {
   unit: string;
@@ -24,6 +25,14 @@ interface ImportTask {
   items?: ImportItem[] | null;
 }
 
+interface Bank {
+  id: number;
+  name: string;
+  is_public: boolean;
+  owner_id: string | null;
+}
+
+const auth = useAuthStore();
 const kind = ref<"text" | "url" | "doc">("text");
 const bankName = ref("");
 const bankDescription = ref("");
@@ -37,7 +46,26 @@ const noticeError = ref("");
 const tasks = ref<ImportTask[]>([]);
 const currentTask = ref<ImportTask | null>(null);
 const selected = ref<number[]>([]);
+const banks = ref<Bank[]>([]);
+// 解析结果的去向：新建题库，或导入到已有题库
+const importMode = ref<"new" | "existing">("new");
+const targetBankId = ref<number | null>(null);
 let pollTimer: number | null = null;
+
+// 只有自己的题库、以及（管理员的）公共题库可以写入；别人的私有题库不在列表里也导不进去
+const importableBanks = computed(() =>
+  banks.value.filter(
+    (bank) => bank.owner_id === auth.user?.id || (bank.is_public && auth.isAdmin),
+  ),
+);
+
+async function loadBanks() {
+  try {
+    banks.value = await api<Bank[]>("/api/banks");
+  } catch {
+    banks.value = [];
+  }
+}
 
 // 解析任务全局串行：自己已有任务在跑时就先别让我提交
 const hasRunningTask = computed(() =>
@@ -81,10 +109,6 @@ function onFile(event: Event) {
 }
 
 async function submit() {
-  if (!bankName.value.trim()) {
-    noticeError.value = "请填写题库名称";
-    return;
-  }
   if (hasRunningTask.value) {
     noticeError.value = "已有解析任务正在进行中，请等它完成或失败后再提交新任务";
     return;
@@ -121,6 +145,10 @@ async function submit() {
 async function openTask(taskId: string) {
   currentTask.value = await api<ImportTask>(`/api/import/task/${taskId}`);
   selected.value = (currentTask.value.items ?? []).map((_, index) => index);
+  // 任务没写题库名、又确实有可导入的题库时，默认按「导入到已有题库」预选，省一次点击
+  importMode.value =
+    !currentTask.value.bank_name?.trim() && importableBanks.value.length > 0 ? "existing" : "new";
+  targetBankId.value = importMode.value === "existing" ? importableBanks.value[0].id : null;
   startPolling(taskId);
 }
 
@@ -149,12 +177,23 @@ function stopPolling() {
 
 async function confirmImport() {
   if (!currentTask.value) return;
+  if (importMode.value === "existing" && !targetBankId.value) {
+    noticeError.value = "请选择要导入到的题库";
+    return;
+  }
+  if (importMode.value === "new" && !currentTask.value.bank_name?.trim()) {
+    noticeError.value = "新建题库需要先在左侧填写题库名称";
+    return;
+  }
   busy.value = true;
   noticeError.value = "";
   try {
     await api(`/api/import/task/${currentTask.value.id}/import`, {
       method: "POST",
-      body: JSON.stringify({ selectedIndexes: selected.value }),
+      body: JSON.stringify({
+        selectedIndexes: selected.value,
+        targetBankId: importMode.value === "existing" ? targetBankId.value : null,
+      }),
     });
     notice.value = "已提交导入，正在写入题库…";
     startPolling(currentTask.value.id);
@@ -165,7 +204,10 @@ async function confirmImport() {
   }
 }
 
-onMounted(loadTasks);
+onMounted(() => {
+  loadTasks();
+  loadBanks();
+});
 </script>
 
 <template>
@@ -194,7 +236,9 @@ onMounted(loadTasks);
         </div>
 
         <label class="mb-4 block">
-          <span class="mb-1.5 block text-sm text-ink">题库名称</span>
+          <span class="mb-1.5 block text-sm text-ink">
+            题库名称<span class="text-oat">（解析后导入到已有题库时可留空）</span>
+          </span>
           <input
             v-model="bankName"
             class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
@@ -301,6 +345,60 @@ onMounted(loadTasks);
               </label>
             </div>
           </div>
+          <div
+            v-if="currentTask.phase === 'READY'"
+            class="mt-4 rounded-xl border border-mist bg-paper p-3"
+          >
+            <p class="text-xs text-oat">导入到</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-1.5 text-xs transition"
+                :class="
+                  importMode === 'new'
+                    ? 'border-moss bg-moss/10 text-moss'
+                    : 'border-mist bg-white/70 text-ink'
+                "
+                @click="importMode = 'new'"
+              >
+                新建题库{{ currentTask.bank_name?.trim() ? `「${currentTask.bank_name}」` : "" }}
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border px-3 py-1.5 text-xs transition disabled:opacity-50"
+                :class="
+                  importMode === 'existing'
+                    ? 'border-moss bg-moss/10 text-moss'
+                    : 'border-mist bg-white/70 text-ink'
+                "
+                :disabled="importableBanks.length === 0"
+                @click="
+                  importMode = 'existing';
+                  targetBankId = importableBanks[0]?.id ?? null;
+                "
+              >
+                导入到已有题库
+              </button>
+            </div>
+            <select
+              v-if="importMode === 'existing'"
+              v-model="targetBankId"
+              class="mt-2 w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+            >
+              <option :value="null">请选择题库…</option>
+              <option v-for="bank in importableBanks" :key="bank.id" :value="bank.id">
+                {{ bank.name }}<template v-if="bank.is_public">（公共题库）</template>
+              </option>
+            </select>
+            <p v-if="importMode === 'existing'" class="mt-1.5 text-xs text-oat">
+              {{
+                importableBanks.length === 0
+                  ? "你还没有自己的题库；公共题库只有管理员能往里加题。"
+                  : "只能导入到自己的题库，公共题库由管理员维护。"
+              }}
+            </p>
+          </div>
+
           <button
             v-if="currentTask.phase === 'READY'"
             class="mt-4 w-full rounded-xl bg-moss py-2.5 text-sm text-white transition hover:bg-moss/90 disabled:opacity-60"
@@ -319,7 +417,9 @@ onMounted(loadTasks);
             class="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-mist"
             @click="openTask(task.id)"
           >
-            <span class="min-w-0 truncate text-ink">{{ task.bank_name }}</span>
+            <span class="min-w-0 truncate text-ink">
+              {{ task.bank_name?.trim() || "未命名任务" }}
+            </span>
             <span class="shrink-0 text-xs text-oat">{{ task.status }} · {{ task.progress }}%</span>
           </button>
         </div>

@@ -1,6 +1,7 @@
 package com.shuati.importer;
 
 import com.shuati.common.ApiResponse;
+import com.shuati.common.ApiException;
 import com.shuati.common.CurrentUser;
 import com.shuati.rate.RateLimit;
 import java.util.List;
@@ -45,8 +46,21 @@ public class ImportController {
     List<Integer> selected = body.get("selectedIndexes") instanceof List<?> list
         ? list.stream().map(v -> ((Number) v).intValue()).toList()
         : List.of();
-    importService.requestImport(CurrentUser.id(), id, selected);
+    importService.requestImport(CurrentUser.id(), id, selected, targetBankId(body));
     importWorker.run(id);
     return ApiResponse.ok(null);
+  }
+
+  /** targetBankId 为空表示新建题库；有值表示导入到那个已有题库。 */
+  private Long targetBankId(Map<String, Object> body) {
+    Object raw = body.get("targetBankId");
+    if (raw == null || String.valueOf(raw).isBlank()) {
+      return null;
+    }
+    try {
+      return (long) Double.parseDouble(String.valueOf(raw).trim());
+    } catch (NumberFormatException e) {
+      throw new ApiException(400, "目标题库参数不正确");
+    }
   }
 }

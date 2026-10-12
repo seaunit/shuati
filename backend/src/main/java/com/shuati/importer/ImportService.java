@@ -83,9 +83,7 @@ public class ImportService {
       throw new ApiException(400, "导入类型不正确");
     }
     String bankName = String.valueOf(body.getOrDefault("bankName", "")).trim();
-    if (bankName.isEmpty()) {
-      throw new ApiException(400, "题库名称必填");
-    }
+    // 名称允许留空：用户可能打算把解析结果导入到已有题库里，提交导入时再校验
     String description = body.get("bankDescription") == null ? null
         : String.valueOf(body.get("bankDescription")).trim();
     String sourceText;
@@ -142,19 +140,65 @@ public class ImportService {
     return json.normalize(rows.get(0), java.util.Set.of("items", "selected_indexes"));
   }
 
-  public void requestImport(String userId, String taskId, List<Integer> selectedIndexes) {
+  /**
+   * 提交导入。
+   *
+   * @param targetBankId 目标题库；为 null 表示按任务里的名称新建（或复用自己同名的）题库
+   */
+  public void requestImport(
+      String userId, String taskId, List<Integer> selectedIndexes, Long targetBankId) {
     List<Map<String, Object>> rows = jdbc.queryForList("""
-        select id, phase from import_task where id = ? and user_id = ?
+        select id, bank_name from import_task where id = ? and user_id = ?
         """, taskId, userId);
     if (rows.isEmpty()) {
       throw new ApiException(404, "任务不存在");
     }
+    if (targetBankId == null) {
+      // 新建题库必须有名字，否则等异步执行时才失败，不如现在就报出来
+      String bankName = String.valueOf(rows.get(0).get("bank_name")).trim();
+      if (bankName.isEmpty()) {
+        throw new ApiException(400, "请先填写题库名称，或选择导入到已有题库");
+      }
+    } else {
+      requireImportAccess(userId, targetBankId);
+    }
     jdbc.update("""
         update import_task
            set phase = 'IMPORT', status = 'PENDING', progress = 0,
-               selected_indexes = cast(? as json), error = null
+               selected_indexes = cast(? as json), target_bank_id = ?, error = null
          where id = ?
-        """, writeJson(selectedIndexes == null ? List.of() : selectedIndexes), taskId);
+        """, writeJson(selectedIndexes == null ? List.of() : selectedIndexes),
+        targetBankId, taskId);
+  }
+
+  /**
+   * 目标题库的写入权限：自己的题库可以；公共题库（owner_id 为空）只有管理员可以。
+   *
+   * <p>这里显式查 profiles.role，而不是用 {@code CurrentUser} —— 导入是在异步线程里执行的，
+   * 那条线程上没有登录上下文。
+   */
+  private void requireImportAccess(String userId, long bankId) {
+    List<Map<String, Object>> banks = jdbc.queryForList(
+        "select id, owner_id from bank where id = ?", bankId);
+    if (banks.isEmpty()) {
+      throw new ApiException(404, "目标题库不存在");
+    }
+    Object ownerId = banks.get(0).get("owner_id");
+    if (ownerId == null) {
+      if (!isAdmin(userId)) {
+        throw new ApiException(403, "公共题库只能由管理员维护，请选择自己的题库或新建题库");
+      }
+      return;
+    }
+    if (!String.valueOf(ownerId).equals(userId)) {
+      throw new ApiException(403, "无权向该题库导入题目");
+    }
+  }
+
+  private boolean isAdmin(String userId) {
+    List<String> roles = jdbc.queryForList(
+        "select role from profiles where id = ?", String.class, userId);
+    return !roles.isEmpty() && "ADMIN".equals(roles.get(0));
   }
 
   /** 由 ImportWorker 在异步线程中调用，处于独立事务之外。 */
@@ -249,33 +293,42 @@ public class ImportService {
     }
 
     Map<String, Object> entitlements = points.entitlements(userId);
-    points.assertBankQuota(userId, entitlements);
+    Long targetBankId = task.get("target_bank_id") == null ? null
+        : ((Number) task.get("target_bank_id")).longValue();
+    if (targetBankId == null) {
+      // 只有「新建题库」才占题库额度；往已有题库里加题不占
+      points.assertBankQuota(userId, entitlements);
+    }
     points.assertQuestionQuota(userId, entitlements, chosen.size());
 
-    String bankName = String.valueOf(task.get("bank_name")).trim();
-    String description = task.get("bank_description") == null ? null
-        : String.valueOf(task.get("bank_description"));
-
-    Long existing = jdbc.queryForList(
-        "select id from bank where owner_id = ? and name = ?", Long.class, userId, bankName)
-        .stream().findFirst().orElse(null);
     long bankId;
-    if (existing != null) {
-      bankId = existing;
+    if (targetBankId != null) {
+      // 异步线程里再校验一次，避免任务参数被改过
+      requireImportAccess(userId, targetBankId);
+      bankId = targetBankId;
     } else {
-      Map<String, Object> key = new LinkedHashMap<>();
-      org.springframework.jdbc.support.KeyHolder keyHolder =
-          new org.springframework.jdbc.support.GeneratedKeyHolder();
-      jdbc.update(connection -> {
-        var ps = connection.prepareStatement(
-            "insert into bank (name, description, is_default, owner_id) values (?, ?, 0, ?)",
-            new String[]{"id"});
-        ps.setString(1, bankName);
-        ps.setString(2, description);
-        ps.setString(3, userId);
-        return ps;
-      }, keyHolder);
-      bankId = keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
+      String bankName = String.valueOf(task.get("bank_name")).trim();
+      String description = task.get("bank_description") == null ? null
+          : String.valueOf(task.get("bank_description"));
+      Long existing = jdbc.queryForList(
+          "select id from bank where owner_id = ? and name = ?", Long.class, userId, bankName)
+          .stream().findFirst().orElse(null);
+      if (existing != null) {
+        bankId = existing;
+      } else {
+        org.springframework.jdbc.support.KeyHolder keyHolder =
+            new org.springframework.jdbc.support.GeneratedKeyHolder();
+        jdbc.update(connection -> {
+          var ps = connection.prepareStatement(
+              "insert into bank (name, description, is_default, owner_id) values (?, ?, 0, ?)",
+              new String[]{"id"});
+          ps.setString(1, bankName);
+          ps.setString(2, description);
+          ps.setString(3, userId);
+          return ps;
+        }, keyHolder);
+        bankId = keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
+      }
     }
 
     Map<String, Long> unitMap = new LinkedHashMap<>();
