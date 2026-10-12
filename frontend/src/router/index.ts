@@ -40,6 +40,12 @@ const router = createRouter({
           meta: { requiresAuth: true },
         },
         {
+          // 题库维护：自己的题库；公共题库只有管理员进得来（后端还会再校验一次）
+          path: "banks/:id",
+          component: () => import("@/views/BankManageView.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
           path: "pricing",
           component: () => import("@/views/PricingView.vue"),
           meta: { requiresAuth: true },

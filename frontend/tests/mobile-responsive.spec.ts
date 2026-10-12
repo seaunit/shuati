@@ -849,6 +849,120 @@ test("admin can also import into a public bank", async ({ page }) => {
   expect(payload).toMatchObject({ targetBankId: 12 });
 });
 
+async function mockBankList(page: import("@playwright/test").Page, role: "USER" | "ADMIN") {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role, status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          entitlements: { planCode: "free", planName: "免费版", monthlyQuota: 50, monthlyLeft: 50, bonusBalance: 100, available: 100 },
+          ledger: [],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          { id: 11, name: "我的题库", description: null, is_default: false, is_public: false, owner_id: "u", unit_count: 0, question_count: 0, answered_count: 0 },
+          { id: 12, name: "软考真题", description: null, is_default: false, is_public: true, owner_id: null, unit_count: 0, question_count: 0, answered_count: 0 },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/banks/11/units", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  await page.route("**/api/banks/12/units", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+}
+
+test("bank maintenance entry only shows for banks you may maintain", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.goto("/app");
+
+  // 默认选中第一个题库（自己的），有维护入口
+  await expect(page.getByRole("link", { name: "维护" })).toBeVisible();
+
+  // 切到公共题库：普通用户看不到维护入口
+  await page.getByRole("button", { name: /软考真题/ }).click();
+  await expect(page.getByRole("link", { name: "维护" })).toBeHidden();
+});
+
+test("admin sees the maintenance entry on a public bank too", async ({ page }) => {
+  await mockBankList(page, "ADMIN");
+  await page.goto("/app");
+  await page.getByRole("button", { name: /软考真题/ }).click();
+  await expect(page.getByRole("link", { name: "维护" })).toBeVisible();
+});
+
+test("bank maintenance page can add and rename units", async ({ page }) => {
+  await mockBankList(page, "USER");
+  let unitPayload: Record<string, unknown> | null = null;
+  let renames = 0;
+
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: "备注", is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "第一章", sort: 0, question_count: 3, off_count: 0 }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/units", (route) => {
+    unitPayload = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: { id: 22 } } });
+  });
+  await page.route("**/api/manage/units/21", (route) => {
+    renames += 1;
+    return route.fulfill({ json: { code: 200, message: "ok", data: null } });
+  });
+  await page.route("**/api/manage/banks/11/questions*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+
+  await page.goto("/app/banks/11");
+
+  await expect(page.getByRole("heading", { name: "题库维护" })).toBeVisible();
+  await expect(page.getByText("第一章")).toBeVisible();
+  await expect(page.getByText("3 题")).toBeVisible();
+
+  // 新建单元
+  await page.getByPlaceholder("新单元名称").fill("第二章");
+  await page.getByRole("button", { name: "新建单元" }).click();
+  expect(unitPayload).toMatchObject({ bankId: 11, name: "第二章" });
+
+  // 重命名单元
+  await page.getByTitle("重命名").click();
+  await page.getByLabel("单元名称").fill("第一章（改）");
+  await page.getByTitle("保存").click();
+  expect(renames).toBe(1);
+});
+
 test("legal pages are public and linked from the login footer", async ({ page }) => {
   // 未登录：/api/me 返回 401，合规页面仍必须能直接打开
   await page.route("**/api/me", (route) =>

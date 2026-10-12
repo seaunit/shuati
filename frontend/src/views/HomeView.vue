@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { BookOpen, CheckCircle2, Lock } from "lucide-vue-next";
+import { BookOpen, CheckCircle2, Lock, Plus, Settings } from "lucide-vue-next";
 import { api } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 
@@ -11,6 +11,7 @@ interface Bank {
   description: string | null;
   is_default: boolean;
   is_public: boolean;
+  owner_id: string | null;
   unit_count: number;
   question_count: number;
   answered_count: number;
@@ -32,9 +33,18 @@ const units = ref<Unit[]>([]);
 const bankId = ref<number | null>(null);
 const loading = ref(true);
 const unitsLoading = ref(false);
+const creating = ref(false);
+const newBankName = ref("");
+const actionError = ref("");
+const actionBusy = ref(false);
 
 const currentBank = computed(() => banks.value.find((b) => b.id === bankId.value));
 const isGuest = computed(() => !auth.user);
+
+// 能维护的题库：自己的；公共题库只有管理员。与后端 requireManage 的规则一致
+function canManage(bank: Bank) {
+  return bank.owner_id === auth.user?.id || (bank.is_public && auth.isAdmin);
+}
 const totalQuestions = computed(() =>
   units.value.reduce((sum, unit) => sum + (unit.question_count ?? 0), 0),
 );
@@ -63,6 +73,29 @@ async function loadUnits(id: number) {
 function selectBank(id: number) {
   bankId.value = id;
   loadUnits(id);
+}
+
+async function createBank() {
+  const name = newBankName.value.trim();
+  if (!name) {
+    actionError.value = "请填写题库名称";
+    return;
+  }
+  actionBusy.value = true;
+  actionError.value = "";
+  try {
+    const created = await api<{ id: number }>("/api/manage/banks", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    creating.value = false;
+    newBankName.value = "";
+    router.push(`/app/banks/${created.id}`);
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : "新建题库失败";
+  } finally {
+    actionBusy.value = false;
+  }
 }
 
 onMounted(async () => {
@@ -119,22 +152,64 @@ onMounted(async () => {
     </div>
 
     <template v-else>
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="bank in banks"
-          :key="bank.id"
-          class="rounded-xl border px-4 py-2 text-sm transition"
-          :class="
-            bankId === bank.id
-              ? 'border-moss bg-moss/10 text-moss'
-              : 'border-mist bg-white/70 text-ink/75 hover:border-moss/60'
-          "
-          @click="selectBank(bank.id)"
-        >
-          {{ bank.name }}
-          <span v-if="bank.is_default" class="ml-1 text-xs text-oat">默认</span>
-        </button>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="bank in banks"
+            :key="bank.id"
+            class="rounded-xl border px-4 py-2 text-sm transition"
+            :class="
+              bankId === bank.id
+                ? 'border-moss bg-moss/10 text-moss'
+                : 'border-mist bg-white/70 text-ink/75 hover:border-moss/60'
+            "
+            @click="selectBank(bank.id)"
+          >
+            {{ bank.name }}
+            <span v-if="bank.is_default" class="ml-1 text-xs text-oat">默认</span>
+          </button>
+        </div>
+
+        <div v-if="!isGuest" class="flex shrink-0 flex-wrap items-center gap-2">
+          <template v-if="creating">
+            <input
+              v-model="newBankName"
+              placeholder="新题库名称"
+              class="w-40 rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+              @keyup.enter="createBank"
+            />
+            <button
+              class="rounded-xl bg-ink px-3 py-2 text-xs text-white transition hover:bg-ink/90 disabled:opacity-50"
+              :disabled="actionBusy"
+              @click="createBank"
+            >
+              创建
+            </button>
+            <button
+              class="rounded-xl border border-mist px-3 py-2 text-xs text-ink transition hover:border-moss"
+              @click="
+                creating = false;
+                newBankName = '';
+                actionError = '';
+              "
+            >
+              取消
+            </button>
+          </template>
+          <button
+            v-else
+            class="flex items-center gap-1.5 rounded-xl border border-moss px-3 py-2 text-sm text-moss transition hover:bg-moss/10"
+            @click="creating = true"
+          >
+            <Plus class="h-4 w-4" />
+            新建题库
+          </button>
+        </div>
       </div>
+
+      <p v-if="actionError" class="mt-3 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">
+        {{ actionError }}
+      </p>
 
       <section v-if="currentBank" class="mt-6 rounded-2xl border border-mist bg-white/70 p-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -156,13 +231,23 @@ onMounted(async () => {
         <div v-if="!isGuest" class="mt-3 h-2 overflow-hidden rounded-full bg-mist">
           <div class="h-full rounded-full bg-moss" :style="{ width: bankPercent + '%' }" />
         </div>
-        <button
-          class="mt-4 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
-          :disabled="totalQuestions === 0"
-          @click="router.push(`/app/practice?bankId=${currentBank.id}`)"
-        >
-          {{ isGuest ? "登录后开始练习" : "开始练习本库" }}
-        </button>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button
+            class="rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
+            :disabled="totalQuestions === 0"
+            @click="router.push(`/app/practice?bankId=${currentBank.id}`)"
+          >
+            {{ isGuest ? "登录后开始练习" : "开始练习本库" }}
+          </button>
+          <RouterLink
+            v-if="canManage(currentBank)"
+            :to="`/app/banks/${currentBank.id}`"
+            class="flex items-center gap-1.5 rounded-xl border border-mist bg-white/70 px-4 py-2 text-sm text-ink transition hover:border-moss"
+          >
+            <Settings class="h-4 w-4" />
+            维护
+          </RouterLink>
+        </div>
       </section>
 
       <section class="mt-6">
