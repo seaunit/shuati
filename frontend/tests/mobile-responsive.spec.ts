@@ -1086,6 +1086,53 @@ test("questions without a unit go to the default unit", async ({ page }) => {
   expect(created).toMatchObject({ bankId: 11, unitId: null, answer: "B" });
 });
 
+/** 题库管理页 + 一道空题目列表，用来验证题目表单的行为 */
+async function mockQuestionFormPage(page: import("@playwright/test").Page) {
+  await mockBankList(page, "USER");
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: null, is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "第一章", sort: 0, question_count: 0, off_count: 0 }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/questions*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+}
+
+test("question form shows up as a modal and closes on Esc or backdrop", async ({ page }) => {
+  await mockQuestionFormPage(page);
+
+  await page.goto("/app/banks/11");
+  await page.getByRole("button", { name: "新增题目" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "新增题目" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("所属单元")).toBeVisible();
+
+  // Esc 关掉
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "新增题目" })).toHaveCount(0);
+
+  // 点遮罩也能关（面板铺满中间，只能点边缘那圈）
+  await page.getByRole("button", { name: "新增题目" }).click();
+  await expect(page.getByRole("dialog", { name: "新增题目" })).toBeVisible();
+  await page.getByRole("button", { name: "关闭题目表单" }).click({ position: { x: 5, y: 5 } });
+  await expect(page.getByRole("dialog", { name: "新增题目" })).toHaveCount(0);
+});
+
 test("sidebar no longer carries the standalone import entry", async ({ page }) => {
   await mockBankList(page, "USER");
   await page.goto("/app");

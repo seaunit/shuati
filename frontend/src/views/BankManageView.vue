@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Check, Loader2, Pencil, Plus, Trash2, Upload, X } from "lucide-vue-next";
 import { api } from "@/api/client";
@@ -455,7 +455,26 @@ async function submitQuestion() {
   }
 }
 
-onMounted(load);
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape" && formOpen.value) {
+    closeForm();
+  }
+}
+
+// 弹窗打开时锁住页面滚动，避免背景跟着滚
+watch(formOpen, (open) => {
+  document.body.style.overflow = open ? "hidden" : "";
+});
+
+onMounted(() => {
+  load();
+  window.addEventListener("keydown", onKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+  document.body.style.overflow = "";
+});
 </script>
 
 <template>
@@ -650,13 +669,27 @@ onMounted(load);
         </div>
       </section>
 
-      <section v-if="formOpen" class="mt-6 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
+      <!-- 题目表单走弹窗：遮罩可点，Esc 也能关 -->
+      <button
+        v-if="formOpen"
+        class="fixed inset-0 z-[45] bg-ink/25 backdrop-blur-[2px]"
+        aria-label="关闭题目表单"
+        @click="closeForm"
+      />
+      <section
+        v-if="formOpen"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="editingQuestionId === null ? '新增题目' : '编辑题目'"
+        class="fixed inset-x-0 top-0 z-50 mx-auto my-4 max-h-[92vh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto rounded-2xl border border-mist bg-paper p-4 shadow-2xl sm:p-5"
+      >
         <div class="mb-4 flex items-center justify-between gap-3">
           <h2 class="font-medium text-ink">
             {{ editingQuestionId === null ? "新增题目" : "编辑题目" }}
           </h2>
           <button
             class="flex h-8 w-8 items-center justify-center rounded-lg border border-mist text-oat transition hover:border-rose hover:text-rose"
+            aria-label="关闭弹窗"
             title="关闭"
             @click="closeForm"
           >
@@ -837,7 +870,10 @@ onMounted(load);
           {{ formError }}
         </p>
 
-        <div class="mt-4 flex flex-wrap gap-2">
+        <!-- 表单比视口高时，操作栏吸在弹窗底部，不用滚到最后才能保存 -->
+        <div
+          class="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex flex-wrap gap-2 border-t border-mist bg-paper px-4 pb-4 pt-3 sm:-bottom-5 sm:-mx-5 sm:-mb-5 sm:px-5 sm:pb-5"
+        >
           <button
             class="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
             :disabled="busy"
