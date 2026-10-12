@@ -1020,6 +1020,7 @@ test("bank management page imports into the bank and adds questions by hand", as
 
   // 手工新增一道单选题：填空、点选项字母设成答案、保存
   await page.getByRole("button", { name: "新增题目" }).click();
+  await page.getByLabel("所属单元").selectOption({ label: "第一章" });
   await page.getByPlaceholder("支持 Markdown 语法").fill("下面哪个是索引的作用？");
   await page.getByPlaceholder("选项 A 内容").fill("加快查询");
   await page.getByPlaceholder("选项 B 内容").fill("加快写入");
@@ -1027,6 +1028,7 @@ test("bank management page imports into the bank and adds questions by hand", as
   await page.getByRole("button", { name: "保存题目" }).click();
 
   expect(created).toMatchObject({
+    bankId: 11,
     unitId: 21,
     type: "SINGLE",
     content: "下面哪个是索引的作用？",
@@ -1036,6 +1038,52 @@ test("bank management page imports into the bank and adds questions by hand", as
       { key: "B", text: "加快写入" },
     ],
   });
+});
+
+test("questions without a unit go to the default unit", async ({ page }) => {
+  await mockBankList(page, "USER");
+  let created: Record<string, unknown> | null = null;
+
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: null, is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "第一章", sort: 0, question_count: 0, off_count: 0 }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/questions*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  await page.route("**/api/manage/questions", (route) => {
+    created = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: { id: 99 } } });
+  });
+
+  await page.goto("/app/banks/11");
+  await page.getByRole("button", { name: "新增题目" }).click();
+
+  // 单元选填：默认停在「默认单元（未分类）」，直接保存也能过
+  await expect(page.getByLabel("所属单元").locator("option:checked")).toHaveText(
+    "默认单元（未分类）",
+  );
+  await page.getByPlaceholder("支持 Markdown 语法").fill("不选单元的题目");
+  await page.getByPlaceholder("选项 A 内容").fill("甲");
+  await page.getByPlaceholder("选项 B 内容").fill("乙");
+  await page.getByTitle("把 B 设为正确答案").click();
+  await page.getByRole("button", { name: "保存题目" }).click();
+
+  expect(created).toMatchObject({ bankId: 11, unitId: null, answer: "B" });
 });
 
 test("sidebar no longer carries the standalone import entry", async ({ page }) => {

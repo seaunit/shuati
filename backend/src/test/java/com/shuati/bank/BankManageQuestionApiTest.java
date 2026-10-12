@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.shuati.common.ApiException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -84,6 +85,48 @@ class BankManageQuestionApiTest {
     assertThat(updated.get("content")).isEqualTo("下面哪些属于索引的代价？");
     assertThat(updated.get("answer")).isEqualTo("AB");
     assertThat(updated.get("difficulty")).isEqualTo("EASY");
+  }
+
+  @Test
+  void questionWithoutUnitFallsIntoTheDefaultUnit() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    authenticate(userId, false);
+
+    long first = createQuestion(choiceQuestion(Map.of("bankId", bankId, "content", "第一题")));
+    long second = createQuestion(choiceQuestion(Map.of("bankId", bankId, "content", "第二题")));
+
+    long unitId = unitOf(first);
+    assertThat(unitName(unitId)).isEqualTo("未分类");
+    // 第二次还要落回同一个兜底单元，不能每道题建一个
+    assertThat(unitOf(second)).isEqualTo(unitId);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from unit where bank_id = ? and name = '未分类'", Integer.class, bankId))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void questionWithoutUnitNeedsTheBank() {
+    authenticate(createUser("USER"), false);
+
+    ApiException error = assertThrows(ApiException.class,
+        () -> createQuestion(choiceQuestion(Map.of("content", "没给题库"))));
+
+    assertThat(error.getStatus()).isEqualTo(400);
+    assertThat(error.getMessage()).contains("题库");
+  }
+
+  @Test
+  void normalUserCannotAddQuestionToPublicBankByBankId() {
+    String userId = createUser("USER");
+    long publicBankId = createBank(null, "公共题库");
+    authenticate(userId, false);
+
+    ApiException error = assertThrows(ApiException.class,
+        () -> createQuestion(choiceQuestion(Map.of("bankId", publicBankId, "content", "想塞进公共题库"))));
+
+    assertThat(error.getStatus()).isEqualTo(403);
+    assertThat(questionCountOfBank(publicBankId)).isZero();
   }
 
   @Test
@@ -193,6 +236,30 @@ class BankManageQuestionApiTest {
 
   private long createQuestion(Map<String, Object> body) {
     return ((Number) controller.createQuestion(body).data().get("id")).longValue();
+  }
+
+  /** 一道能过校验的单选，用例只覆盖自己关心的字段 */
+  private Map<String, Object> choiceQuestion(Map<String, Object> extra) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("type", "SINGLE");
+    body.put("answer", "A");
+    body.put("options", List.of(Map.of("key", "A", "text", "a"), Map.of("key", "B", "text", "b")));
+    body.putAll(extra);
+    return body;
+  }
+
+  private long unitOf(long questionId) {
+    return jdbc.queryForObject("select unit_id from question where id = ?", Long.class, questionId);
+  }
+
+  private String unitName(long unitId) {
+    return jdbc.queryForObject("select name from unit where id = ?", String.class, unitId);
+  }
+
+  private int questionCountOfBank(long bankId) {
+    return jdbc.queryForObject("""
+        select count(*) from question q join unit u on u.id = q.unit_id where u.bank_id = ?
+        """, Integer.class, bankId);
   }
 
   private void authenticate(String userId, boolean admin) {

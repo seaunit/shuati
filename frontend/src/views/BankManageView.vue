@@ -290,7 +290,8 @@ async function changeFilter(value: "ALL" | "ON" | "OFF") {
 
 function resetForm() {
   form.value = {
-    unitId: units.value[0]?.id ?? null,
+    // 单元选填，默认不选 → 后端放进「未分类」兜底单元
+    unitId: null,
     type: "SINGLE",
     content: "",
     options: ["", "", "", ""],
@@ -305,10 +306,6 @@ function resetForm() {
 }
 
 function openCreateForm() {
-  if (units.value.length === 0) {
-    noticeError.value = "请先新建一个单元，题目要挂在单元下面";
-    return;
-  }
   editingQuestionId.value = null;
   resetForm();
   formOpen.value = true;
@@ -372,15 +369,13 @@ function toggleAnswer(key: string) {
 
 function buildPayload() {
   const content = form.value.content.trim();
-  if (form.value.unitId === null) {
-    formError.value = "请选择所属单元";
-    return null;
-  }
   if (!content) {
     formError.value = "题干不能为空";
     return null;
   }
   const payload: Record<string, unknown> = {
+    bankId,
+    // 不选单元就传 null，后端会落到默认单元
     unitId: form.value.unitId,
     type: form.value.type,
     content,
@@ -671,12 +666,15 @@ onMounted(load);
 
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="block">
-            <span class="mb-1.5 block text-sm text-ink">所属单元</span>
+            <span class="mb-1.5 block text-sm text-ink">
+              所属单元<span class="text-oat">（可选，不选就放进默认单元）</span>
+            </span>
             <select
               v-model="form.unitId"
+              aria-label="所属单元"
               class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
             >
-              <option :value="null">请选择单元…</option>
+              <option :value="null">默认单元（未分类）</option>
               <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
             </select>
           </label>

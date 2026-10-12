@@ -39,6 +39,9 @@ public class BankManageController {
 
   private static final Set<String> QUESTION_JSON = Set.of("options", "key_points", "images", "tags");
 
+  /** 不选单元时的兜底单元名，与解析导入里的兜底保持一致 */
+  private static final String DEFAULT_UNIT_NAME = "未分类";
+
   private final JdbcTemplate jdbc;
   private final Json json;
   private final PointAccountService points;
@@ -235,10 +238,17 @@ public class BankManageController {
   @PostMapping("/api/manage/questions")
   public ApiResponse<Map<String, Object>> createQuestion(@RequestBody Map<String, Object> body) {
     long unitId = longValue(body.get("unitId"));
-    if (unitId == 0) {
-      throw new ApiException(400, "请先选择单元");
+    // 单元不是必填：不选就落到该题库的「未分类」兜底单元，所以这时必须知道是哪个题库
+    if (unitId != 0) {
+      requireManage(bankIdOfUnit(unitId));
+    } else {
+      long bankId = longValue(body.get("bankId"));
+      if (bankId == 0) {
+        throw new ApiException(400, "请选择题库");
+      }
+      requireManage(bankId);
+      unitId = defaultUnitId(bankId);
     }
-    requireManage(bankIdOfUnit(unitId));
     String type = string(body.get("type")).toUpperCase();
     String content = string(body.get("content")).trim();
     String answer = string(body.get("answer")).trim();
@@ -247,6 +257,7 @@ public class BankManageController {
     }
     validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
 
+    long targetUnitId = unitId;
     KeyHolder keyHolder = new GeneratedKeyHolder();
     jdbc.update(connection -> {
       var ps = connection.prepareStatement("""
@@ -254,7 +265,7 @@ public class BankManageController {
             (unit_id, type, content, options, answer, key_points, difficulty, explanation, tags, status)
           values (?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, cast(? as json), 'ON')
           """, new String[]{"id"});
-      ps.setLong(1, unitId);
+      ps.setLong(1, targetUnitId);
       ps.setString(2, type);
       ps.setString(3, content);
       ps.setString(4, writeJson(body.get("options")));
@@ -358,6 +369,27 @@ public class BankManageController {
       throw new ApiException(404, "单元不存在");
     }
     return ids.get(0);
+  }
+
+  /** 「未分类」兜底单元：同一个题库只建一个，复用它。 */
+  private long defaultUnitId(long bankId) {
+    List<Long> ids = jdbc.queryForList(
+        "select id from unit where bank_id = ? and name = ?", Long.class, bankId, DEFAULT_UNIT_NAME);
+    if (!ids.isEmpty()) {
+      return ids.get(0);
+    }
+    Integer nextSort = jdbc.queryForObject(
+        "select coalesce(max(sort), -1) + 1 from unit where bank_id = ?", Integer.class, bankId);
+    KeyHolder keyHolder = new GeneratedKeyHolder();
+    jdbc.update(connection -> {
+      var ps = connection.prepareStatement(
+          "insert into unit (bank_id, name, sort) values (?, ?, ?)", new String[]{"id"});
+      ps.setLong(1, bankId);
+      ps.setString(2, DEFAULT_UNIT_NAME);
+      ps.setInt(3, nextSort == null ? 0 : nextSort);
+      return ps;
+    }, keyHolder);
+    return keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
   }
 
   private long bankIdOfQuestion(long questionId) {
