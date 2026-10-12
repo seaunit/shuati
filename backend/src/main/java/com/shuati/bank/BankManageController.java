@@ -3,8 +3,16 @@ package com.shuati.bank;
 import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
+import com.shuati.common.ClientInfo;
 import com.shuati.common.CurrentUser;
 import com.shuati.common.Json;
+import com.shuati.email.EmailDispatchService;
+import com.shuati.email.EmailPurpose;
+import com.shuati.email.EmailVerificationService;
+import com.shuati.rate.RateLimit;
+import com.shuati.user.Profile;
+import com.shuati.user.ProfileRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -45,6 +54,9 @@ public class BankManageController {
   private final JdbcTemplate jdbc;
   private final Json json;
   private final PointAccountService points;
+  private final ProfileRepository profiles;
+  private final EmailVerificationService emails;
+  private final EmailDispatchService emailDispatch;
 
   /** 我能维护的题库：自己的，加上管理员能看到的公共题库 */
   @GetMapping("/api/manage/banks")
@@ -121,16 +133,43 @@ public class BankManageController {
     return ApiResponse.ok(null);
   }
 
-  @DeleteMapping("/api/manage/banks/{id}")
-  public ApiResponse<Void> deleteBank(@PathVariable long id) {
+  /**
+   * 删题库要过邮箱验证码：把 6 位码发到当前账号的邮箱。
+   *
+   * <p>用单独的 DELETE_BANK 用途，键里带 purpose，所以注册/重置密码的验证码不能拿来删题库。
+   */
+  @PostMapping("/api/manage/banks/{id}/delete-code")
+  @RateLimit(name = "bank:delete-code:ip", limit = 30,
+      windowSeconds = 3600, scope = RateLimit.Scope.IP)
+  public ApiResponse<EmailVerificationService.SendResult> sendDeleteBankCode(
+      @PathVariable long id, HttpServletRequest http) {
     requireManage(id);
-    Integer questions = jdbc.queryForObject("""
-        select count(*) from question q join unit u on u.id = q.unit_id where u.bank_id = ?
-        """, Integer.class, id);
-    if (questions != null && questions > 0) {
-      // unit.bank_id 是级联删除，但 question.unit_id 是 RESTRICT，直接删会变成 500
-      throw new ApiException(400, "该题库下还有 " + questions + " 道题，请先清空题目再删除题库");
-    }
+    String email = currentEmail();
+    EmailVerificationService.PreparedCode prepared = emails.prepareCode(
+        email, ClientInfo.ip(http), ClientInfo.device(http), EmailPurpose.DELETE_BANK);
+    emailDispatch.send(prepared);
+    return ApiResponse.ok(prepared.result());
+  }
+
+  /**
+   * 删除题库：单元、题目、以及这些题目留下的练习记录一并删掉，删完不可恢复。
+   *
+   * <p>question.unit_id 是 RESTRICT，所以必须先删题目再删单元；practice_session 的
+   * scope_id 没有外键约束，也要显式清掉，否则会留下指向已删题库的续做记录。
+   */
+  @PostMapping("/api/manage/banks/{id}/delete")
+  @Transactional
+  public ApiResponse<Void> deleteBank(
+      @PathVariable long id, @RequestBody Map<String, Object> body) {
+    requireManage(id);
+    emails.verifyCode(currentEmail(), string(body.get("code")), EmailPurpose.DELETE_BANK);
+    jdbc.update(
+        "delete from question where unit_id in (select id from unit where bank_id = ?)", id);
+    jdbc.update("""
+        delete from practice_session
+         where (scope_type = 'UNIT' and scope_id in (select id from unit where bank_id = ?))
+            or (scope_type = 'BANK' and scope_id = ?)
+        """, id, id);
     jdbc.update("delete from unit where bank_id = ?", id);
     jdbc.update("delete from bank where id = ?", id);
     return ApiResponse.ok(null);
@@ -404,6 +443,17 @@ public class BankManageController {
 
   private String string(Object value) {
     return value == null ? "" : String.valueOf(value);
+  }
+
+  /** 当前账号的邮箱，删题库的验证码发到这里 */
+  private String currentEmail() {
+    Profile profile = profiles.findById(CurrentUser.id())
+        .orElseThrow(() -> new ApiException(400, "账号不存在"));
+    String email = profile.getEmail();
+    if (email == null || email.isBlank()) {
+      throw new ApiException(400, "当前账号没有可用邮箱，无法发送验证码");
+    }
+    return email;
   }
 
   private void validateQuestion(String type, Object options, String answer, Object keyPoints) {

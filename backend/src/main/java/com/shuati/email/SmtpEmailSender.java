@@ -25,7 +25,11 @@ public class SmtpEmailSender implements EmailSender {
       helper.setFrom(new InternetAddress(
           properties.from(), properties.fromName(), StandardCharsets.UTF_8.name()));
       helper.setTo(email);
-      String action = purpose == EmailPurpose.RESET ? "重置密码" : "注册";
+      String action = switch (purpose) {
+        case RESET -> "重置密码";
+        case DELETE_BANK -> "删除题库";
+        case REGISTER -> "注册";
+      };
       helper.setSubject("【拾题】" + action + "邮箱验证码");
       helper.setText(
           "您的" + action + "验证码是：" + code

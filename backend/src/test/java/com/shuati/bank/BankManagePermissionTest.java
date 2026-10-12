@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.shuati.common.ApiException;
+import com.shuati.email.EmailPurpose;
+import com.shuati.email.EmailVerificationProperties;
+import com.shuati.email.EmailVerificationService;
+import com.shuati.email.EmailVerificationStore;
+import com.shuati.email.EmailVerificationTestSupport;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +34,9 @@ class BankManagePermissionTest {
 
   @Autowired BankManageController controller;
   @Autowired JdbcTemplate jdbc;
+  @Autowired EmailVerificationStore emailStore;
+  @Autowired EmailVerificationService emailService;
+  @Autowired EmailVerificationProperties emailProperties;
 
   @AfterEach
   void clearSecurityContext() {
@@ -43,7 +52,7 @@ class BankManagePermissionTest {
     controller.updateBank(bankId, Map.of("name", "新名字", "description", "备注"));
 
     assertThat(bankName(bankId)).isEqualTo("新名字");
-    controller.deleteBank(bankId);
+    deleteBankWithCode(bankId, userId);
     assertThat(jdbc.queryForObject("select count(*) from bank where id = ?", Integer.class, bankId))
         .isZero();
   }
@@ -60,7 +69,8 @@ class BankManagePermissionTest {
     assertThat(rename.getStatus()).isEqualTo(403);
     assertThat(bankName(publicBankId)).isEqualTo(originalName);
 
-    assertThat(assertThrows(ApiException.class, () -> controller.deleteBank(publicBankId)).getStatus())
+    assertThat(assertThrows(ApiException.class,
+        () -> controller.deleteBank(publicBankId, Map.of("code", "123456"))).getStatus())
         .isEqualTo(403);
     assertThat(assertThrows(ApiException.class, () ->
         controller.createUnit(Map.of("bankId", publicBankId, "name", "插一个单元"))).getStatus())
@@ -113,7 +123,7 @@ class BankManagePermissionTest {
   }
 
   @Test
-  void deletingUnitOrBankWithQuestionsIsRefused() {
+  void deletingUnitWithQuestionsIsRefused() {
     String userId = createUser("USER");
     long bankId = createBank(userId, "有题的题库");
     long unitId = createUnit(bankId, "第一章");
@@ -123,10 +133,85 @@ class BankManagePermissionTest {
     ApiException unitError = assertThrows(ApiException.class, () -> controller.deleteUnit(unitId));
     assertThat(unitError.getStatus()).isEqualTo(400);
     assertThat(unitError.getMessage()).contains("请先清空题目");
+  }
 
-    ApiException bankError = assertThrows(ApiException.class, () -> controller.deleteBank(bankId));
-    assertThat(bankError.getStatus()).isEqualTo(400);
-    assertThat(bankError.getMessage()).contains("请先清空题目");
+  /** 删题库是一次性清空：单元、题目、以及这些题目的练习记录都跟着删。 */
+  @Test
+  void deletingBankAlsoRemovesItsUnitsQuestionsAndRecords() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "要删掉的题库");
+    long unitId = createUnit(bankId, "第一章");
+    long questionId = createQuestion(unitId);
+    long otherQuestionId = createQuestion(createUnit(createBank(createUser("USER"), "别人的题库"), "第一章"));
+    jdbc.update("""
+        insert into practice_record (user_id, question_id, user_answer, judge_source, verdict)
+        values (?, ?, 'A', 'LOCAL', 'CORRECT')
+        """, userId, questionId);
+    jdbc.update("""
+        insert into practice_session (user_id, scope_type, scope_id, scope_name)
+        values (?, 'BANK', ?, '要删掉的题库')
+        """, userId, bankId);
+    authenticate(userId, false);
+
+    deleteBankWithCode(bankId, userId);
+
+    assertThat(jdbc.queryForObject("select count(*) from bank where id = ?", Integer.class, bankId))
+        .isZero();
+    assertThat(jdbc.queryForObject("select count(*) from unit where bank_id = ?", Integer.class, bankId))
+        .isZero();
+    assertThat(jdbc.queryForObject("select count(*) from question where id = ?", Integer.class, questionId))
+        .isZero();
+    assertThat(jdbc.queryForObject(
+        "select count(*) from practice_record where question_id = ?", Integer.class, questionId))
+        .isZero();
+    assertThat(jdbc.queryForObject("""
+        select count(*) from practice_session where scope_type = 'BANK' and scope_id = ?
+        """, Integer.class, bankId)).isZero();
+    // 别人的题库不受牵连
+    assertThat(jdbc.queryForObject(
+        "select count(*) from question where id = ?", Integer.class, otherQuestionId)).isEqualTo(1);
+  }
+
+  @Test
+  void deletingBankRequiresTheEmailCode() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    authenticate(userId, false);
+
+    // 没带验证码
+    assertThat(assertThrows(ApiException.class, () -> controller.deleteBank(bankId, Map.of()))
+        .getStatus()).isEqualTo(400);
+    // 码填错了
+    seedCode(userId, "123456", EmailPurpose.DELETE_BANK);
+    assertThat(assertThrows(ApiException.class,
+        () -> controller.deleteBank(bankId, Map.of("code", "000000"))).getStatus()).isEqualTo(400);
+    assertThat(bankName(bankId)).isNotBlank();
+  }
+
+  /** 注册/重置密码的验证码不能拿来删题库，用途要分开。 */
+  @Test
+  void deleteCodeFromAnotherPurposeIsRejected() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    seedCode(userId, "123456", EmailPurpose.RESET);
+    authenticate(userId, false);
+
+    assertThat(assertThrows(ApiException.class,
+        () -> controller.deleteBank(bankId, Map.of("code", "123456"))).getStatus()).isEqualTo(400);
+    assertThat(bankName(bankId)).isNotBlank();
+  }
+
+  @Test
+  void deleteCodeIsSentToTheAccountEmail() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    authenticate(userId, false);
+
+    EmailVerificationService.SendResult result =
+        controller.sendDeleteBankCode(bankId, new MockHttpServletRequest()).data();
+
+    assertThat(result.cooldownSeconds()).isPositive();
+    assertThat(result.expiresInSeconds()).isPositive();
   }
 
   @Test
@@ -151,6 +236,21 @@ class BankManagePermissionTest {
             admin ? List.of(new SimpleGrantedAuthority("ROLE_ADMIN")) : List.of()));
   }
 
+  /** 走完「发码 → 校验 → 删除」，测试里直接把码种进 Redis，不发真邮件 */
+  private void deleteBankWithCode(long bankId, String userId) {
+    seedCode(userId, "123456", EmailPurpose.DELETE_BANK);
+    controller.deleteBank(bankId, Map.of("code", "123456"));
+  }
+
+  private void seedCode(String userId, String code, EmailPurpose purpose) {
+    EmailVerificationTestSupport.seed(
+        emailStore, emailService, emailProperties, emailOf(userId), code, purpose);
+  }
+
+  private String emailOf(String userId) {
+    return jdbc.queryForObject("select email from profiles where id = ?", String.class, userId);
+  }
+
   private String createUser(String role) {
     String id = UUID.randomUUID().toString();
     jdbc.update("""
@@ -172,13 +272,15 @@ class BankManagePermissionTest {
         "select id from unit where bank_id = ? and name = ?", Long.class, bankId, name);
   }
 
-  private void createQuestion(long unitId) {
+  private long createQuestion(long unitId) {
     jdbc.update("""
         insert into question
           (unit_id, type, content, options, answer, key_points, difficulty, status)
         values (?, 'SINGLE', '题干', cast('[{"key":"A","text":"a"}]' as json),
                 'A', cast('[]' as json), 'EASY', 'ON')
         """, unitId);
+    return jdbc.queryForObject(
+        "select id from question where unit_id = ? order by id desc limit 1", Long.class, unitId);
   }
 
   private String bankName(long bankId) {

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Check, Loader2, Pencil, Plus, Trash2, Upload, X } from "lucide-vue-next";
 import { api } from "@/api/client";
+import { useAuthStore } from "@/stores/auth";
 
 interface Bank {
   id: number;
@@ -46,6 +47,7 @@ const MAX_OPTIONS = 8;
 
 const route = useRoute();
 const bankId = Number(route.params.id);
+const auth = useAuthStore();
 
 const bank = ref<Bank | null>(null);
 const bankName = ref("");
@@ -61,6 +63,15 @@ const newUnitName = ref("");
 const editingUnitId = ref<number | null>(null);
 const editingUnitName = ref("");
 const questionFilter = ref<"ALL" | "ON" | "OFF">("ALL");
+
+// 删题库要先过邮箱验证码，验完才执行
+const deleteOpen = ref(false);
+const deleteCode = ref("");
+const deleteError = ref("");
+const deleteSending = ref(false);
+const deleteBusy = ref(false);
+const deleteCooldown = ref(0);
+let deleteTimer: number | null = null;
 
 // 「新建空题库」：建完直接进它的维护页，接着就能导入或手工加题
 const creatingBank = ref(false);
@@ -88,6 +99,10 @@ const unitNameById = computed(() => {
   units.value.forEach((unit) => map.set(unit.id, unit.name));
   return map;
 });
+
+const totalQuestions = computed(() =>
+  units.value.reduce((sum, unit) => sum + (unit.question_count ?? 0), 0),
+);
 
 const needsOptions = computed(() => form.value.type !== "SHORT");
 
@@ -192,15 +207,74 @@ async function saveBank() {
   }
 }
 
-async function deleteBank() {
-  if (!window.confirm("删除题库后不可恢复，确定删除？")) return;
+function stopDeleteCooldown() {
+  if (deleteTimer !== null) {
+    window.clearInterval(deleteTimer);
+    deleteTimer = null;
+  }
+}
+
+function startDeleteCooldown(seconds: number) {
+  stopDeleteCooldown();
+  deleteCooldown.value = Math.max(0, seconds);
+  deleteTimer = window.setInterval(() => {
+    deleteCooldown.value -= 1;
+    if (deleteCooldown.value <= 0) {
+      stopDeleteCooldown();
+    }
+  }, 1000);
+}
+
+function openDeleteDialog() {
+  deleteOpen.value = true;
+  deleteCode.value = "";
+  deleteError.value = "";
+  deleteCooldown.value = 0;
+  stopDeleteCooldown();
+  notice.value = "";
   noticeError.value = "";
+}
+
+function closeDeleteDialog() {
+  deleteOpen.value = false;
+  stopDeleteCooldown();
+}
+
+async function sendDeleteCode() {
+  if (deleteCooldown.value > 0 || deleteSending.value) return;
+  deleteSending.value = true;
+  deleteError.value = "";
   try {
-    await api(`/api/manage/banks/${bankId}`, { method: "DELETE" });
-    notice.value = "题库已删除";
-    window.location.href = "/app";
+    const result = await api<{ cooldownSeconds: number; expiresInSeconds: number }>(
+      `/api/manage/banks/${bankId}/delete-code`,
+      { method: "POST" },
+    );
+    startDeleteCooldown(result.cooldownSeconds ?? 60);
   } catch (e) {
-    fail(e, "删除失败");
+    deleteError.value = e instanceof Error ? e.message : "验证码发送失败";
+  } finally {
+    deleteSending.value = false;
+  }
+}
+
+async function confirmDeleteBank() {
+  if (!/^\d{6}$/.test(deleteCode.value.trim())) {
+    deleteError.value = "请填写 6 位邮箱验证码";
+    return;
+  }
+  deleteBusy.value = true;
+  deleteError.value = "";
+  try {
+    await api(`/api/manage/banks/${bankId}/delete`, {
+      method: "POST",
+      body: JSON.stringify({ code: deleteCode.value.trim() }),
+    });
+    stopDeleteCooldown();
+    window.location.href = "/app/banks";
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : "删除失败";
+  } finally {
+    deleteBusy.value = false;
   }
 }
 
@@ -456,14 +530,19 @@ async function submitQuestion() {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape" && formOpen.value) {
+  if (event.key !== "Escape") return;
+  if (deleteOpen.value) {
+    closeDeleteDialog();
+    return;
+  }
+  if (formOpen.value) {
     closeForm();
   }
 }
 
 // 弹窗打开时锁住页面滚动，避免背景跟着滚
-watch(formOpen, (open) => {
-  document.body.style.overflow = open ? "hidden" : "";
+watch([formOpen, deleteOpen], ([form, remove]) => {
+  document.body.style.overflow = form || remove ? "hidden" : "";
 });
 
 onMounted(() => {
@@ -473,6 +552,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  stopDeleteCooldown();
   document.body.style.overflow = "";
 });
 </script>
@@ -532,7 +612,7 @@ onBeforeUnmount(() => {
           </button>
           <button
             class="flex items-center gap-1.5 rounded-xl border border-rose/40 px-4 py-2 text-sm text-rose transition hover:bg-rose/10"
-            @click="deleteBank"
+            @click="openDeleteDialog"
           >
             <Trash2 class="h-4 w-4" />
             删除题库
@@ -963,5 +1043,86 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </template>
+
+    <!-- 删除题库：不可逆操作，先发邮箱验证码再删 -->
+    <button
+      v-if="deleteOpen"
+      class="fixed inset-0 z-[45] bg-ink/25 backdrop-blur-[2px]"
+      aria-label="关闭删除确认"
+      @click="closeDeleteDialog"
+    />
+    <section
+      v-if="deleteOpen"
+      role="dialog"
+      aria-modal="true"
+      aria-label="删除题库"
+      class="fixed inset-x-0 top-0 z-50 mx-auto my-4 max-h-[92vh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-mist bg-paper p-4 shadow-2xl sm:p-5"
+    >
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h2 class="font-medium text-ink">删除题库</h2>
+        <button
+          class="flex h-8 w-8 items-center justify-center rounded-lg border border-mist text-oat transition hover:border-rose hover:text-rose"
+          aria-label="关闭弹窗"
+          title="关闭"
+          @click="closeDeleteDialog"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+
+      <p class="text-sm text-ink">即将删除「{{ bank?.name }}」</p>
+      <p class="mt-2 text-sm text-oat">
+        题库下的 <span class="text-ink">{{ units.length }}</span> 个单元、<span
+          class="text-ink"
+          >{{ totalQuestions }}</span
+        >
+        道题会一并删除，这些题目的练习记录也会消失，删除后无法恢复。
+      </p>
+
+      <div class="mt-4">
+        <span class="mb-1.5 block text-sm text-ink">邮箱验证码</span>
+        <div class="flex gap-2">
+          <input
+            v-model="deleteCode"
+            aria-label="邮箱验证码"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="6 位验证码"
+            class="min-w-0 flex-1 rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
+            @keyup.enter="confirmDeleteBank"
+          />
+          <button
+            class="shrink-0 rounded-xl border border-moss px-3 py-2 text-sm text-moss transition hover:bg-moss/10 disabled:opacity-50"
+            :disabled="deleteCooldown > 0 || deleteSending"
+            @click="sendDeleteCode"
+          >
+            {{ deleteCooldown > 0 ? deleteCooldown + " 秒后重发" : "发送验证码" }}
+          </button>
+        </div>
+        <p class="mt-1.5 text-xs text-oat">验证码会发到 {{ auth.user?.email ?? "当前账号邮箱" }}</p>
+      </div>
+
+      <p v-if="deleteError" class="mt-3 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">
+        {{ deleteError }}
+      </p>
+
+      <div class="mt-4 flex flex-wrap gap-2 border-t border-mist pt-4">
+        <button
+          class="flex items-center gap-1.5 rounded-xl bg-rose px-4 py-2 text-sm text-white transition hover:bg-rose/90 disabled:opacity-50"
+          :disabled="deleteBusy"
+          @click="confirmDeleteBank"
+        >
+          <Loader2 v-if="deleteBusy" class="h-4 w-4 animate-spin" />
+          <Trash2 v-else class="h-4 w-4" />
+          确认删除
+        </button>
+        <button
+          class="rounded-xl border border-mist px-4 py-2 text-sm text-ink transition hover:border-moss"
+          @click="closeDeleteDialog"
+        >
+          取消
+        </button>
+      </div>
+    </section>
   </div>
 </template>

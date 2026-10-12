@@ -1112,6 +1112,52 @@ async function mockQuestionFormPage(page: import("@playwright/test").Page) {
   );
 }
 
+test("deleting a bank needs the email code from the dialog", async ({ page }) => {
+  await mockQuestionFormPage(page);
+  let codeRequests = 0;
+  let deleted: Record<string, unknown> | null = null;
+
+  await page.route("**/api/manage/banks/11/delete-code", (route) => {
+    codeRequests += 1;
+    return route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { cooldownSeconds: 60, expiresInSeconds: 300, codeAllowed: true },
+      },
+    });
+  });
+  await page.route("**/api/manage/banks/11/delete", (route) => {
+    deleted = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: null } });
+  });
+
+  await page.goto("/app/banks/11");
+  await page.getByRole("button", { name: "删除题库" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "删除题库" });
+  await expect(dialog).toBeVisible();
+  // 先把要连带删掉的东西说清楚
+  await expect(dialog.getByText("1 个单元", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("无法恢复", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("u@example.com", { exact: false })).toBeVisible();
+
+  // 发验证码后按钮进入倒计时
+  await dialog.getByRole("button", { name: "发送验证码" }).click();
+  expect(codeRequests).toBe(1);
+  await expect(dialog.getByRole("button", { name: /秒后重发/ })).toBeDisabled();
+
+  // 没填码不给删
+  await dialog.getByRole("button", { name: "确认删除" }).click();
+  await expect(dialog.getByText("请填写 6 位邮箱验证码")).toBeVisible();
+  expect(deleted).toBeNull();
+
+  // 填了码才提交，并且把码带上
+  await dialog.getByLabel("邮箱验证码").fill("123456");
+  await dialog.getByRole("button", { name: "确认删除" }).click();
+  expect(deleted).toMatchObject({ code: "123456" });
+});
+
 test("question form shows up as a modal and closes on Esc or backdrop", async ({ page }) => {
   await mockQuestionFormPage(page);
 
