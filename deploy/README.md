@@ -414,6 +414,42 @@ Google 不卡备案，反而是眼下最快能拿到收录数据的渠道。抓�
 
 Google 收录一般几天到几周，比百度快得多。Bing 站长工具可以直接从 GSC 导入站点，不用重新验证。
 
+### 让 Cloudflare 缓存直出页面
+
+实测（上海移动 → Cloudflare 伦敦节点，`curl -w`）：
+
+```
+边缘已缓存的静态文件：connect=285ms tls=573ms ttfb=846ms
+直出页面（每次回源）：connect=289ms tls=591ms ttfb=1505ms   ← 回源那一段约 900ms
+```
+
+国内到 Cloudflare 边缘本身就有几百毫秒且节点可能调度到欧洲，所以**回源那一段能省掉就省掉**。
+后端已经给直出页面返回 `Cache-Control: public, max-age=300, s-maxage=600,
+stale-while-revalidate=86400`，但 Cloudflare 默认只按文件扩展名缓存，
+`/bank/1` 这种没有扩展名的路径不会自动缓存，需要加一条 Cache Rule：
+
+**Rules → Cache Rules → Create rule**
+
+- 表达式（Edit expression）：
+  `(http.host eq "www.seaunit.site" and starts_with(http.request.uri.path, "/bank/")) or http.request.uri.path eq "/"`
+- Cache eligibility：**Eligible for cache**
+- Edge TTL：**Respect origin**（跟着后端的 s-maxage 走）
+- Browser TTL：Respect origin
+
+加完验证（应该变成 `cf-cache-status: HIT`，TTFB 掉到 ~850ms）：
+
+```bash
+curl -s -I https://www.seaunit.site/bank/1 | grep -i cf-cache-status
+```
+
+想先确认后端自己快不快，在服务器上直接测源站（绕开 Cloudflare）：
+
+```bash
+curl -s -o /dev/null -w 'ttfb=%{time_starttransfer}s\n' http://127.0.0.1:8080/bank/1
+```
+
+这个值是几十毫秒就说明应用没问题，慢的那部分是跨境链路。想彻底解决只能上国内节点（需要备案）。
+
 ### 建议：把 `seaunit.site` 301 到 `www`
 
 现在 `seaunit.site` 和 `www.seaunit.site` 返回同一份内容（`canonical` 都指向 www）。

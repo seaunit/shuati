@@ -36,6 +36,13 @@ public class SeoController {
 
   private static final String HTML = "text/html;charset=UTF-8";
   private static final String XML = "application/xml;charset=UTF-8";
+  /**
+   * 直出页面很少变（题库、单元、题目+解析都是低频写入），给边缘一段缓存时间：
+   * 国内到 Cloudflare 边缘本身就有几百毫秒，回源那一段能省掉就省掉。
+   */
+  private static final String CACHE_HTML =
+      "public, max-age=300, s-maxage=600, stale-while-revalidate=86400";
+  private static final String CACHE_XML = "public, max-age=1800";
   private static final int MAX_QUESTIONS_PER_PAGE = 300;
   private static final int SITEMAP_LIMIT = 5000;
 
@@ -350,7 +357,10 @@ public class SeoController {
           page.getKey().contains("/question/") ? "0.6" : "0.8", "weekly", page.getValue()));
     }
     xml.append("</urlset>\n");
-    return ResponseEntity.ok().header("Content-Type", XML).body(xml.toString());
+    return ResponseEntity.ok()
+        .header("Content-Type", XML)
+        .header("Cache-Control", CACHE_XML)
+        .body(xml.toString());
   }
 
   /** 一道题的卡片；index 为 0 时不显示题号（详情页用） */
@@ -480,7 +490,10 @@ public class SeoController {
   }
 
   private ResponseEntity<String> page(SeoHtml.Page page) {
-    return ResponseEntity.ok().header("Content-Type", HTML).body(html.render(page));
+    return ResponseEntity.ok()
+        .header("Content-Type", HTML)
+        .header("Cache-Control", CACHE_HTML)
+        .body(html.render(page));
   }
 
   /** 题库不存在或不是公共题库：给一个像样的 404，别让蜘蛛收到 JSON */
@@ -492,6 +505,8 @@ public class SeoController {
         """;
     return ResponseEntity.status(HttpStatus.NOT_FOUND)
         .header("Content-Type", HTML)
+        // 404 不缓存：题库之后可能被开放，别让边缘把 404 记住
+        .header("Cache-Control", "no-store")
         .body(html.render(new SeoHtml.Page(
             "页面不存在 - " + seo.siteName(), "页面不存在。", "/", body)));
   }

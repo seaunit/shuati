@@ -34,6 +34,8 @@ class SeoPageTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(response.getHeaders().getFirst("Content-Type")).contains("text/html");
+    // 边缘要能缓存直出页面，省掉回源那一段（国内到 CF 边缘本身就不快）
+    assertThat(response.getHeaders().getFirst("Cache-Control")).contains("public");
     assertThat(body).contains("<title>");
     assertThat(body).contains("rel=\"canonical\"");
     // 百度统计脚本要出现在 SEO 页面里，否则搜索流量统计不到
@@ -112,6 +114,8 @@ class SeoPageTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(response.getBody()).contains("页面不存在");
     assertThat(response.getHeaders().getFirst("Content-Type")).contains("text/html");
+    // 404 不能被边缘缓存住：题库之后可能被开放
+    assertThat(response.getHeaders().getFirst("Cache-Control")).contains("no-store");
   }
 
   @Test
@@ -129,6 +133,7 @@ class SeoPageTest {
         .contains("<loc>https://www.seaunit.site/bank/" + bankId + "/unit/" + unitId + "</loc>");
     // lastmod 是 Google 真正会用的字段
     assertThat(xml).contains("<lastmod>");
+    assertThat(controller.sitemap().getHeaders().getFirst("Cache-Control")).contains("public");
   }
 
   @Test
