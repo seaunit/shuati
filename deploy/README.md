@@ -397,6 +397,11 @@ Google 不卡备案，反而是眼下最快能拿到收录数据的渠道。抓�
    curl -s https://www.seaunit.site/googleXXXX.html
    ```
 
+   放好之后如果之前点过一次「验证」（Google 那时拿到的是 SPA 首页那份 200 响应），
+   记得去 Cloudflare「缓存 → 清除缓存」按 URL 清一下这个验证文件，否则可能读到旧副本。
+   仓库里的 `${APP_DIR}/deploy/nginx/shuati-prod.conf` 已经把「不存在的 .html 返回 404」
+   写进配置，重装一次 nginx 配置后这类验证就不会再被 SPA 回退干扰。
+
    **方式三：DNS TXT（不改代码，覆盖面最大）**
 
    在 Cloudflare DNS 加一条 TXT：名称 `@`、内容 `google-site-verification=xxxx`，等几分钟生效。
