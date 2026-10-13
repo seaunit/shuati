@@ -21,7 +21,12 @@ trap 'rm -f "$URLS" "$URLS.xml"' EXIT
 
 TOKEN="${SHUATI_BAIDU_PUSH_TOKEN:-}"
 if [ -z "$TOKEN" ] && [ -r "$ENV_FILE" ]; then
-  TOKEN="$(sed -n "s/^SHUATI_BAIDU_PUSH_TOKEN=['\"]\{0,1\}\(.*\)['\"]\{0,1\}$/\1/p" "$ENV_FILE" | head -1)"
+  # 先取等号右边，再单独去引号：不能一步用 .* 配「可选引号」，
+  # 贪婪的 .* 会把行尾的单引号一起吞进捕获组，发出去的 token 多一个引号，
+  # 百度会直接回 token invalid（这个坑踩过一次）。
+  TOKEN="$(sed -n 's/^SHUATI_BAIDU_PUSH_TOKEN=//p' "$ENV_FILE" | head -1)"
+  TOKEN="$(printf '%s' "$TOKEN" | tr -d '"' | tr -d "'" | tr -d '\r' \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 fi
 
 if [ -z "$TOKEN" ]; then
@@ -57,7 +62,7 @@ push() {
     "http://data.zz.baidu.com/urls?site=${site}&token=${TOKEN}"
 }
 
-echo "==> 推送站点：${SITE}"
+echo "==> 推送站点：${SITE}（token 长度 ${#TOKEN}）"
 RESPONSE="$(push "$SITE")"
 echo "==> 百度返回：${RESPONSE}"
 
