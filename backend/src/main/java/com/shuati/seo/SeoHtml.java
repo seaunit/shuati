@@ -44,6 +44,13 @@ public class SeoHtml {
         .append("\">\n");
     html.append("<link rel=\"canonical\" href=\"").append(canonical).append("\">\n");
     html.append("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\">\n");
+    String googleVerification = seo.googleSiteVerification();
+    if (googleVerification != null && !googleVerification.isBlank()) {
+      // Search Console 选「HTML 标记」验证时，Google 抓的就是这些直出页面，
+      // 所以 meta 必须出现在这里，只写在 SPA 外壳里是验不过的。
+      html.append("<meta name=\"google-site-verification\" content=\"")
+          .append(escape(googleVerification.trim())).append("\">\n");
+    }
     html.append("<meta property=\"og:type\" content=\"website\">\n");
     html.append("<meta property=\"og:site_name\" content=\"").append(siteName).append("\">\n");
     html.append("<meta property=\"og:title\" content=\"").append(title).append("\">\n");

@@ -2,6 +2,7 @@ package com.shuati.seo;
 
 import com.shuati.common.Json;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -311,35 +312,42 @@ public class SeoController {
     StringBuilder xml = new StringBuilder();
     xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     xml.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-    xml.append(entry("/", "1.0", "daily"));
-    xml.append(entry("/terms", "0.3", "monthly"));
-    xml.append(entry("/privacy", "0.3", "monthly"));
+    xml.append(entry("/", "1.0", "daily", ""));
+    xml.append(entry("/terms", "0.3", "monthly", ""));
+    xml.append(entry("/privacy", "0.3", "monthly", ""));
 
-    LinkedHashSet<String> paths = new LinkedHashSet<>();
+    // lastmod 是 Google 真正会用的字段，用它告诉搜索引挈这一页什么时候变的
+    LinkedHashMap<String, String> pages = new LinkedHashMap<>();
     for (Map<String, Object> row : jdbc.queryForList(
-        "select id from bank where owner_id is null order by id asc")) {
-      paths.add("/bank/" + number(row.get("id")));
+        "select id, created_at from bank where owner_id is null order by id asc")) {
+      pages.put("/bank/" + number(row.get("id")), lastmod(row.get("created_at")));
     }
     for (Map<String, Object> row : jdbc.queryForList("""
-        select u.id as unit_id, b.id as bank_id
-          from unit u join bank b on b.id = u.bank_id
+        select b.id as bank_id, u.id as unit_id,
+               coalesce(max(q.updated_at), b.created_at) as last_at
+          from unit u
+          join bank b on b.id = u.bank_id
+          left join question q on q.unit_id = u.id
          where b.owner_id is null
-         order by b.id asc, u.sort asc, u.id asc
+         group by b.id, u.id, b.created_at
+         order by b.id asc, u.id asc
         """)) {
-      paths.add("/bank/" + number(row.get("bank_id")) + "/unit/" + number(row.get("unit_id")));
+      pages.put("/bank/" + number(row.get("bank_id")) + "/unit/" + number(row.get("unit_id")),
+          lastmod(row.get("last_at")));
     }
     for (Map<String, Object> row : jdbc.queryForList("""
-        select q.id as question_id, b.id as bank_id
+        select b.id as bank_id, q.id as question_id, q.updated_at
           from question q join unit u on u.id = q.unit_id join bank b on b.id = u.bank_id
          where b.owner_id is null and q.status = 'ON'
          order by b.id asc, u.sort asc, q.id asc
          limit %d
         """.formatted(SITEMAP_LIMIT))) {
-      paths.add("/bank/" + number(row.get("bank_id")) + "/question/"
-          + number(row.get("question_id")));
+      pages.put("/bank/" + number(row.get("bank_id")) + "/question/"
+          + number(row.get("question_id")), lastmod(row.get("updated_at")));
     }
-    for (String path : paths) {
-      xml.append(entry(path, path.contains("/question/") ? "0.6" : "0.8", "weekly"));
+    for (Map.Entry<String, String> page : pages.entrySet()) {
+      xml.append(entry(page.getKey(),
+          page.getKey().contains("/question/") ? "0.6" : "0.8", "weekly", page.getValue()));
     }
     xml.append("</urlset>\n");
     return ResponseEntity.ok().header("Content-Type", XML).body(xml.toString());
@@ -454,10 +462,21 @@ public class SeoController {
     }
   }
 
-  private String entry(String path, String priority, String changefreq) {
-    return "  <url><loc>" + SeoHtml.escape(seo.absolute(path)) + "</loc>"
-        + "<changefreq>" + changefreq + "</changefreq>"
-        + "<priority>" + priority + "</priority></url>\n";
+  private String entry(String path, String priority, String changefreq, String lastmod) {
+    StringBuilder entry = new StringBuilder("  <url><loc>")
+        .append(SeoHtml.escape(seo.absolute(path))).append("</loc>");
+    if (lastmod != null && !lastmod.isBlank()) {
+      entry.append("<lastmod>").append(SeoHtml.escape(lastmod)).append("</lastmod>");
+    }
+    entry.append("<changefreq>").append(changefreq).append("</changefreq>")
+        .append("<priority>").append(priority).append("</priority></url>\n");
+    return entry.toString();
+  }
+
+  /** Timestamp → 带 Z 的 ISO 字符串，sitemap 的 lastmod 用这个格式 */
+  private String lastmod(Object value) {
+    Object iso = json.iso(value);
+    return iso == null ? "" : String.valueOf(iso);
   }
 
   private ResponseEntity<String> page(SeoHtml.Page page) {

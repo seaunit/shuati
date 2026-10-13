@@ -109,3 +109,5 @@ shuati:
     contact-email: ${SHUATI_CONTACT_EMAIL:sealevel666@163.com}
     # 百度统计站点 ID（公开标识），留空则不注入统计脚本
     baidu-tongji-id: ${SHUATI_BAIDU_TONGJI_ID:639e5d48916802a7505c8af19d7002e7}
+    # Google Search Console 选「HTML 标记」验证时填这里，留空则不输出该 meta
+    google-site-verification: ${SHUATI_GOOGLE_SITE_VERIFICATION:}

@@ -360,3 +360,59 @@ cd /opt/shuati && sudo bash deploy/scripts/baidu-push.sh
 | `SHUATI_BAIDU_PUSH_TOKEN` | 空 | 主动推送 token，只用于 `baidu-push.sh` |
 
 站点验证文件（`baidu_verify_*.html`）必须长期保留在站点根目录，删掉验证会失效。
+
+## 10. Google 收录（Search Console）
+
+Google 不卡备案，反而是眼下最快能拿到收录数据的渠道。抓取端已经就绪：
+
+- `robots.txt` 里**没有**屏蔽 Googlebot（屏蔽的是 `Google-Extended`、`Google-Agent`，
+  那是给 AI 用的，不影响搜索）
+- 公开页都是后端直出的完整 HTML，带 canonical、面包屑、JSON-LD
+- `sitemap.xml` 带 `lastmod`，Google 会据此安排重抓
+
+### 步骤
+
+1. 打开 [Google Search Console](https://search.google.com/search-console) → 添加资源 →
+   选「**网址前缀**」填 `https://www.seaunit.site`（不要用「网域」，那个只能用 DNS 验证）
+2. 选一种验证方式：
+
+   **方式一：HTML 标记（推荐，改环境变量即可）**
+
+   ```bash
+   sudo sh -c "echo \"SHUATI_GOOGLE_SITE_VERIFICATION='GSC给你的content值'\" >> /etc/shuati/env"
+   sudo systemctl restart shuati
+   curl -s https://www.seaunit.site/ | grep google-site-verification
+   ```
+
+   注意：首页 `/` 是后端直出的，所以 meta 由后端注入（`shuati.seo.google-site-verification`）。
+   只把 meta 写进 SPA 外壳是验不过的，Google 抓的是 `/` 那份 HTML。
+
+   **方式二：HTML 文件**
+
+   把 GSC 下载的 `googleXXXX.html` 提交到 `frontend/public/`（这样每次部署都在），
+   或临时放到服务器：
+
+   ```bash
+   sudo sh -c 'printf "google-site-verification: googleXXXX.html\n" > /opt/shuati/frontend/googleXXXX.html'
+   curl -s https://www.seaunit.site/googleXXXX.html
+   ```
+
+   **方式三：DNS TXT（不改代码，覆盖面最大）**
+
+   在 Cloudflare DNS 加一条 TXT：名称 `@`、内容 `google-site-verification=xxxx`，等几分钟生效。
+
+3. 验证通过后：左侧「站点地图」→ 填 `sitemap.xml` → 提交
+4. 「网址检查」里逐个提交重点页面并点「请求编入索引」：首页、`/bank/1`、
+   `/bank/1/unit/27`、以及几道题详情页。这个有每日额度，别浪费在重复页面上
+5. 之后盯三个地方：「索引 → 页面」（收录/未收录原因）、「增强功能 → 面包屑」、
+   「体验 → 核心网页指标」
+
+Google 收录一般几天到几周，比百度快得多。Bing 站长工具可以直接从 GSC 导入站点，不用重新验证。
+
+### 建议：把 `seaunit.site` 301 到 `www`
+
+现在 `seaunit.site` 和 `www.seaunit.site` 返回同一份内容（`canonical` 都指向 www）。
+`canonical` 已经能表达首选域，但 301 更干净。在 Cloudflare 里加一条 Redirect Rule 即可：
+
+**Rules → Redirect Rules → Create rule**，条件 `Hostname equals seaunit.site`，
+目标 `https://www.seaunit.site${uri.path}`，状态码 **301**。

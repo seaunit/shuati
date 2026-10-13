@@ -127,6 +127,8 @@ class SeoPageTest {
     assertThat(xml).contains("<loc>https://www.seaunit.site/bank/" + bankId + "</loc>");
     assertThat(xml)
         .contains("<loc>https://www.seaunit.site/bank/" + bankId + "/unit/" + unitId + "</loc>");
+    // lastmod 是 Google 真正会用的字段
+    assertThat(xml).contains("<lastmod>");
   }
 
   @Test

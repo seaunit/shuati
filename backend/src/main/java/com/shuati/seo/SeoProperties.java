@@ -16,7 +16,9 @@ public record SeoProperties(
     String description,
     String keywords,
     String contactEmail,
-    String baiduTongjiId) {
+    String baiduTongjiId,
+    /** Google Search Console 的 HTML 标记验证串；留空则不输出该 meta */
+    String googleSiteVerification) {
 
   /** 去掉结尾斜杠，拼路径时不会出现双斜杠 */
   public String base() {
