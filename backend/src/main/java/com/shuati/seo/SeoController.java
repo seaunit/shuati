@@ -135,15 +135,41 @@ public class SeoController {
     long total = units.stream().mapToLong(unit -> number(unit.get("question_count"))).sum();
 
     StringBuilder body = new StringBuilder();
-    body.append(crumb("/", "首页", bankName)).append("<h1>")
-        .append(SeoHtml.escape(bankName)).append(" · 题目与答案</h1>");
+    // 题库页的上级就是首页，别再套一层 crumb()，否则会出现「首页 / 首页 / 题库」
+    body.append("<div class=\"crumb\"><a href=\"/\">首页</a> / ")
+        .append(SeoHtml.escape(bankName)).append("</div>");
+    // H1 直接放「题库名（含答案与解析）」，跟用户搜「软考真题及答案」的意图对上
+    body.append("<h1>").append(SeoHtml.escape(bankName)).append("（含答案与解析）</h1>");
     String description = string(bank.get("description"));
-    if (!description.isBlank()) {
-      body.append("<p class=\"lead\">").append(SeoHtml.escape(description)).append("</p>");
-    }
-    body.append("<p class=\"meta\">共 ").append(units.size()).append(" 个单元，")
-        .append(total).append(" 道题</p>");
+    body.append("<p class=\"lead\">").append(SeoHtml.escape(bankName)).append("共 ")
+        .append(total).append(" 道题，按 ").append(units.size())
+        .append(" 个考点单元整理。每道题都给答案，选择题可以直接在下面核对，"
+            + "进入题库刷题会记录进度、自动收错题，简答题由 AI 按评分要点批改。")
+        .append(description.isBlank() ? "" : SeoHtml.escape(description))
+        .append("</p>");
+    // 主 CTA 放在正文前面：单元列表很长，按钮沉到底部就没人点了
+    body.append(cta(bankId, bankName));
 
+    body.append("""
+        <h2>这个页面能帮你做什么</h2>
+        <ul>
+          <li>按单元浏览全部题目与答案，不用先注册就能看</li>
+          <li>想动手做的时候点进去刷，答完立刻知道对错</li>
+          <li>错题自动进错题本，考前回看一遍比重新刷更省时间</li>
+          <li>简答题写完由 AI 按评分要点批改，指出答漏了哪几点</li>
+        </ul>
+        """);
+
+    body.append("""
+        <h2>怎么用真题备考</h2>
+        <ol>
+          <li><strong>先按单元过一遍</strong>：一个单元一个单元地刷，做完立刻对答案，把错题的解析看懂，比反复看视频效率高。</li>
+          <li><strong>把错题单独再过一遍</strong>：错题本里通常只有几十道，考前集中看这部分最划算。</li>
+          <li><strong>最后整套限时做</strong>：临近考试时按考试时长整套刷，练答题节奏，避免会做但做不完。</li>
+        </ol>
+        """);
+
+    List<String[]> faq = faqItems(bankName);
     body.append("<h2>单元</h2>");
     if (units.isEmpty()) {
       body.append("<p class=\"lead\">这个题库还没有单元。</p>");
@@ -158,8 +184,9 @@ public class SeoController {
       }
       body.append("</ul>");
     }
-    body.append("<a class=\"cta\" href=\"/app/practice?bankId=").append(bankId)
-        .append("\">开始刷这套题</a>");
+    body.append(cta(bankId, bankName));
+
+    body.append("<h2>常见问题</h2>").append(SeoHtml.faq(faq));
 
     List<Object> items = new ArrayList<>();
     items.add(Map.of("@type", "ListItem", "position", 1, "name", bankName,
@@ -168,12 +195,55 @@ public class SeoController {
         Map.of("name", "首页", "path", "/"),
         Map.of("name", bankName, "path", "/bank/" + bankId)))
         + jsonLd(Map.of("@context", "https://schema.org", "@type", "ItemList",
-            "itemListElement", items));
+            "itemListElement", items))
+        + jsonLd(Map.of(
+            "@context", "https://schema.org",
+            "@type", "FAQPage",
+            "mainEntity", faq.stream()
+                .map(item -> Map.of(
+                    "@type", "Question",
+                    "name", item[0],
+                    "acceptedAnswer", Map.of("@type", "Answer", "text", item[1])))
+                .toList()));
 
     return page(new SeoHtml.Page(
-        bankName + " - 题目与答案 - " + seo.siteName(),
-        bankName + "共 " + total + " 道题，覆盖 " + units.size() + " 个单元，题目含答案与解析。",
+        bankName + "（含答案与解析）- 在线刷题 - " + seo.siteName(),
+        bankName + "共 " + total + " 道题，覆盖 " + units.size()
+            + " 个考点单元，每题给答案与解析；选择题自动判分、简答题 AI 批改，可免费开始刷题。",
         "/bank/" + bankId, body.toString(), ld));
+  }
+
+  /** 常见问题：题库页的通用问法，答案都对着页面上真实有的能力写，不夸大 */
+  private String cta(long bankId, String bankName) {
+    return "<a class=\"cta\" href=\"/app/practice?bankId=" + bankId + "\">免费开始刷「"
+        + SeoHtml.escape(bankName) + "」</a>";
+  }
+
+  private List<String[]> faqItems(String bankName) {
+    return List.of(
+        new String[]{
+            bankName + "要注册才能看答案吗？",
+            "不用。公共题库的题目、选项和答案都可以直接浏览，不需要登录；"
+                + "想动手做题、记录进度和使用错题本，注册登录即可，注册是免费的。"},
+        new String[]{
+            "这里的答案和解析准确吗？",
+            "答案与解析来自公开真题整理与 AI 生成，用于帮助理解考点；"
+                + "如果发现某道题有疑问，可以通过页脚邮箱反馈，我们会核对修正。"},
+        new String[]{
+            "选择题和简答题分别怎么判分？",
+            "选择题在你作答后由本地逻辑立即判定，不消耗额度；"
+                + "简答题和伪代码题由 AI 按评分要点批改，指出命中了哪些要点、漏了哪些。"},
+        new String[]{
+            "手机上能刷题吗？",
+            "可以。刷题页面适配了手机浏览器，通勤路上也能刷；进度会跟着账号同步。"},
+        new String[]{
+            "只靠刷真题够吗？",
+            "刷题是查漏补缺，不能替代系统学习。建议先按考点过一遍教材或课程，"
+                + "再用真题检验；错题集中的单元回头补基础，效率最高。"},
+        new String[]{
+            "刷题会消耗点数吗？",
+            "浏览题目、做选择题、看已有解析都不消耗点数；只有调用 AI 生成解析或 AI 批改才会消耗，"
+                + "免费账号每月也会赠送一定额度。"});
   }
 
   /** 单元页：本单元全部题目（题干、选项、答案、解析），并链到单题详情页 */

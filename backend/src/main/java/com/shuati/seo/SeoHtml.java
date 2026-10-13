@@ -1,5 +1,6 @@
 package com.shuati.seo;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -130,6 +131,16 @@ public class SeoHtml {
     return "<div class=\"text\">" + escape(value) + "</div>";
   }
 
+  /** 常见问题区块：问题用 h3，答案用段落，跟页面结构呼应 */
+  public static String faq(List<String[]> items) {
+    StringBuilder html = new StringBuilder("<div class=\"faq\">");
+    for (String[] item : items) {
+      html.append("<h3>").append(escape(item[0])).append("</h3>");
+      html.append("<p>").append(escape(item[1])).append("</p>");
+    }
+    return html.append("</div>").toString();
+  }
+
   /**
    * AI 解析是 Markdown（粗体、无序列表、分段），但 SEO 页面不加载前端渲染器，
    * 直接按纯文本输出会露出 `**` 这种符号，所以这里做一个最小渲染：
@@ -225,6 +236,10 @@ public class SeoHtml {
       .text p{margin:6px 0}
       .text ul{margin:6px 0;padding-left:22px}
       .text li{margin:2px 0}
+      .faq h3{font-size:15px;margin:16px 0 4px}
+      .faq p{margin:0 0 12px;color:#17181a}
+      ol{padding-left:22px}
+      ol li{margin:6px 0}
       .opt{margin:2px 0 2px 2px;color:#17181a}
       .answer{background:#e9ebee;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:15px}
       .tag{display:inline-block;background:#e9ebee;border-radius:6px;padding:1px 8px;
