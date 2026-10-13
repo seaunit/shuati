@@ -111,5 +111,5 @@ shuati:
     baidu-tongji-id: ${SHUATI_BAIDU_TONGJI_ID:639e5d48916802a7505c8af19d7002e7}
     # Google Search Console 选「HTML 标记」验证时填这里，留空则不输出该 meta
     google-site-verification: ${SHUATI_GOOGLE_SITE_VERIFICATION:}
-    # GA4 衡量 ID（G-XXXXXXX），留空则不注入统计脚本
-    google-analytics-id: ${SHUATI_GA_MEASUREMENT_ID:}
+    # GA4 衡量 ID（G-XXXXXXX）：公开标识，内置为默认值；留空则不注入统计脚本
+    google-analytics-id: ${SHUATI_GA_MEASUREMENT_ID:G-S2H8MP4FYT}

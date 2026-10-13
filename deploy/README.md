@@ -417,7 +417,8 @@ Google 收录一般几天到几周，比百度快得多。Bing 站长工具可�
 ### 访问统计（GA4）
 
 自然搜索的落地页是后端直出的，所以 GA 也要装在这些页面上，否则 GA 里看不到搜索流量。
-衡量 ID 走环境变量，改完重启即可，不用重新部署：
+衡量 ID（`G-S2H8MP4FYT`）作为默认值内置在 `application.yml` 和 `frontend/index.html` 两处，
+部署即生效。要换账号时用环境变量覆盖，改完重启后端即可，不用重新构建前端：
 
 ```bash
 sudo sh -c "echo \"SHUATI_GA_MEASUREMENT_ID='G-XXXXXXXXXX'\" >> /etc/shuati/env"
@@ -425,8 +426,7 @@ sudo systemctl restart shuati
 curl -s https://www.seaunit.site/bank/1 | grep -c googletagmanager   # 应该是 1
 ```
 
-SPA 外壳（`/login`、`/app` 等）里的 GA 代码写在 `frontend/index.html`，改它需要重新构建前端。
-两处用的是同一个衡量 ID。
+两处用的是同一个衡量 ID；SPA 外壳那份改完需要重新构建前端。
 
 记得在「隐私政策」里保留第三方统计的披露（已有百度统计 + Google Analytics 的说明），
 接新统计工具时同步补一句。
