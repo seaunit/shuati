@@ -89,3 +89,21 @@ $env:SHUATI_DB_PASSWORD = '你的本机 MySQL 口令'
 3. `billing` 的 PL/pgSQL 函数（`consume_points`、`refund_points`、`apply_plan` 等）不迁移为存储过程，
    改由 Spring Boot 在事务中实现，保证 `SELECT ... FOR UPDATE` 的原子扣点。
 4. Supabase `storage.objects` 为 0，没有文件需要迁移。
+
+## 公共题库的 AI 解析
+
+公共题库（软考真题）导入时没有解析，题目详情页会显得单薄。补齐方式：
+
+```powershell
+$env:SHUATI_DB_PASSWORD = '你的本机 MySQL 口令'
+python db/etl/generate-explanations.py --limit 5   # 先试跑 5 道
+python db/etl/generate-explanations.py             # 全量，322 次调用约 ¥1
+```
+
+脚本会读本机 `shuati` 库里的公共题库、按 `backend/.../PromptTemplates.EXPLAIN_SYSTEM`
+同款提示词调模型，产出 `backend/src/main/resources/db/migration/V14__public_bank_explanations.sql`。
+迁移按**内容 MD5** 定位题目（不依赖自增 id），且只填空解析，已有解析的题目不动，
+部署时由 Flyway 自动执行。
+
+提示词改动要同步两处：`PromptTemplates` 和这个脚本，否则 App 里点「AI 解析」
+和这里生成的风格会不一致。

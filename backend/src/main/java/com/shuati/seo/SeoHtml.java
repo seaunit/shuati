@@ -109,6 +109,53 @@ public class SeoHtml {
     return "<div class=\"text\">" + escape(value) + "</div>";
   }
 
+  /**
+   * AI 解析是 Markdown（粗体、无序列表、分段），但 SEO 页面不加载前端渲染器，
+   * 直接按纯文本输出会露出 `**` 这种符号，所以这里做一个最小渲染：
+   * 先整体转义，再补上自己生成的标签，不会引入注入风险。
+   */
+  public static String markdown(String value) {
+    String source = escape(value == null ? "" : value.trim());
+    source = source.replaceAll("\\*\\*(.+?)\\*\\*", "<strong>$1</strong>");
+    StringBuilder html = new StringBuilder("<div class=\"text\">");
+    boolean inList = false;
+    for (String rawLine : source.split("\n")) {
+      String line = rawLine.strip();
+      if (line.startsWith("#")) {
+        // 模型有时会用 ## 小标题，原样输出会露出井号
+        if (inList) {
+          html.append("</ul>");
+          inList = false;
+        }
+        String heading = line.replaceFirst("^#+\\s*", "");
+        if (!heading.isEmpty()) {
+          html.append("<h4>").append(heading).append("</h4>");
+        }
+        continue;
+      }
+      boolean bullet = line.startsWith("- ") || line.startsWith("* ");
+      if (bullet) {
+        if (!inList) {
+          html.append("<ul>");
+          inList = true;
+        }
+        html.append("<li>").append(line.substring(2).strip()).append("</li>");
+        continue;
+      }
+      if (inList) {
+        html.append("</ul>");
+        inList = false;
+      }
+      if (!line.isEmpty()) {
+        html.append("<p>").append(line).append("</p>");
+      }
+    }
+    if (inList) {
+      html.append("</ul>");
+    }
+    return html.append("</div>").toString();
+  }
+
   public static String escape(String value) {
     if (value == null || value.isEmpty()) {
       return "";
@@ -154,6 +201,9 @@ public class SeoHtml {
       .list li:last-child{border-bottom:none}
       .meta{color:#6b7280;font-size:13px;white-space:nowrap}
       .text{white-space:pre-wrap;word-break:break-word}
+      .text p{margin:6px 0}
+      .text ul{margin:6px 0;padding-left:22px}
+      .text li{margin:2px 0}
       .opt{margin:2px 0 2px 2px;color:#17181a}
       .answer{background:#e9ebee;border-radius:8px;padding:10px 12px;margin:8px 0;font-size:15px}
       .tag{display:inline-block;background:#e9ebee;border-radius:6px;padding:1px 8px;

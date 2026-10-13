@@ -385,7 +385,7 @@ public class SeoController {
         .append(SeoHtml.escape(string(question.get("answer")))).append("</div>");
     String explanation = string(question.get("explanation"));
     if (!explanation.isBlank()) {
-      card.append("<h4>解析</h4>").append(SeoHtml.text(explanation));
+      card.append("<h4>解析</h4>").append(SeoHtml.markdown(explanation));
     }
     card.append("</div>");
     return card.toString();
