@@ -12,7 +12,10 @@ import org.springframework.test.context.ActiveProfiles;
  * 首页是后端直出的，所以 meta 必须出现在这里，只写在 SPA 外壳里 Google 验不过。
  */
 @ActiveProfiles("test")
-@SpringBootTest(properties = "shuati.seo.google-site-verification=google1234567890abcdef")
+@SpringBootTest(properties = {
+    "shuati.seo.google-site-verification=google1234567890abcdef",
+    "shuati.seo.google-analytics-id=G-TESTID1234",
+})
 class SeoGoogleVerificationTest {
 
   @Autowired SeoController controller;
@@ -25,5 +28,13 @@ class SeoGoogleVerificationTest {
 
     // 深一层的页面也带上，方便按任意 URL 前缀建资源
     assertThat(controller.sitemap().getBody()).isNotBlank();
+  }
+
+  @Test
+  void emitsGoogleAnalyticsWhenConfigured() {
+    String home = controller.home().getBody();
+    assertThat(home)
+        .contains("googletagmanager.com/gtag/js?id=G-TESTID1234")
+        .contains("gtag('config', 'G-TESTID1234')");
   }
 }

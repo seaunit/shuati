@@ -414,6 +414,23 @@ Google 不卡备案，反而是眼下最快能拿到收录数据的渠道。抓�
 
 Google 收录一般几天到几周，比百度快得多。Bing 站长工具可以直接从 GSC 导入站点，不用重新验证。
 
+### 访问统计（GA4）
+
+自然搜索的落地页是后端直出的，所以 GA 也要装在这些页面上，否则 GA 里看不到搜索流量。
+衡量 ID 走环境变量，改完重启即可，不用重新部署：
+
+```bash
+sudo sh -c "echo \"SHUATI_GA_MEASUREMENT_ID='G-XXXXXXXXXX'\" >> /etc/shuati/env"
+sudo systemctl restart shuati
+curl -s https://www.seaunit.site/bank/1 | grep -c googletagmanager   # 应该是 1
+```
+
+SPA 外壳（`/login`、`/app` 等）里的 GA 代码写在 `frontend/index.html`，改它需要重新构建前端。
+两处用的是同一个衡量 ID。
+
+记得在「隐私政策」里保留第三方统计的披露（已有百度统计 + Google Analytics 的说明），
+接新统计工具时同步补一句。
+
 ### 让 Cloudflare 缓存直出页面
 
 实测（上海移动 → Cloudflare 伦敦节点，`curl -w`）：

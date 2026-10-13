@@ -62,6 +62,7 @@ public class SeoHtml {
       html.append(page.extraHead()).append('\n');
     }
     html.append(tongji()).append('\n');
+    html.append(googleAnalytics()).append('\n');
     html.append("</head>\n<body>\n");
 
     html.append("<header class=\"top\">\n");
@@ -102,6 +103,26 @@ public class SeoHtml {
           s.parentNode.insertBefore(hm, s);
         })();
         </script>""".formatted(escape(id.trim()));
+  }
+
+  /**
+   * GA4：自然搜索的落地页大多是这些直出页面，不装在这里 GA 就看不到搜索流量。
+   * 衡量 ID 是公开标识，写进页面没有安全问题。
+   */
+  private String googleAnalytics() {
+    String id = seo.googleAnalyticsId();
+    if (id == null || id.isBlank()) {
+      return "";
+    }
+    String safeId = escape(id.trim());
+    return """
+        <script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script>
+        <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '%s');
+        </script>""".formatted(safeId, safeId);
   }
 
   /** 正文里的换行用 pre-wrap 呈现，Markdown 代码块也能保持原样，不做额外的解析 */
