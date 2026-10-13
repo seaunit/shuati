@@ -57,6 +57,13 @@ class SeoPageTest {
     assertThat(body).contains("href=\"/bank/" + bankId + "/unit/" + unitId + "\"");
     assertThat(body).contains("canonical\" href=\"https://www.seaunit.site/bank/" + bankId + "\"");
     assertThat(body).contains("\"BreadcrumbList\"");
+
+    // 题库页是头部词的承接页：要有 H1 主题、备考正文、FAQ 与结构化标注、明确的 CTA
+    assertThat(body).contains("<h1>").contains("（含答案与解析）</h1>");
+    assertThat(body).contains("<h2>怎么用真题备考</h2>");
+    assertThat(body).contains("<h2>常见问题</h2>").contains("class=\"faq\"");
+    assertThat(body).contains("\"FAQPage\"").contains("\"acceptedAnswer\"");
+    assertThat(body).contains("免费开始刷");
   }
 
   @Test
