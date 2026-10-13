@@ -47,9 +47,30 @@ if [ "$COUNT" -eq 0 ]; then
 fi
 echo "==> 共 ${COUNT} 条 URL，推送给百度"
 
-RESPONSE="$(curl -fsS --max-time 30 \
-  -H 'Content-Type: text/plain' \
-  --data-binary "@${URLS}" \
-  "http://data.zz.baidu.com/urls?site=${SITE}&token=${TOKEN}")"
+# 刻意不用 -f：百度把错误原因放在返回体里（比如 over quota / site is not valid），
+# 加了 -f 只会看到 "error: 400"，排查不了问题。
+push() {
+  local site="$1"
+  curl -sS --max-time 30 -w '\n[http %{http_code}]' \
+    -H 'Content-Type: text/plain' \
+    --data-binary "@${URLS}" \
+    "http://data.zz.baidu.com/urls?site=${site}&token=${TOKEN}"
+}
 
+echo "==> 推送站点：${SITE}"
+RESPONSE="$(push "$SITE")"
 echo "==> 百度返回：${RESPONSE}"
+
+case "$RESPONSE" in
+  *'"success"'*)
+    exit 0
+    ;;
+esac
+
+# 百度文档里 site 参数写的是「比如 www.example.com」，后台生成的地址却带协议头，
+# 两种形态都试一次，省得排查到底是哪种。
+HOST="${SITE#*://}"
+if [ "$HOST" != "$SITE" ]; then
+  echo "==> 上面没推成功，改用不带协议的站点名再试一次：${HOST}"
+  echo "==> 百度返回：$(push "$HOST")"
+fi
