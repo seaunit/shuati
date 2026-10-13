@@ -301,12 +301,16 @@ sudo systemctl reload nginx
 | --- | --- | --- |
 | `/` | 后端 | 落地页：产品说明 + 公共题库列表 |
 | `/bank/{id}` | 后端 | 公共题库页：单元列表 |
-| `/bank/{id}/unit/{uid}` | 后端 | 单元页：题目、选项、答案、解析（收录主力） |
-| `/sitemap.xml` | 后端 | 首页 + 合规页 + 所有公共题库与单元 |
+| `/bank/{id}/unit/{uid}` | 后端 | 单元页：本单元全部题目（题干、选项、答案、解析） |
+| `/bank/{id}/question/{qid}` | 后端 | 单题详情页：标题就是题干，吃长尾搜索 |
+| `/sitemap.xml` | 后端 | 首页 + 合规页 + 公共题库、单元与题目 |
 | `/robots.txt` | 前端静态 | 屏蔽 `/api`、`/app`、`/login` 等 |
 | `/app/**`、`/login` | 前端 SPA | 应用本体，不参与收录 |
 
 只暴露 `owner_id` 为空的公共题库，用户自己建的题库不会出现在收录里。
+每页都带 canonical、面包屑、上下页内链，以及 schema.org 结构化数据
+（首页 WebSite/Organization、列表页 ItemList、单题 Question/Answer、全站 BreadcrumbList）。
+按当前数据量，sitemap 约 480 条 URL（1 题库 + 158 单元 + 322 题）。
 
 ### 上线步骤
 

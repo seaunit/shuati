@@ -38,6 +38,8 @@ class SeoPageTest {
     assertThat(body).contains("rel=\"canonical\"");
     // 百度统计脚本要出现在 SEO 页面里，否则搜索流量统计不到
     assertThat(body).contains("hm.baidu.com/hm.js?639e5d48916802a7505c8af19d7002e7");
+    // 结构化数据：首页给 WebSite + Organization
+    assertThat(body).contains("application/ld+json").contains("\"WebSite\"");
     assertThat(body).contains("href=\"/bank/" + bankId + "\"");
     assertThat(body).contains("1 个单元");
   }
@@ -52,29 +54,55 @@ class SeoPageTest {
     assertThat(body).contains("第一章 计算机组成");
     assertThat(body).contains("href=\"/bank/" + bankId + "/unit/" + unitId + "\"");
     assertThat(body).contains("canonical\" href=\"https://www.seaunit.site/bank/" + bankId + "\"");
+    assertThat(body).contains("\"BreadcrumbList\"");
   }
 
   @Test
   void unitPageShowsQuestionsWithAnswers() {
     long bankId = createBank(null, "软考真题" + UUID.randomUUID());
     long unitId = createUnit(bankId, "第一章");
-    createQuestion(unitId, "在计算机中，指令寄存器的位数取决于什么？");
+    long questionId = createQuestion(unitId, "在计算机中，指令寄存器的位数取决于什么？");
 
     String body = controller.unit(bankId, unitId).getBody();
 
     assertThat(body).contains("在计算机中，指令寄存器的位数取决于什么？");
     assertThat(body).contains("答案：A");
     assertThat(body).contains("加快查询");
+    // 单元页把每道题链到单题详情页
+    assertThat(body).contains("href=\"/bank/" + bankId + "/question/" + questionId + "\"");
   }
 
   @Test
-  void privateBankIsNotExposed() {
+  void questionPageShowsQuestionAnswerAndSiblings() {
+    long bankId = createBank(null, "软考真题" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章");
+    long first = createQuestion(unitId, "第一题的题干内容？");
+    long second = createQuestion(unitId, "第二题的题干内容？");
+
+    String body = controller.question(bankId, first).getBody();
+
+    assertThat(body).contains("第一题的题干内容？");
+    assertThat(body).contains("答案：A");
+    assertThat(body).contains("加快查询");
+    // 结构化数据：单题给 Question/Answer + 面包屑
+    assertThat(body).contains("\"Question\"").contains("acceptedAnswer");
+    assertThat(body).contains("\"BreadcrumbList\"");
+    // 同单元其他题目作为内链
+    assertThat(body).contains("href=\"/bank/" + bankId + "/question/" + second + "\"");
+    assertThat(body).contains("下一题");
+  }
+
+  @Test
+  void privateBankAndItsQuestionsAreNotExposed() {
     String ownerId = createUser();
     long bankId = createBank(ownerId, "我的私有题库" + UUID.randomUUID());
     long unitId = createUnit(bankId, "第一章");
+    long questionId = createQuestion(unitId, "私有题库里的题");
 
     assertThat(controller.bank(bankId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(controller.unit(bankId, unitId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(controller.question(bankId, questionId).getStatusCode())
+        .isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test
@@ -108,6 +136,17 @@ class SeoPageTest {
     assertThat(controller.sitemap().getBody()).doesNotContain("/bank/" + bankId + "<");
   }
 
+  @Test
+  void sitemapIncludesQuestionPagesForPublicBanks() {
+    long bankId = createBank(null, "软考真题" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章");
+    long questionId = createQuestion(unitId, "在计算机中，指令寄存器的位数取决于什么？");
+
+    assertThat(controller.sitemap().getBody())
+        .contains("<loc>https://www.seaunit.site/bank/" + bankId + "/question/" + questionId
+            + "</loc>");
+  }
+
   private String createUser() {
     String id = UUID.randomUUID().toString();
     jdbc.update("""
@@ -128,7 +167,7 @@ class SeoPageTest {
         "select id from unit where bank_id = ? and name = ?", Long.class, bankId, name);
   }
 
-  private void createQuestion(long unitId, String content) {
+  private long createQuestion(long unitId, String content) {
     jdbc.update("""
         insert into question
           (unit_id, type, content, options, answer, key_points, difficulty, status)
@@ -136,5 +175,7 @@ class SeoPageTest {
                 cast('[{"key":"A","text":"加快查询"},{"key":"B","text":"加快写入"}]' as json),
                 'A', cast('[]' as json), 'MEDIUM', 'ON')
         """, unitId, content);
+    return jdbc.queryForObject(
+        "select id from question where unit_id = ? and content = ?", Long.class, unitId, content);
   }
 }

@@ -1,8 +1,9 @@
 package com.shuati.seo;
 
 import com.shuati.common.Json;
-import java.util.List;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,10 +14,20 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 面向搜索引擎的公开页面（百度蜘蛛不执行 JS，所以这些页面直接吐 HTML）。
+ * 面向搜索引擎的公开页面（百度蜘蛛不执行 JS，所以这些页面直接吐完整 HTML）。
+ *
+ * <p>层级是「首页 → 题库 → 单元 → 题目」四层，每层都只列下一层的入口，形成一条
+ * 蜘蛛能顺着爬、用户也能顺着点的路径：
+ *
+ * <ul>
+ *   <li>{@code /} 落地页：产品说明 + 公共题库
+ *   <li>{@code /bank/{id}} 题库页：单元列表
+ *   <li>{@code /bank/{id}/unit/{uid}} 单元页：本单元全部题目（题干、选项、答案、解析）
+ *   <li>{@code /bank/{id}/question/{qid}} 题目页：单题聚焦页，标题就是题干，吃长尾搜索
+ * </ul>
  *
  * <p>只暴露公共题库（owner_id 为空）：用户自己建的题库是私有的，不参与收录。
- * 页面里除了正文，还给出 canonical 和指向下一层的链接，方便蜘蛛顺着爬。
+ * 每页都带 canonical、面包屑和结构化数据。
  */
 @RestController
 @RequiredArgsConstructor
@@ -39,7 +50,7 @@ public class SeoController {
         select b.id, b.name, b.description,
                (select count(*) from unit u where u.bank_id = b.id) as unit_count,
                (select count(*) from question q join unit u2 on u2.id = q.unit_id
-                 where u2.bank_id = b.id) as question_count
+                 where u2.bank_id = b.id and q.status = 'ON') as question_count
           from bank b
          where b.owner_id is null
          order by b.id asc
@@ -68,15 +79,28 @@ public class SeoController {
         long bankId = number(bank.get("id"));
         body.append("<li><a href=\"/bank/").append(bankId).append("\">")
             .append(SeoHtml.escape(string(bank.get("name")))).append("</a>")
-            .append("<span class=\"meta\">").append(number(bank.get("unit_count"))).append(" 个单元 · ")
-            .append(number(bank.get("question_count"))).append(" 道题</span></li>");
+            .append("<span class=\"meta\">").append(number(bank.get("unit_count")))
+            .append(" 个单元 · ").append(number(bank.get("question_count")))
+            .append(" 道题</span></li>");
       }
       body.append("</ul>");
     }
-
     body.append("<a class=\"cta\" href=\"/app\">进入题库开始刷题</a>");
+
+    String ld = jsonLd(Map.of(
+        "@context", "https://schema.org",
+        "@graph", List.of(
+            Map.of("@type", "WebSite",
+                "name", seo.siteName(),
+                "url", seo.base(),
+                "inLanguage", "zh-CN"),
+            Map.of("@type", "Organization",
+                "name", seo.siteName(),
+                "url", seo.base(),
+                "email", seo.contactEmail()))));
+
     return page(new SeoHtml.Page(
-        seo.siteName() + " - " + seo.tagline(), seo.description(), "/", body.toString()));
+        seo.siteName() + " - " + seo.tagline(), seo.description(), "/", body.toString(), ld));
   }
 
   /** 题库页：列出单元，链到每个单元的题目页 */
@@ -93,7 +117,8 @@ public class SeoController {
 
     List<Map<String, Object>> units = jdbc.queryForList("""
         select u.id, u.name,
-               (select count(*) from question q where q.unit_id = u.id) as question_count
+               (select count(*) from question q where q.unit_id = u.id and q.status = 'ON')
+                 as question_count
           from unit u
          where u.bank_id = ?
          order by u.sort asc, u.id asc
@@ -102,9 +127,8 @@ public class SeoController {
     long total = units.stream().mapToLong(unit -> number(unit.get("question_count"))).sum();
 
     StringBuilder body = new StringBuilder();
-    body.append("<div class=\"crumb\"><a href=\"/\">首页</a> / ")
-        .append(SeoHtml.escape(bankName)).append("</div>");
-    body.append("<h1>").append(SeoHtml.escape(bankName)).append(" · 题目与答案</h1>");
+    body.append(crumb("/", "首页", bankName)).append("<h1>")
+        .append(SeoHtml.escape(bankName)).append(" · 题目与答案</h1>");
     String description = string(bank.get("description"));
     if (!description.isBlank()) {
       body.append("<p class=\"lead\">").append(SeoHtml.escape(description)).append("</p>");
@@ -129,18 +153,26 @@ public class SeoController {
     body.append("<a class=\"cta\" href=\"/app/practice?bankId=").append(bankId)
         .append("\">开始刷这套题</a>");
 
+    List<Object> items = new ArrayList<>();
+    items.add(Map.of("@type", "ListItem", "position", 1, "name", bankName,
+        "item", seo.absolute("/bank/" + bankId)));
+    String ld = breadcrumbLd(List.of(
+        Map.of("name", "首页", "path", "/"),
+        Map.of("name", bankName, "path", "/bank/" + bankId)))
+        + jsonLd(Map.of("@context", "https://schema.org", "@type", "ItemList",
+            "itemListElement", items));
+
     return page(new SeoHtml.Page(
         bankName + " - 题目与答案 - " + seo.siteName(),
-        bankName + "共 " + total + " 道题，覆盖 " + units.size() + " 个单元，含答案与解析。",
-        "/bank/" + bankId,
-        body.toString()));
+        bankName + "共 " + total + " 道题，覆盖 " + units.size() + " 个单元，题目含答案与解析。",
+        "/bank/" + bankId, body.toString(), ld));
   }
 
-  /** 单元页：把单元里的题目、选项、答案、解析整段输出，这是收录的主力页面 */
+  /** 单元页：本单元全部题目（题干、选项、答案、解析），并链到单题详情页 */
   @GetMapping(value = "/bank/{bankId}/unit/{unitId}", produces = HTML)
   public ResponseEntity<String> unit(@PathVariable long bankId, @PathVariable long unitId) {
     List<Map<String, Object>> units = jdbc.queryForList("""
-        select u.id, u.name, b.name as bank_name
+        select u.id, u.name, u.sort, b.name as bank_name
           from unit u join bank b on b.id = u.bank_id
          where u.id = ? and u.bank_id = ? and b.owner_id is null
         """, unitId, bankId);
@@ -151,67 +183,129 @@ public class SeoController {
     String unitName = string(unit.get("name"));
     String bankName = string(unit.get("bank_name"));
 
-    List<Map<String, Object>> questions = jdbc.queryForList("""
-        select id, type, content, options, answer, explanation, difficulty
-          from question
-         where unit_id = ? and status = 'ON'
-         order by id asc
-         limit %d
-        """.formatted(MAX_QUESTIONS_PER_PAGE), unitId);
+    List<Map<String, Object>> questions = questionsOfUnit(unitId);
 
     StringBuilder body = new StringBuilder();
-    body.append("<div class=\"crumb\"><a href=\"/\">首页</a> / <a href=\"/bank/").append(bankId)
-        .append("\">").append(SeoHtml.escape(bankName)).append("</a> / ")
-        .append(SeoHtml.escape(unitName)).append("</div>");
-    body.append("<h1>").append(SeoHtml.escape(unitName)).append(" - ")
+    body.append(crumb("/bank/" + bankId, bankName, unitName))
+        .append("<h1>").append(SeoHtml.escape(unitName)).append(" - ")
         .append(SeoHtml.escape(bankName)).append("题目与答案</h1>");
     body.append("<p class=\"lead\">本单元共 ").append(questions.size())
-        .append(" 道题，每题都给答案，部分带解析。</p>");
+        .append(" 道题，每题给答案，部分带解析。</p>");
 
     if (questions.isEmpty()) {
       body.append("<p class=\"lead\">这个单元还没有上线的题目。</p>");
     }
     int index = 1;
     for (Map<String, Object> question : questions) {
-      String type = string(question.get("type"));
-      body.append("<div class=\"card\">");
-      body.append("<h3>").append(index++).append(". ")
-          .append(typeLabel(type)).append("</h3>");
-      body.append(SeoHtml.text(string(question.get("content"))));
-
-      List<?> options = asList(question.get("options"));
-      if (!options.isEmpty()) {
-        body.append("<div>");
-        for (Object option : options) {
-          if (option instanceof Map<?, ?> map) {
-            body.append("<p class=\"opt\">")
-                .append(SeoHtml.escape(string(map.get("key")))).append(". ")
-                .append(SeoHtml.escape(string(map.get("text")))).append("</p>");
-          }
-        }
-        body.append("</div>");
-      }
-
-      body.append("<div class=\"answer\">答案：")
-          .append(SeoHtml.escape(string(question.get("answer")))).append("</div>");
-      String explanation = string(question.get("explanation"));
-      if (!explanation.isBlank()) {
-        body.append("<h3>解析</h3>").append(SeoHtml.text(explanation));
-      }
-      body.append("</div>");
+      body.append(questionCard(bankId, question, index++));
     }
-
+    body.append(siblingUnits(bankId, number(unit.get("sort")), unitId));
     body.append("<a class=\"cta\" href=\"/app/practice?unitId=").append(unitId)
         .append("\">开始刷这个单元</a>");
 
+    String ld = breadcrumbLd(List.of(
+        Map.of("name", "首页", "path", "/"),
+        Map.of("name", bankName, "path", "/bank/" + bankId),
+        Map.of("name", unitName, "path", "/bank/" + bankId + "/unit/" + unitId)));
+
     return page(new SeoHtml.Page(
         unitName + " - " + bankName + "题目与答案 - " + seo.siteName(),
-        bankName + unitName + "共 " + questions.size() + " 道题，含答案与解析，可在拾题在线刷题并记录错题。",
-        "/bank/" + bankId + "/unit/" + unitId,
-        body.toString()));
+        bankName + unitName + "共 " + questions.size()
+            + " 道题，含答案与解析，可在拾题在线刷题并记录错题。",
+        "/bank/" + bankId + "/unit/" + unitId, body.toString(), ld));
   }
 
-  /** sitemap：首页 + 合规页 + 所有公共题库与单元 */
+  /** 题目详情页：一道题一个页面，标题就是题干，承接长尾搜索 */
+  @GetMapping(value = "/bank/{bankId}/question/{questionId}", produces = HTML)
+  public ResponseEntity<String> question(
+      @PathVariable long bankId, @PathVariable long questionId) {
+    List<Map<String, Object>> rows = jdbc.queryForList("""
+        select q.id, q.unit_id, q.type, q.content, q.options, q.answer, q.explanation, q.difficulty,
+               u.name as unit_name, b.name as bank_name
+          from question q
+          join unit u on u.id = q.unit_id
+          join bank b on b.id = u.bank_id
+         where q.id = ? and u.bank_id = ? and b.owner_id is null and q.status = 'ON'
+        """, questionId, bankId);
+    if (rows.isEmpty()) {
+      return notFound();
+    }
+    Map<String, Object> question = rows.get(0);
+    long unitId = number(question.get("unit_id"));
+    String unitName = string(question.get("unit_name"));
+    String bankName = string(question.get("bank_name"));
+
+    String answer = string(question.get("answer"));
+    String content = string(question.get("content"));
+    String typeLabel = typeLabel(string(question.get("type")));
+
+    List<Map<String, Object>> siblings = questionsOfUnit(unitId);
+    int index = -1;
+    for (int i = 0; i < siblings.size(); i++) {
+      if (number(siblings.get(i).get("id")) == questionId) {
+        index = i;
+        break;
+      }
+    }
+
+    StringBuilder body = new StringBuilder();
+    body.append("<div class=\"crumb\"><a href=\"/\">首页</a> / <a href=\"/bank/")
+        .append(bankId).append("\">").append(SeoHtml.escape(bankName)).append("</a> / <a href=\"")
+        .append("/bank/").append(bankId).append("/unit/").append(unitId).append("\">")
+        .append(SeoHtml.escape(unitName)).append("</a> / 第 ").append(index + 1)
+        .append(" 题</div>");
+    body.append("<h1>").append(SeoHtml.escape(summary(content, 60))).append("</h1>");
+    body.append(questionCard(bankId, question, 0));
+
+    if (index > 0) {
+      Map<String, Object> prev = siblings.get(index - 1);
+      body.append("<a class=\"cta ghost\" href=\"/bank/").append(bankId).append("/question/")
+          .append(number(prev.get("id"))).append("\">← 上一题</a> ");
+    }
+    if (index >= 0 && index < siblings.size() - 1) {
+      Map<String, Object> next = siblings.get(index + 1);
+      body.append("<a class=\"cta ghost\" href=\"/bank/").append(bankId).append("/question/")
+          .append(number(next.get("id"))).append("\">下一题 →</a>");
+    }
+
+    // 同单元的其他题目：给蜘蛛一条继续爬、给用户一条继续刷的路
+    body.append("<h2>本单元其他题目</h2>");
+    body.append("<ul class=\"list\">");
+    for (Map<String, Object> sibling : siblings) {
+      long siblingId = number(sibling.get("id"));
+      if (siblingId == questionId) {
+        continue;
+      }
+      body.append("<li><a href=\"/bank/").append(bankId).append("/question/").append(siblingId)
+          .append("\">").append(SeoHtml.escape(summary(string(sibling.get("content")), 48)))
+          .append("</a><span class=\"meta\">")
+          .append(typeLabel(string(sibling.get("type")))).append("</span></li>");
+    }
+    body.append("</ul>");
+    body.append("<a class=\"cta\" href=\"/app/practice?unitId=").append(unitId)
+        .append("\">在拾题里做这套题</a>");
+
+    String ld = breadcrumbLd(List.of(
+        Map.of("name", "首页", "path", "/"),
+        Map.of("name", bankName, "path", "/bank/" + bankId),
+        Map.of("name", unitName, "path", "/bank/" + bankId + "/unit/" + unitId),
+        Map.of("name", summary(content, 24), "path",
+            "/bank/" + bankId + "/question/" + questionId)))
+        + jsonLd(Map.of(
+            "@context", "https://schema.org",
+            "@type", "Question",
+            "name", content,
+            "text", content,
+            "acceptedAnswer", Map.of("@type", "Answer", "text", answer),
+            "isPartOf", Map.of("@type", "Quiz", "name", unitName)));
+
+    return page(new SeoHtml.Page(
+        summary(content, 30) + " 答案与解析 - " + seo.siteName(),
+        typeLabel + "：" + summary(content, 60) + "。正确答案：" + summary(answer, 40),
+        "/bank/" + bankId + "/question/" + questionId, body.toString(), ld));
+  }
+
+  /** sitemap：首页 + 合规页 + 所有公共题库、单元与题目 */
   @GetMapping(value = "/sitemap.xml", produces = XML)
   public ResponseEntity<String> sitemap() {
     StringBuilder xml = new StringBuilder();
@@ -221,25 +315,143 @@ public class SeoController {
     xml.append(entry("/terms", "0.3", "monthly"));
     xml.append(entry("/privacy", "0.3", "monthly"));
 
-    List<Map<String, Object>> rows = jdbc.queryForList("""
-        select b.id as bank_id, u.id as unit_id
-          from bank b left join unit u on u.bank_id = b.id
+    LinkedHashSet<String> paths = new LinkedHashSet<>();
+    for (Map<String, Object> row : jdbc.queryForList(
+        "select id from bank where owner_id is null order by id asc")) {
+      paths.add("/bank/" + number(row.get("id")));
+    }
+    for (Map<String, Object> row : jdbc.queryForList("""
+        select u.id as unit_id, b.id as bank_id
+          from unit u join bank b on b.id = u.bank_id
          where b.owner_id is null
          order by b.id asc, u.sort asc, u.id asc
+        """)) {
+      paths.add("/bank/" + number(row.get("bank_id")) + "/unit/" + number(row.get("unit_id")));
+    }
+    for (Map<String, Object> row : jdbc.queryForList("""
+        select q.id as question_id, b.id as bank_id
+          from question q join unit u on u.id = q.unit_id join bank b on b.id = u.bank_id
+         where b.owner_id is null and q.status = 'ON'
+         order by b.id asc, u.sort asc, q.id asc
          limit %d
-        """.formatted(SITEMAP_LIMIT));
-    LinkedHashSet<Long> banks = new LinkedHashSet<>();
-    for (Map<String, Object> row : rows) {
-      long bankId = number(row.get("bank_id"));
-      if (banks.add(bankId)) {
-        xml.append(entry("/bank/" + bankId, "0.8", "weekly"));
-      }
-      if (row.get("unit_id") != null) {
-        xml.append(entry("/bank/" + bankId + "/unit/" + number(row.get("unit_id")), "0.7", "weekly"));
-      }
+        """.formatted(SITEMAP_LIMIT))) {
+      paths.add("/bank/" + number(row.get("bank_id")) + "/question/"
+          + number(row.get("question_id")));
+    }
+    for (String path : paths) {
+      xml.append(entry(path, path.contains("/question/") ? "0.6" : "0.8", "weekly"));
     }
     xml.append("</urlset>\n");
     return ResponseEntity.ok().header("Content-Type", XML).body(xml.toString());
+  }
+
+  /** 一道题的卡片；index 为 0 时不显示题号（详情页用） */
+  private String questionCard(long bankId, Map<String, Object> question, int index) {
+    String type = string(question.get("type"));
+    StringBuilder card = new StringBuilder();
+    card.append("<div class=\"card\">");
+    card.append("<h3>");
+    if (index > 0) {
+      card.append("<a href=\"/bank/").append(bankId).append("/question/")
+          .append(number(question.get("id"))).append("\">").append(index).append(". ")
+          .append(typeLabel(type)).append("</a>");
+    } else {
+      card.append(typeLabel(type));
+    }
+    card.append("</h3>");
+    card.append(SeoHtml.text(string(question.get("content"))));
+
+    List<?> options = asList(question.get("options"));
+    if (!options.isEmpty()) {
+      card.append("<div>");
+      for (Object option : options) {
+        if (option instanceof Map<?, ?> map) {
+          card.append("<p class=\"opt\">").append(SeoHtml.escape(string(map.get("key"))))
+              .append(". ").append(SeoHtml.escape(string(map.get("text")))).append("</p>");
+        }
+      }
+      card.append("</div>");
+    }
+
+    card.append("<div class=\"answer\">答案：")
+        .append(SeoHtml.escape(string(question.get("answer")))).append("</div>");
+    String explanation = string(question.get("explanation"));
+    if (!explanation.isBlank()) {
+      card.append("<h4>解析</h4>").append(SeoHtml.text(explanation));
+    }
+    card.append("</div>");
+    return card.toString();
+  }
+
+  /** 上一单元 / 下一单元 / 返回题库：单元之间的内链，方便蜘蛛遍历整站 */
+  private String siblingUnits(long bankId, long sort, long unitId) {
+    Map<String, Object> prev = one("""
+        select id, name from unit
+         where bank_id = ? and (sort < ? or (sort = ? and id < ?))
+         order by sort desc, id desc limit 1
+        """, bankId, sort, sort, unitId);
+    Map<String, Object> next = one("""
+        select id, name from unit
+         where bank_id = ? and (sort > ? or (sort = ? and id > ?))
+         order by sort asc, id asc limit 1
+        """, bankId, sort, sort, unitId);
+    StringBuilder nav = new StringBuilder("<nav class=\"sibling\">");
+    if (prev != null) {
+      nav.append("<a href=\"/bank/").append(bankId).append("/unit/")
+          .append(number(prev.get("id"))).append("\">← ")
+          .append(SeoHtml.escape(summary(string(prev.get("name")), 20))).append("</a>");
+    }
+    nav.append("<a href=\"/bank/").append(bankId).append("\">全部单元</a>");
+    if (next != null) {
+      nav.append("<a href=\"/bank/").append(bankId).append("/unit/")
+          .append(number(next.get("id"))).append("\">")
+          .append(SeoHtml.escape(summary(string(next.get("name")), 20))).append(" →</a>");
+    }
+    nav.append("</nav>");
+    return nav.toString();
+  }
+
+  private List<Map<String, Object>> questionsOfUnit(long unitId) {
+    return jdbc.queryForList("""
+        select id, type, content, options, answer, explanation, difficulty
+          from question
+         where unit_id = ? and status = 'ON'
+         order by id asc
+         limit %d
+        """.formatted(MAX_QUESTIONS_PER_PAGE), unitId);
+  }
+
+  /** 可见的面包屑：tail 是「上层名称 / 当前名称」交替的字符串 */
+  private String crumb(String parentPath, String parentName, String currentName) {
+    return "<div class=\"crumb\"><a href=\"/\">首页</a> / <a href=\"" + parentPath + "\">"
+        + SeoHtml.escape(parentName) + "</a> / " + SeoHtml.escape(currentName) + "</div>";
+  }
+
+  private String breadcrumbLd(List<Map<String, String>> trail) {
+    List<Object> items = new ArrayList<>();
+    int position = 1;
+    for (Map<String, String> node : trail) {
+      items.add(Map.of(
+          "@type", "ListItem",
+          "position", position++,
+          "name", node.get("name"),
+          "item", seo.absolute(node.get("path"))));
+    }
+    return jsonLd(Map.of(
+        "@context", "https://schema.org",
+        "@type", "BreadcrumbList",
+        "itemListElement", items));
+  }
+
+  /** 结构化数据统一从这里出，避免手工拼 JSON 出错；顺手挡住 </script> 逃逸 */
+  private String jsonLd(Object node) {
+    try {
+      String raw = json.objectMapper().writeValueAsString(node);
+      return "<script type=\"application/ld+json\">" + raw.replace("<", "\\u003c")
+          + "</script>";
+    } catch (Exception e) {
+      return "";
+    }
   }
 
   private String entry(String path, String priority, String changefreq) {
@@ -263,6 +475,17 @@ public class SeoController {
         .header("Content-Type", HTML)
         .body(html.render(new SeoHtml.Page(
             "页面不存在 - " + seo.siteName(), "页面不存在。", "/", body)));
+  }
+
+  private Map<String, Object> one(String sql, Object... args) {
+    List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
+    return rows.isEmpty() ? null : rows.get(0);
+  }
+
+  /** 题干摘要：标题和列表里用，去掉换行、超长截断 */
+  private static String summary(String text, int max) {
+    String flat = text == null ? "" : text.replaceAll("\\s+", " ").trim();
+    return flat.length() <= max ? flat : flat.substring(0, max) + "…";
   }
 
   private static String typeLabel(String type) {
