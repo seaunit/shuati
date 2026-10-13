@@ -292,3 +292,67 @@ sudo systemctl reload nginx
 ```
 
 备份至少覆盖：MySQL `shuati` 库、`/etc/shuati/`（密钥）、`APP_AES_SECRET`（丢了就解不开已存的 AI Key）。
+
+## 9. 搜索引擎收录（百度）
+
+百度蜘蛛对 JS 渲染支持很弱，所以公开页面不走 SPA，直接由后端吐完整 HTML：
+
+| 路径 | 谁渲染 | 说明 |
+| --- | --- | --- |
+| `/` | 后端 | 落地页：产品说明 + 公共题库列表 |
+| `/bank/{id}` | 后端 | 公共题库页：单元列表 |
+| `/bank/{id}/unit/{uid}` | 后端 | 单元页：题目、选项、答案、解析（收录主力） |
+| `/sitemap.xml` | 后端 | 首页 + 合规页 + 所有公共题库与单元 |
+| `/robots.txt` | 前端静态 | 屏蔽 `/api`、`/app`、`/login` 等 |
+| `/app/**`、`/login` | 前端 SPA | 应用本体，不参与收录 |
+
+只暴露 `owner_id` 为空的公共题库，用户自己建的题库不会出现在收录里。
+
+### 上线步骤
+
+1. 部署（`provision-ubuntu.sh`）会把验证文件与 `robots.txt` 一起放到 `/opt/shuati/frontend/`。
+2. Nginx 需要放开后端路由，重跑一次 Cloudflare 生产配置即可（会自动备份并在 `nginx -t` 失败时回滚）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/enable-cloudflare-proxy.sh | sudo bash
+```
+
+3. 自检：
+
+```bash
+curl -s https://www.seaunit.site/robots.txt
+curl -s https://www.seaunit.site/sitemap.xml | head -5
+curl -s https://www.seaunit.site/baidu_verify_codeva-YKEobJ2RLw.html   # 输出站点校验码
+curl -s https://www.seaunit.site/ | grep -o '<title>.*</title>'          # 首页要能直接看到正文
+```
+
+4. 在百度搜索资源平台「普通收录 → API 提交」拿到 token，写进 `/etc/shuati/env`：
+
+```bash
+sudo sh -c "echo \"SHUATI_BAIDU_PUSH_TOKEN='你的token'\" >> /etc/shuati/env"
+```
+
+5. 推送 URL（新增题库或单元后跑一次即可）：
+
+```bash
+cd /opt/shuati && sudo bash deploy/scripts/baidu-push.sh
+```
+
+也可以挂到 crontab 每周推一次：
+
+```
+0 6 * * 1 cd /opt/shuati && bash deploy/scripts/baidu-push.sh >>/var/log/shuati-baidu-push.log 2>&1
+```
+
+### 相关配置
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SHUATI_SITE_URL` | `https://www.seaunit.site` | canonical / sitemap 里的规范域名，要和搜索资源平台验证的站点一致 |
+| `SHUATI_SITE_NAME` | `拾题` | 站点名 |
+| `SHUATI_SITE_TAGLINE` | `在线刷题与 AI 解析` | 首页副标题 |
+| `SHUATI_CONTACT_EMAIL` | `sealevel666@163.com` | 页脚客服邮箱 |
+| `SHUATI_BAIDU_TONGJI_ID` | 已内置 | 百度统计站点 ID，留空则不注入统计脚本 |
+| `SHUATI_BAIDU_PUSH_TOKEN` | 空 | 主动推送 token，只用于 `baidu-push.sh` |
+
+站点验证文件（`baidu_verify_*.html`）必须长期保留在站点根目录，删掉验证会失效。

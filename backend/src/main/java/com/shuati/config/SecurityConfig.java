@@ -41,7 +41,12 @@ public class SecurityConfig {
                 // 支付回调由共享密钥校验，不走 JWT
                 "/api/payments/waffo/notify",
                 "/captcha/**",
-                "/actuator/health")
+                "/actuator/health",
+                // SEO：百度等蜘蛛抓的是公开页面，不能要求登录
+                "/",
+                "/robots.txt",
+                "/sitemap.xml",
+                "/bank/**")
             .permitAll()
             // 游客模式：首页展示公共题库与单元，无需登录；其余接口仍要求登录
             .requestMatchers(HttpMethod.GET, "/api/banks", "/api/banks/*/units").permitAll()

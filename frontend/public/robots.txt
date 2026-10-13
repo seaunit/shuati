@@ -1,0 +1,12 @@
+# 拾题 robots.txt
+User-agent: *
+Allow: /
+
+# 接口与需要登录的功能页不参与收录
+Disallow: /api/
+Disallow: /captcha/
+Disallow: /pay/
+Disallow: /app
+Disallow: /login
+
+Sitemap: https://www.seaunit.site/sitemap.xml

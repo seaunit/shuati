@@ -1,0 +1,140 @@
+package com.shuati.seo;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * SEO 页面：只暴露公共题库，页面里要有正文、canonical 和往下一层的链接，
+ * 私有题库与不存在的 id 一律 404。
+ */
+@ActiveProfiles("test")
+@SpringBootTest
+@Transactional
+class SeoPageTest {
+
+  @Autowired SeoController controller;
+  @Autowired JdbcTemplate jdbc;
+
+  @Test
+  void homeListsPublicBanksAndLinksToThem() {
+    long bankId = createBank(null, "软考真题" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章");
+    createQuestion(unitId, "下面哪个是索引的作用？");
+
+    var response = controller.home();
+    String body = response.getBody();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getHeaders().getFirst("Content-Type")).contains("text/html");
+    assertThat(body).contains("<title>");
+    assertThat(body).contains("rel=\"canonical\"");
+    // 百度统计脚本要出现在 SEO 页面里，否则搜索流量统计不到
+    assertThat(body).contains("hm.baidu.com/hm.js?639e5d48916802a7505c8af19d7002e7");
+    assertThat(body).contains("href=\"/bank/" + bankId + "\"");
+    assertThat(body).contains("1 个单元");
+  }
+
+  @Test
+  void bankPageListsUnitsAndLinksToUnitPages() {
+    long bankId = createBank(null, "软考真题" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章 计算机组成");
+
+    String body = controller.bank(bankId).getBody();
+
+    assertThat(body).contains("第一章 计算机组成");
+    assertThat(body).contains("href=\"/bank/" + bankId + "/unit/" + unitId + "\"");
+    assertThat(body).contains("canonical\" href=\"https://www.seaunit.site/bank/" + bankId + "\"");
+  }
+
+  @Test
+  void unitPageShowsQuestionsWithAnswers() {
+    long bankId = createBank(null, "软考真题" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章");
+    createQuestion(unitId, "在计算机中，指令寄存器的位数取决于什么？");
+
+    String body = controller.unit(bankId, unitId).getBody();
+
+    assertThat(body).contains("在计算机中，指令寄存器的位数取决于什么？");
+    assertThat(body).contains("答案：A");
+    assertThat(body).contains("加快查询");
+  }
+
+  @Test
+  void privateBankIsNotExposed() {
+    String ownerId = createUser();
+    long bankId = createBank(ownerId, "我的私有题库" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章");
+
+    assertThat(controller.bank(bankId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(controller.unit(bankId, unitId).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  void unknownBankReturnsHtmlNotFound() {
+    var response = controller.bank(999_999_999L);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(response.getBody()).contains("页面不存在");
+    assertThat(response.getHeaders().getFirst("Content-Type")).contains("text/html");
+  }
+
+  @Test
+  void sitemapCoversHomeComplianceAndPublicBanks() {
+    long bankId = createBank(null, "软考真题" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "第一章");
+
+    String xml = controller.sitemap().getBody();
+
+    assertThat(xml).contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    assertThat(xml).contains("<loc>https://www.seaunit.site/</loc>");
+    assertThat(xml).contains("<loc>https://www.seaunit.site/terms</loc>");
+    assertThat(xml).contains("<loc>https://www.seaunit.site/bank/" + bankId + "</loc>");
+    assertThat(xml)
+        .contains("<loc>https://www.seaunit.site/bank/" + bankId + "/unit/" + unitId + "</loc>");
+  }
+
+  @Test
+  void sitemapSkipsPrivateBanks() {
+    long bankId = createBank(createUser(), "私有的" + UUID.randomUUID());
+
+    assertThat(controller.sitemap().getBody()).doesNotContain("/bank/" + bankId + "<");
+  }
+
+  private String createUser() {
+    String id = UUID.randomUUID().toString();
+    jdbc.update("""
+        insert into profiles (id, email, password_hash, role, status)
+        values (?, ?, 'x', 'USER', 'ENABLED')
+        """, id, "seo-" + id.substring(0, 8) + "@example.com");
+    return id;
+  }
+
+  private long createBank(String ownerId, String name) {
+    jdbc.update("insert into bank (name, is_default, owner_id) values (?, 0, ?)", name, ownerId);
+    return jdbc.queryForObject("select id from bank where name = ?", Long.class, name);
+  }
+
+  private long createUnit(long bankId, String name) {
+    jdbc.update("insert into unit (bank_id, name, sort) values (?, ?, 0)", bankId, name);
+    return jdbc.queryForObject(
+        "select id from unit where bank_id = ? and name = ?", Long.class, bankId, name);
+  }
+
+  private void createQuestion(long unitId, String content) {
+    jdbc.update("""
+        insert into question
+          (unit_id, type, content, options, answer, key_points, difficulty, status)
+        values (?, 'SINGLE', ?,
+                cast('[{"key":"A","text":"加快查询"},{"key":"B","text":"加快写入"}]' as json),
+                'A', cast('[]' as json), 'MEDIUM', 'ON')
+        """, unitId, content);
+  }
+}

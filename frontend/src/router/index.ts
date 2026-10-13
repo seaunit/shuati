@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import { applyRouteMeta } from "@/seo";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -81,6 +82,10 @@ router.beforeEach(async (to) => {
     return { path: "/app" };
   }
   return true;
+});
+
+router.afterEach((to) => {
+  applyRouteMeta(to.path);
 });
 
 export default router;
