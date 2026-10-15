@@ -30,6 +30,9 @@ APP_DIR="/opt/shuati"
 ENV_DIR="/etc/shuati"
 DB_NAME="shuati"
 DB_USER="shuati"
+# 交互输入的等待上限（秒）：超时按「直接回车」处理，即保留现有值/留空。
+# 部署脚本大多挂在终端里跑，人离开一会儿不该把流程卡住。
+PROMPT_TIMEOUT="${SHUATI_PROMPT_TIMEOUT:-60}"
 ADMIN_EMAIL="${SHUATI_BOOTSTRAP_ADMIN_EMAIL:-shuati.admin@gmail.com}"
 # 管理员初始口令不设公共默认值（避免仓库里出现真实生产口令）：
 # 环境变量 > 已有 /etc/shuati/env > 随机生成并在部署结束时打印
@@ -140,10 +143,17 @@ prompt_mail_password() {
   else
     printf '[配置] 当前未设置密码\n' >/dev/tty
   fi
-  printf '[配置] 输入不会回显；直接回车 = 保留现有密码或为空：' >/dev/tty
+  printf '[配置] 输入不会回显；直接回车 = 保留现有密码或为空\n' >/dev/tty
+  printf '[配置] %s 秒内没有输入将按回车处理：' "$PROMPT_TIMEOUT" >/dev/tty
   local input=""
-  IFS= read -rs input </dev/tty || input=""
-  printf '\n' >/dev/tty
+  local rc=0
+  IFS= read -rs -t "$PROMPT_TIMEOUT" input </dev/tty || rc=$?
+  if [ "$rc" -gt 128 ]; then
+    input=""
+    printf '\n[配置] 等待 %s 秒无输入，按回车处理\n' "$PROMPT_TIMEOUT" >/dev/tty
+  else
+    printf '\n' >/dev/tty
+  fi
   if [ -z "$input" ]; then
     if [ -n "$existing" ]; then
       printf '[配置] 已保留现有 SMTP 密码\n' >/dev/tty
@@ -189,10 +199,17 @@ prompt_waffo_private_key() {
   fi
   printf '[配置] 打开私钥文件，把里面的内容整段复制粘贴进来即可\n' >/dev/tty
   printf '[配置] （PEM 原文，或文件里那一整串 base64 都行，两种都会自动识别）\n' >/dev/tty
-  printf '[配置] 输入不会回显；直接回车 = 保留现有私钥或为空：' >/dev/tty
+  printf '[配置] 输入不会回显；直接回车 = 保留现有私钥或为空\n' >/dev/tty
+  printf '[配置] %s 秒内没有输入将按回车处理：' "$PROMPT_TIMEOUT" >/dev/tty
   local input=""
-  IFS= read -rs input </dev/tty || input=""
-  printf '\n' >/dev/tty
+  local rc=0
+  IFS= read -rs -t "$PROMPT_TIMEOUT" input </dev/tty || rc=$?
+  if [ "$rc" -gt 128 ]; then
+    input=""
+    printf '\n[配置] 等待 %s 秒无输入，按回车处理\n' "$PROMPT_TIMEOUT" >/dev/tty
+  else
+    printf '\n' >/dev/tty
+  fi
   if [ -z "$input" ]; then
     if [ -n "$existing" ]; then
       printf '[配置] 已保留现有 Waffo 私钥\n' >/dev/tty
