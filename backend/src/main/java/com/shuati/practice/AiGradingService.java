@@ -59,7 +59,10 @@ public class AiGradingService {
       AiClient.AiResult result = ai.chat("JUDGE", PromptTemplates.ESSAY_SYSTEM,
           PromptTemplates.essayUser(
               String.valueOf(question.get("content")),
-              String.valueOf(question.get("key_points")),
+              // 为空时传 null，由提示词决定「自己提炼评分要点」，别把 "null" 字符串塞给模型
+              question.get("key_points") == null
+                  ? null
+                  : String.valueOf(question.get("key_points")),
               String.valueOf(question.get("answer")),
               answer),
           true);

@@ -18,4 +18,22 @@ class PromptTemplatesTest {
     assertThat(prompt).doesNotContain("回答错误");
     assertThat(PromptTemplates.EXPLAIN_SYSTEM).doesNotContain("考生对错");
   }
+
+  @Test
+  void essayPromptAsksModelToDeriveKeyPointsWhenQuestionHasNone() {
+    String withPoints = PromptTemplates.essayUser(
+        "说说索引的作用", "[\"加速检索\"]", "B+ 树索引", "我的回答");
+    assertThat(withPoints).contains("【评分要点】").contains("加速检索");
+
+    // 没给要点时不能把「评分要点」区块塞进去，更不能把 JDBC 读出来的 "null" 当内容发给模型
+    for (String absent : new String[]{null, "", "null", "[]"}) {
+      String prompt = PromptTemplates.essayUser("说说索引的作用", absent, "B+ 树索引", "我的回答");
+      assertThat(prompt).doesNotContain("【评分要点】");
+      assertThat(prompt).doesNotContain("null");
+      assertThat(prompt).contains("【参考答案】").contains("【考生答案】");
+    }
+
+    // 提示词里要明确交代「自己提炼要点」这条规则
+    assertThat(PromptTemplates.ESSAY_SYSTEM).contains("自行提炼");
+  }
 }

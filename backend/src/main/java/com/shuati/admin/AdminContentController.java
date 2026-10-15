@@ -183,7 +183,7 @@ public class AdminContentController {
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
+    validateQuestion(type, body.get("options"), answer);
     jdbc.update("""
         insert into question
           (unit_id, type, content, options, answer, key_points, difficulty, explanation, tags, status)
@@ -203,7 +203,7 @@ public class AdminContentController {
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
+    validateQuestion(type, body.get("options"), answer);
     jdbc.update("""
         update question
            set type = ?, content = ?, options = cast(? as json), answer = ?,
@@ -233,7 +233,7 @@ public class AdminContentController {
     return ApiResponse.ok(null);
   }
 
-  private void validateQuestion(String type, Object options, String answer, Object keyPoints) {
+  private void validateQuestion(String type, Object options, String answer) {
     if (!List.of("SINGLE", "MULTI", "SHORT").contains(type)) {
       throw new ApiException(400, "题型不正确");
     }
@@ -244,9 +244,7 @@ public class AdminContentController {
         && !(options instanceof List<?> list && !list.isEmpty())) {
       throw new ApiException(400, "选择题必须提供选项");
     }
-    if ("SHORT".equals(type) && !(keyPoints instanceof List<?> list && !list.isEmpty())) {
-      throw new ApiException(400, "简答题必须提供评分要点");
-    }
+    // 简答题的评分要点可选：留空时由 AI 判分自行提炼（见 PromptTemplates.ESSAY_SYSTEM）
   }
 
   private String normalizeDifficulty(Object value) {

@@ -7,30 +7,42 @@ public final class PromptTemplates {
 
   public static final String ESSAY_SYSTEM = """
       你是资深的面试官，正在批改面试简答题（考生答案可能是文字论述、解题思路或伪代码；若是伪代码/思路，重点评判逻辑正确性、边界条件处理与思路完整性，不要求语法精确）。
-      请根据【题目】【评分要点】【参考答案】评判【考生答案】。
+      请根据【题目】【参考答案】以及（若提供）【评分要点】评判【考生答案】。
       要求：
       1. 逐条核对评分要点是否被覆盖；
       2. verdict 只能是 CORRECT（要点基本全覆盖）、PARTIAL（覆盖部分要点）、WRONG（离题或要点基本未覆盖）之一；
       3. score 为 0 到 10 的整数；
-      4. hit_points 列出命中的要点（从评分要点中原样摘录），missed_points 列出遗漏的要点；
-      5. feedback 用中文给出 100 到 300 字的评语与讲解，指出错误并补充正确知识；
-      6. 只输出 JSON 对象，禁止输出任何其他内容。
+      4. hit_points 列出命中的要点，missed_points 列出遗漏的要点；
+      5. 若题目未提供【评分要点】，先根据【题目】与【参考答案】自行提炼 3 到 5 条评分要点，再按这些要点评判，
+         hit_points / missed_points 就用你提炼出来的要点；
+      6. feedback 用中文给出 100 到 300 字的评语与讲解，指出错误并补充正确知识；
+      7. 只输出 JSON 对象，禁止输出任何其他内容。
       JSON 格式：{"verdict":"...","score":0,"hit_points":[],"missed_points":[],"feedback":"..."}""";
 
   public static String essayUser(
       String content, String keyPoints, String referenceAnswer, String userAnswer) {
+    // 评分要点是可选项：题库里没有要点时，由模型自己提炼（见 ESSAY_SYSTEM 第 5 条）。
+    // JDBC 把 NULL 读出成 "null"，空数组读成 "[]"，两种都算「没提供」。
+    String pointsBlock = hasKeyPoints(keyPoints)
+        ? "【评分要点】\n" + keyPoints + "\n\n"
+        : "";
     return """
         【题目】
         %s
 
-        【评分要点】
-        %s
-
-        【参考答案】
+        %s【参考答案】
         %s
 
         【考生答案】
-        %s""".formatted(content, keyPoints, referenceAnswer, userAnswer);
+        %s""".formatted(content, pointsBlock, referenceAnswer, userAnswer);
+  }
+
+  private static boolean hasKeyPoints(String keyPoints) {
+    if (keyPoints == null) {
+      return false;
+    }
+    String trimmed = keyPoints.trim();
+    return !trimmed.isEmpty() && !"null".equals(trimmed) && !"[]".equals(trimmed);
   }
 
   public static final String EXPLAIN_SYSTEM = """

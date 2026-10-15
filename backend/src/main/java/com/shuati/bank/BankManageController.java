@@ -294,7 +294,7 @@ public class BankManageController {
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
+    validateQuestion(type, body.get("options"), answer);
 
     long targetUnitId = unitId;
     KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -329,7 +329,7 @@ public class BankManageController {
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer, body.get("keyPoints"));
+    validateQuestion(type, body.get("options"), answer);
     jdbc.update("""
         update question
            set type = ?, content = ?, options = cast(? as json), answer = ?,
@@ -456,7 +456,7 @@ public class BankManageController {
     return email;
   }
 
-  private void validateQuestion(String type, Object options, String answer, Object keyPoints) {
+  private void validateQuestion(String type, Object options, String answer) {
     if (!List.of("SINGLE", "MULTI", "SHORT").contains(type)) {
       throw new ApiException(400, "题型不正确");
     }
@@ -470,9 +470,7 @@ public class BankManageController {
     if ("SINGLE".equals(type) && answer.length() != 1) {
       throw new ApiException(400, "单选题答案只能是一个选项");
     }
-    if ("SHORT".equals(type) && !(keyPoints instanceof List<?> list && !list.isEmpty())) {
-      throw new ApiException(400, "简答题必须提供评分要点");
-    }
+    // 简答题的评分要点是可选的：留空时由 AI 判分时自行提炼（见 PromptTemplates.ESSAY_SYSTEM）
   }
 
   private String normalizeDifficulty(Object value) {

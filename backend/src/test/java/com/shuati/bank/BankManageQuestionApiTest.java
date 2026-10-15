@@ -130,15 +130,22 @@ class BankManageQuestionApiTest {
   }
 
   @Test
-  void shortQuestionNeedsReferenceAnswerAndKeyPoints() {
+  void shortQuestionNeedsReferenceAnswerButKeyPointsAreOptional() {
     String userId = createUser("USER");
     long unitId = createUnit(createBank(userId, "我的题库"), "第一章");
     authenticate(userId, false);
 
-    ApiException noKeyPoints = assertThrows(ApiException.class, () -> createQuestion(Map.of(
-        "unitId", unitId, "type", "SHORT", "content", "说说索引的作用", "answer", "参考答案")));
-    assertThat(noKeyPoints.getStatus()).isEqualTo(400);
-    assertThat(noKeyPoints.getMessage()).contains("评分要点");
+    // 参考答案仍然必填
+    ApiException noAnswer = assertThrows(ApiException.class, () -> createQuestion(Map.of(
+        "unitId", unitId, "type", "SHORT", "content", "说说索引的作用", "answer", "  ")));
+    assertThat(noAnswer.getStatus()).isEqualTo(400);
+    assertThat(noAnswer.getMessage()).contains("答案");
+
+    // 不填评分要点也能建：判分时由 AI 自行提炼
+    long withoutKeyPoints = createQuestion(Map.of(
+        "unitId", unitId, "type", "SHORT", "content", "说说索引的作用", "answer", "参考答案"));
+    assertThat(jdbc.queryForObject(
+        "select key_points from question where id = ?", Object.class, withoutKeyPoints)).isNull();
 
     long questionId = createQuestion(Map.of(
         "unitId", unitId,

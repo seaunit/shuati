@@ -462,20 +462,18 @@ function buildPayload() {
   };
   if (form.value.type === "SHORT") {
     const answer = form.value.answer.trim();
-    const keyPoints = form.value.keyPoints
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean);
     if (!answer) {
       formError.value = "简答题要填参考答案";
       return null;
     }
-    if (keyPoints.length === 0) {
-      formError.value = "简答题要填评分要点，一行一条";
-      return null;
-    }
     payload.answer = answer;
-    payload.keyPoints = keyPoints;
+    // 评分要点不再要求填写：新建时留空（判分时由 AI 自行提炼），
+    // 编辑时保留题目原有的要点，避免把导入/后台已有的数据静默清空
+    const keptKeyPoints = form.value.keyPoints
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    payload.keyPoints = keptKeyPoints.length > 0 ? keptKeyPoints : null;
     payload.options = null;
   } else {
     const options = form.value.options.map((item) => item.trim());
@@ -891,15 +889,6 @@ onBeforeUnmount(() => {
               rows="3"
               class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
               placeholder="用于 AI 批改时对照的参考答案"
-            />
-          </label>
-          <label class="block">
-            <span class="mb-1.5 block text-sm text-ink">评分要点（一行一条）</span>
-            <textarea
-              v-model="form.keyPoints"
-              rows="4"
-              class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
-              placeholder="例如：说明了索引的作用"
             />
           </label>
         </div>
