@@ -245,7 +245,8 @@ public class SeoHtml {
       .tag{display:inline-block;background:#e9ebee;border-radius:6px;padding:1px 8px;
         font-size:12px;color:#6b7280;margin-right:6px}
       .foot{border-top:1px solid #e9ebee;margin-top:32px;padding:16px 20px 28px;font-size:13px;color:#6b7280}
-      .foot p{margin:0;display:flex;flex-wrap:wrap;gap:14px}
+      .foot p{margin:0 auto;max-width:880px;display:flex;flex-wrap:wrap;justify-content:center;
+        align-items:center;gap:8px 14px;text-align:center}
       @media (max-width:520px){h1{font-size:20px}main{padding:18px 16px 4px}}
       """;
 }
