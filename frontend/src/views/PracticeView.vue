@@ -55,6 +55,10 @@ const startedAt = ref(Date.now());
 const resumed = ref(false);
 
 const current = computed(() => questions.value[index.value]);
+// 只有选择题才回显「你的答案」：简答的长文本再贴一遍太啰嗦
+const answeredChoice = computed(
+  () => !!result.value && current.value?.type !== "SHORT" && selected.value.length > 0,
+);
 const progress = computed(() =>
   questions.value.length ? Math.round(((index.value + (result.value ? 1 : 0)) / questions.value.length) * 100) : 0,
 );
@@ -82,6 +86,52 @@ function toggleOption(key: string) {
   selected.value = selected.value.includes(key)
     ? selected.value.filter((item) => item !== key)
     : [...selected.value, key];
+}
+
+/**
+ * 作答后的四种选项状态：
+ * correct = 正确答案；wrong = 自己选了但答错；chosen = 尚未提交时的选中；idle = 其余。
+ * 答对的选项会落在 correct，不会出现「又绿又红」的矛盾配色。
+ */
+type OptionState = "correct" | "wrong" | "chosen" | "idle";
+
+const OPTION_ROW_CLASS: Record<OptionState, string> = {
+  correct: "border-moss bg-moss/10",
+  wrong: "border-rose bg-rose/10",
+  chosen: "border-moss bg-moss/10",
+  idle: "border-mist bg-paper hover:border-moss/60",
+};
+
+const OPTION_BADGE_CLASS: Record<OptionState, string> = {
+  correct: "bg-moss text-white",
+  wrong: "bg-rose text-white",
+  chosen: "bg-moss/15 text-moss",
+  idle: "bg-mist text-ink/70",
+};
+
+// 颜色之外再给读屏用户一段文字，避免只靠颜色传达对错
+const OPTION_STATE_LABEL: Record<OptionState, string> = {
+  correct: "（正确答案）",
+  wrong: "（你的选择，答错）",
+  chosen: "",
+  idle: "",
+};
+
+function optionState(key: string): OptionState {
+  if (!result.value) {
+    return selected.value.includes(key) ? "chosen" : "idle";
+  }
+  if (result.value.correctAnswer?.toUpperCase().includes(key)) {
+    return "correct";
+  }
+  return selected.value.includes(key) ? "wrong" : "idle";
+}
+
+// 「你的答案」那行单独配色：答对时不能还标红
+function yourAnswerClass() {
+  if (result.value?.verdict === "WRONG") return "text-rose";
+  if (result.value?.verdict === "CORRECT") return "text-moss";
+  return "text-ink/80";
 }
 
 function resetState() {
@@ -301,15 +351,20 @@ onMounted(async () => {
             v-for="option in current.options ?? []"
             :key="option.key"
             class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition"
-            :class="[
-              selected.includes(option.key) ? 'border-moss bg-moss/10' : 'border-mist bg-paper hover:border-moss/60',
-              result && result.correctAnswer?.includes(option.key) ? 'border-moss bg-moss/15' : '',
-            ]"
+            :class="OPTION_ROW_CLASS[optionState(option.key)]"
             :disabled="!!result"
             @click="toggleOption(option.key)"
           >
-            <span class="font-medium text-ink">{{ option.key }}</span>
-            <span class="text-ink/85">{{ option.text }}</span>
+            <span
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition"
+              :class="OPTION_BADGE_CLASS[optionState(option.key)]"
+            >
+              {{ option.key }}
+            </span>
+            <span class="pt-0.5 text-ink/85">
+              {{ option.text }}
+              <span class="sr-only">{{ OPTION_STATE_LABEL[optionState(option.key)] }}</span>
+            </span>
           </button>
         </div>
 
@@ -318,7 +373,14 @@ onMounted(async () => {
             判定：{{ verdictLabel(result.verdict) }}
             <span v-if="result.score !== null">（{{ result.score }} 分）</span>
           </p>
-          <p v-if="result.correctAnswer" class="text-sm text-ink/80">正确答案：{{ result.correctAnswer }}</p>
+          <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-ink/80">
+            <p v-if="result.correctAnswer">
+              正确答案：<span class="font-medium text-moss">{{ result.correctAnswer }}</span>
+            </p>
+            <p v-if="answeredChoice">
+              你的答案：<span class="font-medium" :class="yourAnswerClass()">{{ selected.join("") }}</span>
+            </p>
+          </div>
           <p v-if="result.referenceAnswer" class="text-sm text-ink/80">参考答案：{{ result.referenceAnswer }}</p>
           <div v-if="result.feedback" class="text-sm text-ink/80">
             <MarkdownText :text="String(result.feedback.feedback ?? '')" />

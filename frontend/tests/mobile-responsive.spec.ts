@@ -555,6 +555,88 @@ test("stored explanation shows after answering and can be regenerated", async ({
   await expect(page.getByText("重新生成的解析内容")).toBeVisible();
 });
 
+test("wrongly picked option is marked red while correct ones stay green", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 1,
+            unit_id: 1,
+            type: "MULTI",
+            content: "关于多智能体协作模式，正确的说法有（ ）。",
+            options: [
+              { key: "A", text: "选项 A" },
+              { key: "B", text: "选项 B" },
+              { key: "C", text: "选项 C" },
+              { key: "D", text: "选项 D" },
+              { key: "E", text: "选项 E" },
+            ],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 1, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
+  // 正确答案 ABDE，用户多选了 C
+  await page.route("**/api/practice/submit-choice", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { recordId: 1, verdict: "WRONG", score: 0, correctAnswer: "ABDE" },
+      },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  for (const key of ["A", "B", "C", "D", "E"]) {
+    await page.getByRole("button", { name: new RegExp(`选项 ${key}`) }).click();
+  }
+  await page.getByRole("button", { name: "提交答案" }).click();
+
+  // 选错的 C 标红，正确的 A / B / D / E 标绿
+  await expect(page.getByRole("button", { name: /选项 C/ })).toHaveClass(/border-rose/);
+  for (const key of ["A", "B", "D", "E"]) {
+    await expect(page.getByRole("button", { name: new RegExp(`选项 ${key}`) })).toHaveClass(
+      /border-moss/,
+    );
+  }
+
+  // 结果区同时给出正确答案与自己的答案
+  await expect(page.getByText("正确答案：ABDE")).toBeVisible();
+  await expect(page.getByText("你的答案：ABCDE")).toBeVisible();
+});
+
 test("clicking anywhere on a point pack card starts checkout", async ({ page }) => {
   let orderPayload: Record<string, unknown> | null = null;
 
