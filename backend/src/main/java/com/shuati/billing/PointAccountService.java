@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class PointAccountService {
 
   private final JdbcTemplate jdbc;
+
+  /** 自建题库数量上限，所有账号相同；需要调整改配置即可，不用改代码。 */
+  @Value("${shuati.limits.max-banks:20}")
+  private int maxBanks;
 
   @Transactional
   public void ensureAccount(String userId) {
@@ -311,17 +316,19 @@ public class PointAccountService {
         """, userId, Math.max(1, Math.min(limit, 200)));
   }
 
-  public void assertBankQuota(String userId, Map<String, Object> entitlements) {
-    Object maxBanks = entitlements.get("maxBanks");
-    if (maxBanks == null) {
-      return;
-    }
+  /**
+   * 自建题库数量上限：**所有账号一视同仁**，不再按套餐区分。
+   *
+   * <p>额度放在这里而不是 plan.max_banks，是因为它属于平台防滥用限制（避免有人批量建空库），
+   * 不是付费权益；套餐之间用点数区分就够了。
+   */
+  public void assertBankQuota(String userId) {
     Integer count = jdbc.queryForObject(
         "select count(*) from bank where owner_id = ?", Integer.class, userId);
     int current = count == null ? 0 : count;
-    if (current >= intValue(maxBanks)) {
-      throw new ApiException(402, "当前套餐最多创建 " + intValue(maxBanks)
-          + " 个自建题库，已用 " + current + " 个。升级套餐可提升上限。");
+    if (current >= maxBanks) {
+      throw new ApiException(402, "自建题库最多 " + maxBanks + " 个，你已经建了 " + current
+          + " 个。可以先删掉不再需要的题库，或往已有题库里导入题目。");
     }
   }
 

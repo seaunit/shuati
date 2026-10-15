@@ -296,8 +296,8 @@ public class ImportService {
     Long targetBankId = task.get("target_bank_id") == null ? null
         : ((Number) task.get("target_bank_id")).longValue();
     if (targetBankId == null) {
-      // 只有「新建题库」才占题库额度；往已有题库里加题不占
-      points.assertBankQuota(userId, entitlements);
+      // 只有「新建题库」才受题库数量上限约束；往已有题库里加题不占
+      points.assertBankQuota(userId);
     }
     points.assertQuestionQuota(userId, entitlements, chosen.size());
 

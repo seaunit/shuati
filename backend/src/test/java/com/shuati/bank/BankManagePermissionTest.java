@@ -215,17 +215,35 @@ class BankManagePermissionTest {
   }
 
   @Test
-  void creatingBankBeyondPlanQuotaIsRefused() {
+  void creatingBankBeyondThePlatformLimitIsRefused() {
     String userId = createUser("USER");
-    createBank(userId, "已有的题库");
     authenticate(userId, false);
 
-    // 免费版自带题库上限是 1
+    // 自建题库上限对所有账号一致：20 个
+    for (int i = 1; i <= 20; i++) {
+      controller.createBank(Map.of("name", "题库 " + i));
+    }
+
     ApiException error = assertThrows(ApiException.class, () ->
-        controller.createBank(Map.of("name", "再建一个")));
+        controller.createBank(Map.of("name", "第 21 个")));
 
     assertThat(error.getStatus()).isEqualTo(402);
-    assertThat(error.getMessage()).contains("最多创建");
+    assertThat(error.getMessage()).contains("最多 20 个");
+    // 提示里不能再引导用户「升级套餐」，这个上限不是付费权益
+    assertThat(error.getMessage()).doesNotContain("升级套餐");
+  }
+
+  /** 免费账号也能建到 20 个，不再受「免费版 1 个」的旧限制 */
+  @Test
+  void freeAccountCanCreateMoreThanOneBank() {
+    String userId = createUser("USER");
+    authenticate(userId, false);
+
+    controller.createBank(Map.of("name", "第一个"));
+    controller.createBank(Map.of("name", "第二个"));
+
+    assertThat(jdbc.queryForObject(
+        "select count(*) from bank where owner_id = ?", Integer.class, userId)).isEqualTo(2);
   }
 
   private void authenticate(String userId, boolean admin) {

@@ -97,8 +97,8 @@ public class BankManageController {
       throw new ApiException(400, "题库名称不能为空");
     }
     String description = body.get("description") == null ? null : string(body.get("description")).trim();
-    // 新建题库占用套餐的题库额度（往已有题库加题不占）
-    points.assertBankQuota(userId, points.entitlements(userId));
+    // 新建题库受平台统一的题库数量上限约束（往已有题库加题不占）
+    points.assertBankQuota(userId);
     if (nameTaken(userId, false, name, 0L)) {
       throw new ApiException(400, "你已经有一个同名题库了");
     }
