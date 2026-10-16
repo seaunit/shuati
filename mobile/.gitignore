@@ -1,0 +1,17 @@
+node_modules/
+
+# 本机便携 JDK（Capacitor 8 的 Android 构建需要 JDK 21，不进仓库）
+.jdk/
+
+# Capacitor 生成的平台工程里的构建产物与本机配置
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/capacitor-cordova-android-plugins/build/
+ios/App/Pods/
+ios/App/build/
+
+# 本机临时目录
+.tmp-counter/

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">拾题</string>
+    <string name="title_activity_main">拾题</string>
+    <string name="package_name">site.seaunit.shuati</string>
+    <string name="custom_url_scheme">site.seaunit.shuati</string>
+</resources>

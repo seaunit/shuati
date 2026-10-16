@@ -1,0 +1,22 @@
+{
+  "name": "shuati-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "拾题移动端壳：把网页端同一份实现打包成 Android / iOS App（宪法原则 VI）",
+  "scripts": {
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
+    "sync": "cap sync",
+    "sync:android": "cap sync android",
+    "apk": "node scripts/build-android.mjs",
+    "check": "node scripts/check-config.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "typescript": "^5.9.3"
+  }
+}

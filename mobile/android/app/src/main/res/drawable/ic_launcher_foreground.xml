@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  与网页端 frontend/public/favicon.svg 同一个叶子，路径数据逐字照抄。
+  变换与那份 SVG 等价：原图是「路径 translate(4,4) → 32×32 视口」，
+  这里再把 32 视口等比放大 2.25 倍（32 × 2.25 = 72，正好是自适应图标 108dp 画布的安全区）
+  并居中（+18）；两段合起来是 (p + 4) × 2.25 + 18 = p × 2.25 + 27。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="27"
+        android:translateY="27"
+        android:scaleX="2.25"
+        android:scaleY="2.25">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M11,20A7,7 0 0 1 9.8,6.1C15.5,5 17,4.48 19,2c1,2 2,4.18 2,8 0,5.5 -4.78,10 -10,10Z"
+            android:strokeColor="#7D9B76"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M2,21c0,-3 1.85,-5.36 5.08,-6C9.5,14.52 12,13 13,12"
+            android:strokeColor="#7D9B76"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>
