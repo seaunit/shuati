@@ -262,15 +262,36 @@ public class BankManageController {
 
   @GetMapping("/api/manage/banks/{id}/questions")
   public ApiResponse<List<Map<String, Object>>> questions(
-      @PathVariable long id, @RequestParam(defaultValue = "ALL") String status) {
+      @PathVariable long id,
+      @RequestParam(defaultValue = "ALL") String status,
+      @RequestParam(defaultValue = "") String q) {
     requireManage(id);
     String filter = status.toUpperCase();
+    String keyword = likeKeyword(q);
     List<Map<String, Object>> rows = jdbc.queryForList("""
         select q.* from question q join unit u on u.id = q.unit_id
          where u.bank_id = ? and (? not in ('ON', 'OFF') or q.status = ?)
+           and (? = '' or q.content like concat('%', ?, '%'))
          order by q.id desc limit 500
-        """, id, filter, filter);
+        """, id, filter, filter, keyword, keyword);
     return ApiResponse.ok(json.normalize(rows, QUESTION_JSON));
+  }
+
+  /**
+   * 题库内检索的关键词：去空白 + 转义 LIKE 通配符。
+   *
+   * <p>不转义的话，用户输入一个 `%` 就会把整个题库捞回来，看着像检索失效；
+   * 空串表示「不筛选」，由 SQL 里的 {@code ? = ''} 短路。
+   */
+  private String likeKeyword(String raw) {
+    if (raw == null) {
+      return "";
+    }
+    String trimmed = raw.trim();
+    if (trimmed.isEmpty()) {
+      return "";
+    }
+    return trimmed.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 
   /** 手工新增题目（AI 解析之外的另一条录入路径） */

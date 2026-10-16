@@ -257,6 +257,64 @@ class BankManageQuestionApiTest {
     assertThat(unitOf(questionId)).isEqualTo(myUnit);
   }
 
+  /** 题库内检索：只返回题干命中的题目，空关键词等于不筛选 */
+  @Test
+  void searchReturnsOnlyMatchingQuestions() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    long unitId = createUnit(bankId, "第一章");
+    authenticate(userId, false);
+    long indexQuestion = insertQuestion(unitId, "SINGLE", "索引的作用是什么？");
+    insertQuestion(unitId, "SINGLE", "事务的隔离级别有几个？");
+
+    List<Map<String, Object>> hit = controller.questions(bankId, "ALL", "索引").data();
+    assertThat(hit).hasSize(1);
+    assertThat(hit.get(0).get("id")).isEqualTo(indexQuestion);
+
+    // 空串 / 纯空格都等于不筛选
+    assertThat(controller.questions(bankId, "ALL", "").data()).hasSize(2);
+    assertThat(controller.questions(bankId, "ALL", "   ").data()).hasSize(2);
+  }
+
+  /** 检索词里的 % 是普通字符，不能把整个题库捞回来 */
+  @Test
+  void searchDoesNotTreatPercentAsWildcard() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    long unitId = createUnit(bankId, "第一章");
+    authenticate(userId, false);
+    insertQuestion(unitId, "SINGLE", "正常题目一");
+    insertQuestion(unitId, "SINGLE", "正常题目二");
+    insertQuestion(unitId, "SINGLE", "命中率 90% 的那道题");
+
+    List<Map<String, Object>> hit = controller.questions(bankId, "ALL", "%").data();
+    assertThat(hit).hasSize(1);
+    assertThat(String.valueOf(hit.get(0).get("content"))).contains("90%");
+  }
+
+  /** 检索叠加状态过滤，且不放宽权限 */
+  @Test
+  void searchStacksWithStatusFilterAndStillChecksPermission() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    long unitId = createUnit(bankId, "第一章");
+    authenticate(userId, false);
+    long onQuestion = insertQuestion(unitId, "SINGLE", "索引的作用是什么？");
+    long offQuestion = insertQuestion(unitId, "SINGLE", "索引失效的常见原因？");
+    jdbc.update("update question set status = 'OFF' where id = ?", offQuestion);
+
+    assertThat(idsOf(controller.questions(bankId, "ON", "索引").data())).containsExactly(onQuestion);
+    assertThat(idsOf(controller.questions(bankId, "OFF", "索引").data())).containsExactly(offQuestion);
+
+    long otherBankId = createBank(createUser("USER"), "别人的题库");
+    ApiException error = assertThrows(
+        ApiException.class, () -> controller.questions(otherBankId, "ALL", "索引"));
+    assertThat(error.getStatus()).isEqualTo(403);
+    // 列表按 q.id 倒序，后插入的排在前面
+    assertThat(idsOf(controller.questions(bankId, "ALL", "索引").data()))
+        .containsExactly(offQuestion, onQuestion);
+  }
+
   @Test
   void badChoiceQuestionIsRefused() {
     String userId = createUser("USER");
@@ -355,6 +413,11 @@ class BankManageQuestionApiTest {
 
   private long unitOf(long questionId) {
     return jdbc.queryForObject("select unit_id from question where id = ?", Long.class, questionId);
+  }
+
+  /** 列表接口返回的行里取出 id，方便断言筛选结果 */
+  private List<Object> idsOf(List<Map<String, Object>> rows) {
+    return rows.stream().map(row -> row.get("id")).toList();
   }
 
   private String unitName(long unitId) {

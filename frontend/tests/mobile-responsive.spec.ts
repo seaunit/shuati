@@ -1347,6 +1347,122 @@ test("saved question edit shows a result the user can always see", async ({ page
   expect(updated).toMatchObject({ unitId: 21, type: "SHORT" });
 });
 
+const LONG_CONTENT =
+  "原型设计阶段需要参考两类核心文档：业务建模文档与产品需求文档，通常需要一次性生成两份设计文档，"
+  + "输出内容应包含页面清单、每个页面的结构层次、页面中的主要功能模块、页面之间的跳转关系以及关键交互流程。";
+
+/** 题库管理页 + 两道题目（一道题干超长），用来验证列表对齐与检索 */
+async function mockLongQuestionList(page: import("@playwright/test").Page) {
+  await mockBankList(page, "USER");
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: null, is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "第一章", sort: 0, question_count: 2, off_count: 0 }],
+      },
+    }),
+  );
+  return page.route("**/api/manage/banks/11/questions*", (route) => {
+    const keyword = new URL(route.request().url()).searchParams.get("q") ?? "";
+    const rows = [
+      {
+        id: 77,
+        unit_id: 21,
+        type: "SHORT",
+        content: LONG_CONTENT,
+        status: "ON",
+        difficulty: "MEDIUM",
+        options: null,
+        answer: "参考答案",
+        key_points: null,
+        explanation: null,
+        tags: [],
+      },
+      {
+        id: 78,
+        unit_id: 21,
+        type: "SINGLE",
+        content: "索引的作用是什么？",
+        status: "ON",
+        difficulty: "EASY",
+        options: [
+          { key: "A", text: "加快查询" },
+          { key: "B", text: "加快写入" },
+        ],
+        answer: "A",
+        key_points: null,
+        explanation: null,
+        tags: [],
+      },
+    ];
+    const data = keyword ? rows.filter((row) => row.content.includes(keyword)) : rows;
+    return route.fulfill({ json: { code: 200, message: "ok", data } });
+  });
+}
+
+test("long question text truncates without pushing the row buttons to a second line", async ({
+  page,
+}) => {
+  await mockLongQuestionList(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/app/banks/11");
+
+  const content = page.locator(`span[title^="原型设计阶段需要参考两类核心文档"]`);
+  await expect(content).toBeVisible();
+
+  // 题干真的被截断了（不是被挤宽），并且行内没有横向溢出
+  expect(await content.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    ),
+  ).toBe(false);
+
+  // 操作按钮仍在同一行：题干与「编辑题目」按钮的垂直中心对齐
+  const editButton = page.getByTitle("编辑题目").first();
+  const contentBox = (await content.boundingBox())!;
+  const buttonBox = (await editButton.boundingBox())!;
+  const contentCenter = contentBox.y + contentBox.height / 2;
+  const buttonCenter = buttonBox.y + buttonBox.height / 2;
+  expect(Math.abs(contentCenter - buttonCenter)).toBeLessThan(6);
+});
+
+test("bank management searches questions by keyword", async ({ page }) => {
+  const queries: string[] = [];
+  await mockLongQuestionList(page);
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/manage/banks/11/questions") {
+      queries.push(url.searchParams.get("q") ?? "");
+    }
+  });
+
+  await page.goto("/app/banks/11");
+  await expect(page.getByText("索引的作用是什么？")).toBeVisible();
+  await expect(page.locator('span[title^="原型设计阶段需要参考两类核心文档"]')).toBeVisible();
+
+  // 检索由服务端做：请求带上 q，列表收敛到命中项
+  await page.getByLabel("检索题目").fill("索引");
+  await expect(page.getByText("索引的作用是什么？")).toBeVisible();
+  await expect(page.locator('span[title^="原型设计阶段需要参考两类核心文档"]')).toHaveCount(0);
+  expect(queries).toContain("索引");
+
+  // 清空后恢复全部
+  await page.getByLabel("清空检索").click();
+  await expect(page.locator('span[title^="原型设计阶段需要参考两类核心文档"]')).toBeVisible();
+  expect(queries[queries.length - 1]).toBe("");
+});
+
 test("sidebar no longer carries the standalone import entry", async ({ page }) => {
   await mockBankList(page, "USER");
   await page.goto("/app");

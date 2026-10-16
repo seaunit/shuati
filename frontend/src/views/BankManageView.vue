@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { Check, Loader2, Pencil, Plus, Trash2, Upload, X } from "lucide-vue-next";
+import { Check, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-vue-next";
 import { api, ApiRequestError } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 
@@ -67,6 +67,9 @@ const newUnitName = ref("");
 const editingUnitId = ref<number | null>(null);
 const editingUnitName = ref("");
 const questionFilter = ref<"ALL" | "ON" | "OFF">("ALL");
+// 题干检索：输入后防抖再请求，避免每敲一个字都打一次接口
+const keyword = ref("");
+let keywordTimer: number | null = null;
 
 // 删题库要先过邮箱验证码，验完才执行
 const deleteOpen = ref(false);
@@ -161,10 +164,24 @@ async function loadUnits() {
 }
 
 async function loadQuestions() {
-  questions.value = await api<Question[]>(
-    `/api/manage/banks/${bankId}/questions?status=${questionFilter.value}`,
-  );
+  const params = new URLSearchParams({ status: questionFilter.value });
+  const search = keyword.value.trim();
+  if (search) {
+    params.set("q", search);
+  }
+  questions.value = await api<Question[]>(`/api/manage/banks/${bankId}/questions?${params}`);
 }
+
+// 检索框与状态过滤都走同一份查询，任何一项变化都重新拉列表
+watch(keyword, () => {
+  if (keywordTimer !== null) {
+    window.clearTimeout(keywordTimer);
+  }
+  keywordTimer = window.setTimeout(() => {
+    keywordTimer = null;
+    loadQuestions().catch((e) => fail(e, "加载题目失败"));
+  }, 300);
+});
 
 async function load() {
   loading.value = true;
@@ -584,6 +601,9 @@ onBeforeUnmount(() => {
   stopDeleteCooldown();
   if (toastTimer !== null) {
     window.clearTimeout(toastTimer);
+  }
+  if (keywordTimer !== null) {
+    window.clearTimeout(keywordTimer);
   }
   document.body.style.overflow = "";
 });
@@ -1010,24 +1030,45 @@ onBeforeUnmount(() => {
       <section class="mt-6 rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 class="font-medium text-ink">题目</h2>
-          <div class="flex gap-1">
-            <button
-              v-for="item in [
-                { key: 'ALL', label: '全部' },
-                { key: 'ON', label: '已上架' },
-                { key: 'OFF', label: '已下架' },
-              ]"
-              :key="item.key"
-              class="rounded-lg border px-2.5 py-1 text-xs transition"
-              :class="
-                questionFilter === item.key
-                  ? 'border-moss bg-moss/10 text-moss'
-                  : 'border-mist bg-white/70 text-ink'
-              "
-              @click="changeFilter(item.key as 'ALL' | 'ON' | 'OFF')"
-            >
-              {{ item.label }}
-            </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="relative flex items-center">
+              <Search class="pointer-events-none absolute left-2.5 h-4 w-4 text-oat" />
+              <input
+                v-model="keyword"
+                aria-label="检索题目"
+                placeholder="检索题干"
+                class="h-8 w-40 rounded-lg border border-mist bg-white/70 pl-8 pr-7 text-xs text-ink outline-none transition focus:border-moss sm:w-52"
+              />
+              <button
+                v-if="keyword"
+                type="button"
+                aria-label="清空检索"
+                title="清空检索"
+                class="absolute right-1.5 flex h-5 w-5 items-center justify-center rounded-md text-oat transition hover:text-ink"
+                @click="keyword = ''"
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </label>
+            <div class="flex gap-1">
+              <button
+                v-for="item in [
+                  { key: 'ALL', label: '全部' },
+                  { key: 'ON', label: '已上架' },
+                  { key: 'OFF', label: '已下架' },
+                ]"
+                :key="item.key"
+                class="rounded-lg border px-2.5 py-1 text-xs transition"
+                :class="
+                  questionFilter === item.key
+                    ? 'border-moss bg-moss/10 text-moss'
+                    : 'border-mist bg-white/70 text-ink'
+                "
+                @click="changeFilter(item.key as 'ALL' | 'ON' | 'OFF')"
+              >
+                {{ item.label }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1036,20 +1077,32 @@ onBeforeUnmount(() => {
           <div
             v-for="question in questions"
             :key="question.id"
-            class="flex flex-wrap items-center gap-2 rounded-xl border border-mist bg-paper px-3 py-2"
+            class="flex flex-wrap items-center gap-2 rounded-xl border border-mist bg-paper px-3 py-2 sm:flex-nowrap"
           >
-            <span class="shrink-0 rounded-md bg-mist px-1.5 py-0.5 text-xs text-oat">
+            <span class="w-10 shrink-0 rounded-md bg-mist px-1.5 py-0.5 text-center text-xs text-oat">
               {{ typeLabel(question.type) }}
             </span>
-            <span class="shrink-0 text-xs text-oat">{{ difficultyLabel(question.difficulty) }}</span>
-            <span class="min-w-0 flex-1 basis-full truncate text-sm text-ink sm:basis-auto">
+            <span class="w-8 shrink-0 text-center text-xs text-oat">
+              {{ difficultyLabel(question.difficulty) }}
+            </span>
+            <!--
+              题干占剩余空间并在超宽时省略：桌面下基准必须给 0（basis-0），
+              否则 flex 会先按 max-content 换行、再谈收缩，按钮就被挤到第二行了。
+            -->
+            <span
+              class="min-w-0 basis-full flex-1 truncate text-sm text-ink sm:basis-0"
+              :title="question.content"
+            >
               {{ question.content }}
             </span>
-            <span class="shrink-0 text-xs text-oat">
+            <span
+              class="w-20 shrink-0 truncate text-right text-xs text-oat"
+              :title="unitNameById.get(question.unit_id) ?? '—'"
+            >
               {{ unitNameById.get(question.unit_id) ?? "—" }}
             </span>
             <span
-              class="shrink-0 rounded-md px-1.5 py-0.5 text-xs"
+              class="w-14 shrink-0 rounded-md px-1.5 py-0.5 text-center text-xs"
               :class="question.status === 'ON' ? 'bg-moss/10 text-moss' : 'bg-mist text-oat'"
             >
               {{ question.status === "ON" ? "已上架" : "已下架" }}
@@ -1062,7 +1115,7 @@ onBeforeUnmount(() => {
               <Pencil class="h-3.5 w-3.5" />
             </button>
             <button
-              class="shrink-0 rounded-lg border border-mist px-2 py-1 text-xs text-ink transition hover:border-moss"
+              class="w-14 shrink-0 rounded-lg border border-mist py-1 text-center text-xs text-ink transition hover:border-moss"
               @click="toggleQuestion(question)"
             >
               {{ question.status === "ON" ? "下架" : "上架" }}
