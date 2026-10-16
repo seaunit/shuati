@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  与网页端 frontend/public/favicon.svg 同一个叶子：把 32×32 的图标等比放大 2.25 倍
-  （32 × 2.25 = 72，正好落在自适应图标 108dp 画布的安全区里），路径数据逐字照抄。
+  与网页端 frontend/public/favicon.svg 同一个叶子，路径数据逐字照抄。
+
+  变换要和原 SVG 等价：原图是「路径 translate(4,4) → 32×32 视口」，这里再把 32 视口
+  等比放大 2.25 倍（32 × 2.25 = 72，正好是自适应图标 108dp 画布的安全区）并居中（+18）。
+  两段合起来是 (p + 4) × 2.25 + 18 = p × 2.25 + 27，
+  所以平移量是 27 而不是 18 —— 少算那 4 个单位会让叶子整体偏到左上角去。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -9,8 +13,8 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:translateX="18"
-        android:translateY="18"
+        android:translateX="27"
+        android:translateY="27"
         android:scaleX="2.25"
         android:scaleY="2.25">
         <path
