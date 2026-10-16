@@ -75,6 +75,9 @@ npm --prefix frontend run dev      # http://127.0.0.1:5173
 # 移动端壳（Capacitor：同一份前端产物打包成 App；JDK 17 + 本机 Android SDK，不需要 Android Studio）
 cd mobile; npm install; npm run apk
 
+# 移动端发版（版本号在 mobile/version.properties；产物含版本号 + latest.json 清单）
+cd mobile; npm run publish:apk
+
 # 已退役的原生客户端（v1.2.0 起被 mobile/ 取代，仅供查阅，不再构建分发）
 # cd android; .\gradlew.bat :app:assembleDebug
 ```

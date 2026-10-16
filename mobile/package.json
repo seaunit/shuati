@@ -9,6 +9,7 @@
     "sync": "cap sync",
     "sync:android": "cap sync android",
     "apk": "node scripts/build-android.mjs",
+    "publish:apk": "node scripts/publish-apk.mjs",
     "check": "node scripts/check-config.mjs"
   },
   "dependencies": {

@@ -17,8 +17,12 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <!-- 用纯色而不是模板的 splash 图：品牌由本地启动页展示，启动瞬间只铺底色，避免跳色 -->
+        <!--
+          只铺品牌底色、不放图标：品牌（叶子 + 拾题 + 一句话）统一由本地启动页展示，
+          否则会出现「大叶子 → 叶子+文字」两个启动画面。
+        -->
         <item name="android:background">@color/splash_background</item>
         <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/transparent_splash_icon</item>
     </style>
 </resources>

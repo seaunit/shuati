@@ -14,6 +14,8 @@ const router = createRouter({
     // 合规页面：公开可访问，不需要登录（Waffo 生产审核会检查）
     { path: "/terms", component: () => import("@/views/TermsView.vue") },
     { path: "/privacy", component: () => import("@/views/PrivacyView.vue") },
+    // 安卓包下载页：公开页，方便直接分享/扫码，不需要登录（宪法 v1.3.0 要求提供下载页）
+    { path: "/download", component: () => import("@/views/DownloadView.vue") },
     {
       path: "/app",
       component: () => import("@/layouts/AppLayout.vue"),

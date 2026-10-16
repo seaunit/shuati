@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// 版本号来自 mobile/version.properties（唯一来源，宪法 v1.3.0）；
+// 必须在顶层读：android {} 里解析不到 project.file()
+def versionProps = new Properties()
+project.file("../../version.properties").withInputStream { versionProps.load(it) }
+def appVersionName = versionProps.getProperty("versionName")
+def appVersionCode = versionProps.getProperty("versionCode").toInteger()
+
 android {
     namespace = "site.seaunit.shuati"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +14,8 @@ android {
         applicationId "site.seaunit.shuati"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

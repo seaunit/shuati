@@ -296,6 +296,24 @@ Nginx 已配好 `/pay/webhooks/` → `127.0.0.1:8090` 的反代，且只暴露�
 
 ## 8. 日常运维
 
+### 安卓安装包发布（`/apk/`）
+
+网页端下载页是 `/download`，安装包与版本清单放在 `/apk/`（Nginx 已把 `/apk/` 指向
+`/opt/shuati/apk/`；两个路径必须分开，否则带斜杠访问会撞成目录）。部署脚本只建目录、不清内容，
+重新部署不会删掉已上传的安装包。
+
+```bash
+# 本机出包（版本号在 mobile/version.properties，产物带版本号 + latest.json 清单）
+cd mobile && npm run publish:apk
+
+# 上传（三个文件一起传：带版本的产物、稳定别名、版本清单）
+scp mobile/releases/shuati-android-*.apk mobile/releases/shuati-android.apk \
+    mobile/releases/latest.json <服务器>:/opt/shuati/apk/
+```
+
+上传后 `https://www.seaunit.site/download` 自动显示新版本号（页面读的是 `latest.json`，不缓存），
+下载按钮与二维码都指向 `/apk/shuati-android.apk`。
+
 ```bash
 sudo journalctl -u shuati -f            # 后端日志
 sudo journalctl -u shuati-payments -f   # 支付侧车日志

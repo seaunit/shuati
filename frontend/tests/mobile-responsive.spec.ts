@@ -76,6 +76,40 @@ test("site favicon uses the Shuati leaf brand mark", async ({ page, request }) =
   expect(await response.text()).toContain("<svg");
 });
 
+const RELEASE_MANIFEST = {
+  version: "1.2.3",
+  versionCode: 7,
+  sizeMb: 4.19,
+  sha256: "ABCDEF123456",
+  publishedAt: "2026-10-17T09:30:00Z",
+  url: "https://www.seaunit.site/apk/shuati-android.apk",
+};
+
+test("download page offers the apk with a qr code and the published version", async ({ page, request }) => {
+  await page.route("**/apk/latest.json", (route) =>
+    route.fulfill({ json: RELEASE_MANIFEST }),
+  );
+
+  await page.goto("/download");
+
+  await expect(page.getByRole("heading", { name: "下载拾题安卓版" })).toBeVisible();
+  // 版本号来自服务端清单，不是页面里手写的
+  await expect(page.getByText("当前版本 v1.2.3")).toBeVisible();
+  await expect(page.getByText("4.19 MB", { exact: false })).toBeVisible();
+
+  // 点击下载指向静态产物（/apk/ 与页面路由 /download 分开，避免带斜杠撞车）
+  await expect(page.getByTestId("download-apk")).toHaveAttribute("href", "/apk/shuati-android.apk");
+
+  // 二维码：构建时可能被内联成 data URL，所以只断言"渲染出来了且是 SVG"
+  const qr = page.getByTestId("download-qr");
+  await expect(qr).toBeVisible();
+  const qrSrc = (await qr.getAttribute("src")) ?? "";
+  expect(qrSrc.includes("svg")).toBe(true);
+  // 静态文件本身也必须发布出去（public 目录随构建产物一起部署）
+  const qrFile = await request.get("/download-qr.svg");
+  expect(qrFile.ok()).toBe(true);
+});
+
 test("captcha is only required for login, not register or forgot password", async ({ page }) => {
   await page.route("**/captcha/image", (route) =>
     route.fulfill({

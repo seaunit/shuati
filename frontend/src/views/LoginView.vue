@@ -326,6 +326,10 @@ watch(email, resetEmailCode);
         <a class="text-moss transition hover:text-moss/80" href="mailto:sealevel666@163.com">
           sealevel666@163.com
         </a>
+        <span class="mx-1">·</span>
+        <RouterLink to="/download" class="text-moss transition hover:text-moss/80">
+          下载安卓 App
+        </RouterLink>
       </p>
     </div>
   </main>

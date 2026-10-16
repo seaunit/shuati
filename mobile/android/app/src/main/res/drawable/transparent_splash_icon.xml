@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  系统启动画面（Android 12+ 的 SplashScreen）里不放图标：
+  否则用户会先看到一个大叶子，再切到本地启动页（叶子 + 文字），等于两个启动画面。
+  透明之后系统阶段只铺品牌底色，品牌信息统一交给本地启动页展示。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <size android:width="1dp" android:height="1dp" />
+    <solid android:color="#00000000" />
+</shape>

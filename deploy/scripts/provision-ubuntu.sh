@@ -92,6 +92,10 @@ echo "==> 6/9 部署应用产物"
 install -m 0644 "$BUILD_DIR/backend/target/shuati-backend.jar" \
   "$APP_DIR/shuati-backend.jar"
 
+# 安卓包发布目录：下载页与二维码指向 /apk/shuati-android.apk
+# 这里只建目录、不动内容，重新部署不会删掉已经上传的安装包
+install -d -o shuati -g shuati -m 0755 "$APP_DIR/apk"
+
 rm -rf "$APP_DIR/frontend"
 install -d -o shuati -g shuati -m 0755 "$APP_DIR/frontend"
 cp -a "$BUILD_DIR/frontend/dist/." "$APP_DIR/frontend/"

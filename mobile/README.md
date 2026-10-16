@@ -40,6 +40,43 @@ npm run apk          # 同步 web/插件 + 出调试包
 
 > 首次跑 `npm run apk` 时，Gradle wrapper 会下载一次分发包；之后都走本地缓存。
 
+## 版本号与发布（宪法 v1.3.0 要求）
+
+版本号**只有一个来源**：`mobile/version.properties`
+
+```properties
+versionName=1.0.0   # 语义化版本，每次出包按需递增
+versionCode=1       # 每次出包必须 +1（Android 用它判断能不能覆盖安装）
+```
+
+`android/app/build.gradle` 从这里读取，所以**不要**在别处再写版本号。
+
+出包 + 生成发布产物与版本清单：
+
+```powershell
+npm run publish:apk
+```
+
+产物（都在 `mobile/releases/`，**不进 Git**）：
+
+| 文件 | 用途 |
+| --- | --- |
+| `shuati-android-{版本号}.apk` | 带版本号的产物，留档 |
+| `shuati-android.apk` | 稳定别名的"最新包"，下载页与二维码指向它 |
+| `latest.json` | 版本清单（版本号、体积、SHA256、发布时间、下载地址），下载页只读它 |
+
+然后上传到服务器（Nginx 已把 `/apk/` 指向 `/opt/shuati/apk/`）：
+
+```powershell
+scp .\releases\shuati-android-1.0.0.apk .\releases\shuati-android.apk .\releases\latest.json <服务器>:/opt/shuati/apk/
+
+# 或者让脚本代传
+$env:SHUATI_DEPLOY_HOST='root@<服务器IP>'; npm run publish:apk
+```
+
+上传后无需改前端：网页端下载页 `https://www.seaunit.site/download` 会用清单里的新版本号，
+二维码和下载按钮都指向 `/apk/shuati-android.apk`（下次出包只要覆盖这个文件）。
+
 安装到真机：
 
 ```powershell
@@ -78,6 +115,9 @@ npm run sync
 ```powershell
 npm run check        # 断言 appId / 站点地址 / 应用名 / 图标资源存在
 ```
+
+> 只有**改动客户端本身**（图标、启动页、版本号）才需要重新出包并让用户重新下载；
+> 平时的功能改动都在网页端，部署即生效。
 
 ## 已知风险（宪法要求显式记录）
 

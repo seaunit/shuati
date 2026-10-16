@@ -46,6 +46,13 @@
     `https://www.seaunit.site/app/`；`assets/capacitor.config.json` 无 `server.url` 且
     `allowNavigation` 就位；APK 4.19 MB
 
+## Phase 6: 启动画面去重（用户反馈）
+
+- [x] T014 只保留一个品牌启动画面：
+  用户反馈"有两个启动画面，一个大叶子（没文字）、一个叶子+文字" —— 前者是 Android 12+
+  的系统 SplashScreen 用应用图标画的。现在把 `windowSplashScreenAnimatedIcon` 指向透明 drawable，
+  系统阶段只铺品牌底色，品牌信息统一由本地启动页展示（`styles.xml` + `drawable/transparent_splash_icon.xml`）。
+
 ## 依赖与顺序
 
 - Phase 1 先做（壳配置决定后面怎么生成平台工程）

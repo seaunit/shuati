@@ -3,6 +3,9 @@ node_modules/
 # 本机便携 JDK（Capacitor 8 的 Android 构建需要 JDK 21，不进仓库）
 .jdk/
 
+# 发布产物与版本清单（宪法 v1.3.0：产物不进 Git，放到服务器 /download/）
+releases/
+
 # Capacitor 生成的平台工程里的构建产物与本机配置
 android/.gradle/
 android/build/
