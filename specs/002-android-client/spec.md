@@ -1,5 +1,11 @@
 # Feature Specification: 拾题安卓客户端（以网页端为准）
 
+> **已退役（2026-10-16，宪法 v1.2.0）**：本规格描述的是**原生 Kotlin/Compose 客户端**，
+> 它已被 [`specs/003-cross-platform-shell`](../003-cross-platform-shell/spec.md) 取代 ——
+> 客户端的界面不再单独实现，改为「同一份前端产物 + Capacitor 壳」多端打包。
+> 代码保留在 `android/` 仅供查阅，不再构建分发；本目录里的 API 契约清单
+> （[contracts/api-reuse.md](./contracts/api-reuse.md)）仍然有效，两端通用。
+
 **Feature Branch**: `002-android-client`
 
 **Created**: 2026-10-16

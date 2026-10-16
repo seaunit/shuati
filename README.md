@@ -8,7 +8,8 @@
 ```
 backend/   Spring Boot 后端（Java 17 + Maven + Flyway）
 frontend/  Vue 3 前端（Vite + Pinia + Tailwind 4）
-android/   安卓客户端（Kotlin + Jetpack Compose，复用同一套 /api）
+mobile/    移动端壳（Capacitor：把 frontend 的产物打包成 Android / iOS App）
+android/   已退役的原生客户端（Kotlin + Compose，仅供查阅，不再构建分发）
 payments/  Waffo Pancake 支付侧车（Node）
 db/        Supabase → MySQL 迁移脚本与说明
 deploy/    Nginx / systemd / 构建部署脚本
@@ -46,7 +47,7 @@ npm --prefix frontend run dev
 ```bash
 mvn -f backend/pom.xml test        # 需要本机 MySQL 的 shuati_test 库
 npm --prefix frontend run build    # 类型检查 + 生产构建
-cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug   # 安卓端（JDK 17 + Android SDK）
+cd mobile && npm install && npm run apk   # 移动端壳出 Android 调试包（JDK 17 + Android SDK）
 ```
 
 ## 生产部署

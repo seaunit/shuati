@@ -72,8 +72,11 @@ mvn -f backend/pom.xml spring-boot:run -Dspring-boot.run.profiles=local
 # 本地起前端
 npm --prefix frontend run dev      # http://127.0.0.1:5173
 
-# 安卓端（JDK 17 + 本机 Android SDK；不需要 Android Studio）
-cd android; .\gradlew.bat :app:testDebugUnitTest; .\gradlew.bat :app:assembleDebug
+# 移动端壳（Capacitor：同一份前端产物打包成 App；JDK 17 + 本机 Android SDK，不需要 Android Studio）
+cd mobile; npm install; npm run apk
+
+# 已退役的原生客户端（v1.2.0 起被 mobile/ 取代，仅供查阅，不再构建分发）
+# cd android; .\gradlew.bat :app:assembleDebug
 ```
 
 ```bash
@@ -88,13 +91,14 @@ curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/
 
 | 端 | 目录 | 定位 |
 | --- | --- | --- |
-| 后端 | `backend/` | 唯一的 API 与业务规则来源（`/api/**`），网页端与安卓端共用 |
-| 网页端 | `frontend/` | 功能定义来源：新功能先在网页端定义并可用 |
-| 安卓端 | `android/` | 复用同一套 `/api/**` 与同一套 JWT（Cookie），只对齐网页端已有能力 |
+| 后端 | `backend/` | 唯一的 API 与业务规则来源（`/api/**`），网页端与移动端共用 |
+| 网页端 | `frontend/` | **唯一界面实现**：新功能先在网页端定义并可用 |
+| 移动端壳 | `mobile/` | Capacitor 壳：把同一份前端产物打包成 Android / iOS App，只做打包与原生能力 |
 | 支付侧车 | `payments/` | Waffo Pancake 下单与回调，两端都只是跳到它给出的支付页 |
+| 旧原生客户端 | `android/` | **已退役**（宪法 v1.2.0 起由 `mobile/` 取代，保留代码仅供查阅，不再构建分发） |
 
-安卓端的三条硬约束：不新增接口、不新增"仅 App 生效"的字段或分支、不本地重复实现业务判定
-（例如选择题对错由服务端返回，不在客户端判分）。契约清单见
+移动端的三条硬约束：**不另写原生界面**、不新增接口或"仅 App 生效"的字段与分支、
+不在客户端重复实现业务判定（例如选择题对错由服务端返回，不在客户端判分）。契约清单两端通用，见
 [`specs/002-android-client/contracts/api-reuse.md`](specs/002-android-client/contracts/api-reuse.md)。
 
 ---
