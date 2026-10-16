@@ -1261,6 +1261,92 @@ test("question form shows up as a modal and closes on Esc or backdrop", async ({
   await expect(page.getByRole("dialog", { name: "新增题目" })).toHaveCount(0);
 });
 
+/** 题库管理页 + 一道简答题，用来验证编辑保存的反馈 */
+async function mockEditableQuestionPage(page: import("@playwright/test").Page) {
+  await mockBankList(page, "USER");
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: null, is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "简答", sort: 0, question_count: 1, off_count: 0 }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 77,
+            unit_id: 21,
+            type: "SHORT",
+            content: "原型设计阶段需要参考哪两类核心文档？",
+            status: "ON",
+            difficulty: "MEDIUM",
+            options: null,
+            answer: "参考答案",
+            key_points: null,
+            explanation: null,
+            tags: [],
+          },
+        ],
+      },
+    }),
+  );
+}
+
+test("failed question edit reports inside the dialog instead of behind it", async ({ page }) => {
+  await mockEditableQuestionPage(page);
+  await page.route("**/api/manage/questions/77", (route) =>
+    route.fulfill({
+      status: 500,
+      json: { code: 500, message: "服务器内部错误", data: null },
+    }),
+  );
+
+  await page.goto("/app/banks/11");
+  await page.getByTitle("编辑题目").click();
+
+  const dialog = page.getByRole("dialog", { name: "编辑题目" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "保存修改" }).click();
+
+  // 页面顶部的提示条被弹窗挡住，报错必须落在弹窗里，并且弹窗保持打开好让用户重试
+  await expect(dialog.getByRole("alert")).toHaveText("服务器内部错误（HTTP 500）");
+  await expect(dialog).toBeVisible();
+});
+
+test("saved question edit shows a result the user can always see", async ({ page }) => {
+  await mockEditableQuestionPage(page);
+  let updated: Record<string, unknown> | null = null;
+  await page.route("**/api/manage/questions/77", (route) => {
+    updated = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: null } });
+  });
+
+  await page.goto("/app/banks/11");
+  await page.getByTitle("编辑题目").click();
+  const dialog = page.getByRole("dialog", { name: "编辑题目" });
+  await dialog.getByRole("button", { name: "保存修改" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("题目已保存");
+  await expect(page.getByRole("dialog", { name: "编辑题目" })).toHaveCount(0);
+  // 保存时把当前所属单元一起带上，后端才能按表单里的选择落库
+  expect(updated).toMatchObject({ unitId: 21, type: "SHORT" });
+});
+
 test("sidebar no longer carries the standalone import entry", async ({ page }) => {
   await mockBankList(page, "USER");
   await page.goto("/app");

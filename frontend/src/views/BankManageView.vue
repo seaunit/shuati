@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Check, Loader2, Pencil, Plus, Trash2, Upload, X } from "lucide-vue-next";
-import { api } from "@/api/client";
+import { api, ApiRequestError } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 
 interface Bank {
@@ -58,6 +58,10 @@ const loading = ref(true);
 const busy = ref(false);
 const notice = ref("");
 const noticeError = ref("");
+// 新增/编辑题目这类「点了按钮就关窗」的操作，结果必须显示在视口里：
+// 页面顶部的 notice 条在题目列表很长、页面已滚动时是看不见的（曾让用户以为没保存成功）。
+const toast = ref("");
+let toastTimer: number | null = null;
 
 const newUnitName = ref("");
 const editingUnitId = ref<number | null>(null);
@@ -121,6 +125,26 @@ function difficultyLabel(value: string | null | undefined) {
 
 function fail(e: unknown, fallback: string) {
   noticeError.value = e instanceof Error ? e.message : fallback;
+}
+
+/** 固定悬浮提示，任何滚动位置都看得见；定时自动收起 */
+function showToast(message: string) {
+  toast.value = message;
+  if (toastTimer !== null) {
+    window.clearTimeout(toastTimer);
+  }
+  toastTimer = window.setTimeout(() => {
+    toast.value = "";
+    toastTimer = null;
+  }, 5000);
+}
+
+/** 保存失败的文案带上 HTTP 状态码，4xx（参数/权限）和 5xx（服务端异常）一眼能分清 */
+function saveFailureMessage(e: unknown) {
+  if (e instanceof ApiRequestError) {
+    return `${e.message}（HTTP ${e.status}）`;
+  }
+  return e instanceof Error ? e.message : "保存题目失败，请稍后重试";
 }
 
 async function loadBanks() {
@@ -502,26 +526,33 @@ function buildPayload() {
 }
 
 async function submitQuestion() {
-  const payload = buildPayload();
-  if (!payload) return;
+  if (busy.value) return;
   busy.value = true;
   notice.value = "";
   noticeError.value = "";
+  formError.value = "";
   try {
-    if (editingQuestionId.value === null) {
+    const payload = buildPayload();
+    if (!payload) return;
+    const editing = editingQuestionId.value !== null;
+    if (!editing) {
       await api("/api/manage/questions", { method: "POST", body: JSON.stringify(payload) });
-      notice.value = "题目已新增";
     } else {
       await api(`/api/manage/questions/${editingQuestionId.value}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
-      notice.value = "题目已保存";
     }
     closeForm();
-    await Promise.all([loadQuestions(), loadUnits()]);
+    showToast(editing ? "题目已保存" : "题目已新增");
+    // 保存已经成功，刷新列表失败不该让用户以为没保存上，所以单独处理
+    await Promise.all([loadQuestions(), loadUnits()]).catch(() => {
+      showToast("题目已保存，但列表刷新失败，请手动刷新页面确认");
+    });
   } catch (e) {
-    fail(e, "保存题目失败");
+    // 失败提示必须落在弹窗里（弹窗盖住了页面顶部）：显示在吸底操作栏上方，
+    // 用户点完按钮就能看到，并且弹窗保持打开，改完能直接重试。
+    formError.value = saveFailureMessage(e);
   } finally {
     busy.value = false;
   }
@@ -551,12 +582,23 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
   stopDeleteCooldown();
+  if (toastTimer !== null) {
+    window.clearTimeout(toastTimer);
+  }
   document.body.style.overflow = "";
 });
 </script>
 
 <template>
   <div class="w-full">
+    <!-- 新增/编辑题目的结果提示：固定悬浮，页面滚到哪儿都看得见 -->
+    <div
+      v-if="toast"
+      role="status"
+      class="fixed inset-x-0 top-4 z-[60] mx-auto w-[calc(100%-2rem)] max-w-sm rounded-xl border border-moss/40 bg-white px-4 py-2.5 text-center text-sm text-moss shadow-lg"
+    >
+      {{ toast }}
+    </div>
     <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
         <h1 class="text-2xl font-semibold tracking-tight text-ink">题库管理</h1>
@@ -935,14 +977,18 @@ onBeforeUnmount(() => {
           />
         </label>
 
-        <p v-if="formError" class="mt-3 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">
-          {{ formError }}
-        </p>
-
         <!-- 表单比视口高时，操作栏吸在弹窗底部，不用滚到最后才能保存 -->
         <div
           class="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex flex-wrap gap-2 border-t border-mist bg-paper px-4 pb-4 pt-3 sm:-bottom-5 sm:-mx-5 sm:-mb-5 sm:px-5 sm:pb-5"
         >
+          <!-- 报错放在操作栏里，吸底时也一定看得见 -->
+          <p
+            v-if="formError"
+            role="alert"
+            class="w-full rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose"
+          >
+            {{ formError }}
+          </p>
           <button
             class="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
             :disabled="busy"

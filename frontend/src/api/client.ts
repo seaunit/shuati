@@ -9,6 +9,21 @@ export interface ApiOptions {
   redirectOn401?: boolean;
 }
 
+/**
+ * 带上 HTTP 状态码的接口错误。
+ * 排障时 4xx（参数/权限）和 5xx（服务端异常）的处理方向完全不同，
+ * 所以把状态码一路带到调用方，界面上能看到、用户截图也能直接定位。
+ */
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
 export async function api<T>(
   path: string,
   init: RequestInit = {},
@@ -37,7 +52,7 @@ export async function api<T>(
         window.location.href = "/login";
       }
     }
-    throw new Error(json.message || "请求失败");
+    throw new ApiRequestError(json.message || "请求失败", response.status);
   }
   return json.data;
 }
