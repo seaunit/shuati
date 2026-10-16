@@ -1,6 +1,8 @@
 package site.seaunit.shuati.practice
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import site.seaunit.shuati.data.dto.ChoiceResult
 import site.seaunit.shuati.data.dto.Question
@@ -48,6 +50,16 @@ class ResumeLocatorTest {
         assertEquals(OptionMark.NORMAL, AnswerRules.mark("C", setOf("B"), result))
         // 未提交前不着色
         assertEquals(OptionMark.NORMAL, AnswerRules.mark("A", setOf("A"), null))
+    }
+
+    /** 解析不能在提交前露出来：解析库里写明了正确选项，提前显示就是泄题 */
+    @Test
+    fun `explanation stays hidden until the question is submitted`() {
+        assertFalse(AnswerRules.canShowExplanation(submitted = false, explanation = "正确选项是 A"))
+        assertFalse(AnswerRules.canShowExplanation(submitted = false, explanation = null))
+        assertFalse(AnswerRules.canShowExplanation(submitted = true, explanation = ""))
+        assertFalse(AnswerRules.canShowExplanation(submitted = true, explanation = null))
+        assertTrue(AnswerRules.canShowExplanation(submitted = true, explanation = "正确选项是 A"))
     }
 
     @Test

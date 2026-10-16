@@ -415,7 +415,8 @@ private fun PracticeBody(state: PracticeState, modifier: Modifier = Modifier) {
             ResultBlock(state)
         }
 
-        if (state.explanation.isNotBlank()) {
+        // 解析必须等提交后才出现，否则等于提前泄答案（规则与单测见 AnswerRules.canShowExplanation）
+        if (AnswerRules.canShowExplanation(state.submitted, state.explanation)) {
             Spacer(Modifier.height(10.dp))
             Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
                 Text(

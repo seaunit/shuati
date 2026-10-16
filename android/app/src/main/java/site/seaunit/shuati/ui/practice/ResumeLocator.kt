@@ -31,6 +31,15 @@ enum class OptionMark { CORRECT, WRONG, NORMAL }
 
 object AnswerRules {
 
+    /**
+     * 解析什么时候能显示：**必须已经提交过**。
+     *
+     * 题库里的解析（解析库）常常直接写出正确选项，进题就显示等于把答案泄给考生。
+     * 与网页端的 `v-if="result && (explanation || explanationError)"` 是同一条规则。
+     */
+    fun canShowExplanation(submitted: Boolean, explanation: String?): Boolean =
+        submitted && !explanation.isNullOrBlank()
+
     /** 正确选项标绿；选错的标红；其余保持原样（与网页端一致） */
     fun mark(optionKey: String, selected: Collection<String>, result: ChoiceResult?): OptionMark {
         if (result == null) return OptionMark.NORMAL

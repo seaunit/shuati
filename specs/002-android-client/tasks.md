@@ -237,3 +237,10 @@
   ③ 一轮刷完再进来停在最后一题 → `ResumeLocator` 抄错了网页端的边界：
   网页端只在"未答题下标 > 0"时跳转，全部答完时回到第 1 题，安卓端原来返回 `lastIndex`。
   现已对齐，单测同步改成"全部答完从头开始"。
+
+- [x] T053 解析提前泄露（用户反馈"没选答案就把正确答案显示出来了"）：
+  题库里有 322 道题带解析库内容，安卓端进题就把 `explanation` 渲染出来了 ——
+  解析里常直接写出正确选项，等于提前泄题。网页端的条件是
+  `v-if="result && (explanation || explanationError)"`，即**必须提交后**才显示。
+  修法：把这条规则下沉成纯函数 `AnswerRules.canShowExplanation(submitted, explanation)`
+  并补 5 条断言的单测（提交前 / 空串 / null / 提交后全覆盖），界面按它渲染。
