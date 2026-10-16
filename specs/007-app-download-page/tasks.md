@@ -32,3 +32,8 @@
       规则（部署脚本又会跳过有证书的配置），导致 `/apk/*` 掉进 SPA 回退返回首页 HTML。
       两份模板补齐规则；部署脚本改为每次重建配置（`nginx -t` 不过自动回滚），
       并在结尾自检 `/apk/` 的 Content-Type
+- [x] T020 二维码卡片化：产品名与标语画进 PNG（原来是挂在 HTML 上，保存下来只有光秃秃
+      一个码）；位图随之变成竖版，Playwright 断言宽高与保存文件名
+- [x] T021 App 里隐藏「下载安卓 App」入口：`frontend/src/appShell.ts` 用壳的本地 origin
+      （Referer）与新版本壳的 UA 标记识别，识出后写 sessionStorage；`capacitor.config.ts`
+      追加 `appendUserAgent: "ShuatiApp"`；Playwright 用 `https://localhost` 当壳真跑一遍

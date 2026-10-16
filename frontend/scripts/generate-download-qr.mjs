@@ -9,8 +9,12 @@
  *   3. 静区（quiet zone）也在这里统一加，省得谁导出时裁掉导致扫不出来。
  *
  * 产出两份：
- *   - download-qr.svg：矢量原图（页面缩放不糊，也方便印刷）
- *   - download-qr.png：1024×1024 位图，给手机长按保存/转发用（SVG 存不下来）
+ *   - download-qr.svg：矢量原图（缩放不糊，也方便印刷）
+ *   - download-qr.png：位图，给手机长按保存/转发用（SVG 存不下来）
+ *
+ * 两张图都是**完整卡片**：二维码 + 中心叶子 + 产品名 + 标语。
+ * 文字必须画进图里——只挂在 HTML 上的话，用户长按保存或点「保存二维码」拿到的
+ * 就是一张光秃秃的二维码，转给朋友谁也认不出是什么。
  *
  * 用法：
  *   npm run qr:download
@@ -31,10 +35,13 @@ const targetUrl = `${siteBase}/download`;
 
 const MARGIN = 4; // 静区宽度（模块数），低于 4 很多扫码器会识别不稳
 const BADGE = 13; // 中心叶子徽标边长（模块数）；再大就明显吃掉可读余量了
+const UNIT = 10; // 一个二维码模块在画布里占多少单位
 
 // 站点配色（与 frontend/src/styles/main.css 一致）
 const INK = "#17181a";
 const MOSS = "#2f6b45";
+const GRAY = "#6b7280";
+const FONT = "PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
 
 // 纠错等级必须 ≥ H：中心徽标挡掉的模块全靠这份冗余兜底
 const qr = QRCode.create(targetUrl, { errorCorrectionLevel: "H" });
@@ -63,30 +70,46 @@ const pad = BADGE * 0.17;
 const leafSize = BADGE - pad * 2;
 const leafScale = leafSize / 24;
 
+// 卡片：上面二维码，下面产品名与标语（文字画进图里，保存/转发出去都认得）
+const qrSide = total * UNIT;
+// 字号按卡片宽度等比算（二维码版本会随内容长度变，写死数字就会溢出被裁）：
+// 标语 11 个全角字，取 0.07 倍宽度 → 约 0.77 倍卡片宽，两边还留得下边距
+const nameSize = Math.round(qrSide * 0.13);
+const taglineSize = Math.round(qrSide * 0.07);
+const nameBaseline = qrSide + Math.round(qrSide * 0.16) + Math.round(nameSize * 0.72);
+const taglineBaseline = nameBaseline + Math.round(taglineSize * 1.3);
+const cardHeight = taglineBaseline + Math.round(taglineSize * 0.45);
+
 const svg = `<?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${total * 8}" height="${total * 8}" shape-rendering="crispEdges" role="img" aria-label="扫码下载拾题安卓版">
-  <title>扫码下载拾题安卓版</title>
-  <path fill="#ffffff" d="M0 0h${total}v${total}H0z"/>
-  <path stroke="${INK}" stroke-width="1" d="${runs.join("")}"/>
-  <g transform="translate(${badgeLeft} ${badgeLeft})">
-    <rect width="${BADGE}" height="${BADGE}" rx="${BADGE * 0.24}" fill="#ffffff"/>
-    <g transform="translate(${pad} ${pad}) scale(${leafScale})" fill="none" stroke="${MOSS}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
-      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${qrSide} ${cardHeight}" role="img" aria-label="扫码打开拾题下载页">
+  <title>扫码打开拾题下载页</title>
+  <rect width="${qrSide}" height="${cardHeight}" fill="#ffffff"/>
+  <g transform="scale(${UNIT})" shape-rendering="crispEdges">
+    <path stroke="${INK}" stroke-width="1" d="${runs.join("")}"/>
+    <g transform="translate(${badgeLeft} ${badgeLeft})">
+      <rect width="${BADGE}" height="${BADGE}" rx="${BADGE * 0.24}" fill="#ffffff"/>
+      <g transform="translate(${pad} ${pad}) scale(${leafScale})" fill="none" stroke="${MOSS}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+        <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+      </g>
     </g>
   </g>
+  <text x="${qrSide / 2}" y="${nameBaseline}" text-anchor="middle" font-family="${FONT}" font-size="${nameSize}" font-weight="700" fill="${INK}">拾题</text>
+  <text x="${qrSide / 2}" y="${taglineBaseline}" text-anchor="middle" font-family="${FONT}" font-size="${taglineSize}" fill="${GRAY}">安静地练习，温柔地记住</text>
 </svg>
 `;
 
 const svgPath = join(frontendDir, "public", "download-qr.svg");
 const pngPath = join(frontendDir, "public", "download-qr.png");
 writeFileSync(svgPath, svg, "utf8");
+const pngWidth = 1024;
+const pngHeight = Math.round((pngWidth * cardHeight) / qrSide);
 await sharp(Buffer.from(svg), { density: 384 })
-  .resize(1024, 1024, { fit: "contain", background: "#ffffff" })
+  .resize(pngWidth, pngHeight, { fit: "contain", background: "#ffffff" })
   .png({ compressionLevel: 9 })
   .toFile(pngPath);
 
 console.log(`二维码内容：${targetUrl}`);
 console.log(`纠错等级：H ｜ 版本：${(size - 17) / 4} ｜ 模块：${size}×${size} ｜ 中心徽标：${BADGE}×${BADGE}`);
 console.log(`已写入：${svgPath}`);
-console.log(`已写入：${pngPath}（1024×1024，供手机长按保存/转发）`);
+console.log(`已写入：${pngPath}（${pngWidth}×${pngHeight}：二维码 + 叶子 + 产品名 + 标语）`);

@@ -83,15 +83,16 @@ onMounted(async () => {
 
     <section class="mt-6 grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
       <div class="rounded-2xl border border-mist bg-white p-4 text-center">
-        <!-- 用 PNG 而不是 SVG 展示：手机长按图片能存进相册，SVG 存不下来 -->
+        <!--
+          用 PNG 而不是 SVG 展示：手机长按图片能存进相册，SVG 存不下来。
+          产品名与标语已经画在图里了（保存/转发出去都认得），页面不再重复写一遍。
+        -->
         <img
           src="/download-qr.png"
           alt="扫码打开拾题下载页"
           data-testid="download-qr"
-          class="mx-auto h-44 w-44"
+          class="mx-auto w-40"
         />
-        <p class="mt-3 text-sm font-semibold tracking-tight text-ink">拾题</p>
-        <p class="mt-0.5 text-xs text-oat">安静地练习，温柔地记住</p>
         <a
           href="/download-qr.png"
           download="shuati-download-qr.png"

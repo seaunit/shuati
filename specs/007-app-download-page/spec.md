@@ -51,7 +51,15 @@
   直链在微信等内置浏览器里容易被拦，且用户落地看不到版本与安装说明。
 - **FR-013**: 二维码 MUST 能保存到本地：页面展示位图版本（手机长按即可存相册，
   SVG 存不下来），并提供「保存二维码」下载入口；因此发布产物 MUST 同时包含
-  `download-qr.png`（1024×1024）与 `download-qr.svg`。
+  `download-qr.png` 与 `download-qr.svg`。
+  **产品名与标语 MUST 画进图里**（不只是写在 HTML 上）：长按保存或点按钮拿到的
+  必须是完整卡片，否则转发出去没人认得是什么；位图因此是竖版（高 > 宽）。
+- **FR-015**: 在 App 壳里 MUST NOT 显示「下载安卓 App」入口——装都装上了，点进去
+  在 WebView 里下不了，而且下载页是独立页面、没有导航，不好退出来。
+  识别方式 MUST NOT 依赖后端新增字段或接口（宪法原则 VI）；用壳的本地 origin
+  （`https://localhost` / `capacitor://localhost`）带来的 Referer，以及新版本壳追加的
+  User-Agent 标记，认出后写进 sessionStorage（整页跳转会丢 Referer，但不该又冒出入口）。
+  网页端（含浏览器、微信里的浏览器）MUST 照常显示该入口。
 - **FR-014**: 部署 MUST 保证 `/apk/` 由 Nginx 静态直接服务（带正确的 apk/json
   Content-Type，文件不存在时 404），MUST NOT 被 SPA 回退成首页；部署脚本 MUST
   在结束时自检 `/apk/latest.json` 与 `/apk/shuati-android.apk` 的 Content-Type 并显式告警。
@@ -76,3 +84,5 @@
 - **SC-009**: 线上 `https://www.seaunit.site/apk/shuati-android.apk` 返回的
   Content-Type 为 `application/vnd.android.package-archive`、体积与 `latest.json` 的
   `sizeBytes` 一致（曾出现返回首页 HTML 导致"解析软件包时出现问题"）。
+- **SC-010**: Playwright：从壳的 origin 跳进应用时导航里没有「下载安卓 App」，
+  直接访问站点时有；`download-qr.png` 为竖版（说明文字确实画进了图里）。
