@@ -4,12 +4,15 @@ import { useRoute } from "vue-router";
 import { Coins, Ellipsis, Leaf, LogIn, LogOut, X } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { useBillingStore } from "@/stores/billing";
+import { isInAppShell } from "@/appShell";
 import NavLinks from "@/components/NavLinks.vue";
 
 const route = useRoute();
 const auth = useAuthStore();
 const billing = useBillingStore();
 const moreOpen = ref(false);
+// App 里不显示「下载安卓 App」：装都装上了，点进去下不了，而且下载页是独立页面、没有导航
+const inAppShell = isInAppShell();
 
 const nav = computed(() => [
   { href: "/app", label: "首页", icon: "home" },
@@ -20,7 +23,7 @@ const nav = computed(() => [
   { href: "/app/pricing", label: "套餐与点数", icon: "pricing" },
   // 下载页是公开页（/download，不带 /app 前缀），点进来会离开应用壳，这是有意的：
   // 两个 URL 指向同一份内容会让搜索引擎分不清哪个是正主
-  { href: "/download", label: "下载安卓 App", icon: "download" },
+  ...(inAppShell ? [] : [{ href: "/download", label: "下载安卓 App", icon: "download" }]),
   ...(auth.isAdmin ? [{ href: "/app/admin", label: "后台管理", icon: "admin" }] : []),
 ]);
 const primaryNav = computed(() => nav.value.slice(0, 4));

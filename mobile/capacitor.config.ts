@@ -36,6 +36,13 @@ const config: CapacitorConfig = {
    * 远端首帧一画出来就被页面自己的白底盖住，正常使用看不到这层。
    */
   backgroundColor: "#FFFFFF00",
+  /**
+   * 给 WebView 的 UA 加个标记：网页端靠它认出"我在 App 里"（见 frontend/src/appShell.ts），
+   * 用来隐藏「下载安卓 App」这类只对浏览器有意义的入口。
+   * 不加也能认——壳跳过去时带的 Referer 就是 https://localhost，
+   * 但整页跳转（登录、退出）之后 Referer 就变成站点自己了，这个标记更稳。
+   */
+  appendUserAgent: "ShuatiApp",
 };
 
 export default config;

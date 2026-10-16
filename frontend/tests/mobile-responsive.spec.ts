@@ -107,11 +107,13 @@ test("download page offers the apk with a qr code and the published version", as
   const qr = page.getByTestId("download-qr");
   await expect(qr).toBeVisible();
   expect((await qr.getAttribute("src")) ?? "").toContain("png");
-  // 定制二维码：下面是产品名与标语，另给一个「保存二维码」入口
-  await expect(page.getByText("安静地练习，温柔地记住")).toBeVisible();
+  // 定制二维码：产品名与标语画在图里（保存下来的图片才是完整的），另给一个保存入口
   await expect(page.getByTestId("save-qr")).toHaveAttribute("download", "shuati-download-qr.png");
   // 位图与矢量原图都必须发布出去（public 目录随构建产物一起部署）
-  expect((await request.get("/download-qr.png")).ok()).toBe(true);
+  const png = Buffer.from(await (await request.get("/download-qr.png")).body());
+  // PNG 的 IHDR 里宽高在第 16/20 字节：竖版卡片才说明文字真的画进去了
+  expect(png.readUInt32BE(16)).toBe(1024);
+  expect(png.readUInt32BE(20)).toBeGreaterThan(1024);
   expect((await request.get("/download-qr.svg")).ok()).toBe(true);
 });
 
@@ -187,6 +189,32 @@ test("app nav links to the public download page (desktop: sidebar)", async ({ pa
   const entry = page.getByTestId("desktop-sidebar").getByRole("link", { name: "下载安卓 App" });
   await expect(entry).toBeVisible();
   await expect(entry).toHaveAttribute("href", "/download");
+});
+
+test("App 里不显示「下载安卓 App」入口", async ({ page }) => {
+  // 壳是本地页（Capacitor 里就是 https://localhost），跳进来时 Referer 会带壳的 origin。
+  // 这里把 https://localhost 当成壳：请求转发给 vite，其余环境（路由、API mock）照旧。
+  await page.route("https://localhost/**", async (route) => {
+    const response = await route.fetch({
+      url: route.request().url().replace("https://localhost", "http://127.0.0.1:5173"),
+    });
+    await route.fulfill({ response });
+  });
+  await page.route("https://localhost/shell", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<script>location.replace("https://localhost/app")</script>`,
+    }),
+  );
+  await mockBankList(page, "USER");
+
+  await page.goto("https://localhost/shell");
+  await page.waitForURL("https://localhost/app");
+
+  await page.getByRole("button", { name: "打开更多菜单" }).click();
+  // 其余入口照常，只有下载那条不该出现：装都装上了，点进去还下不了
+  await expect(page.getByRole("link", { name: "套餐与点数" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "下载安卓 App" })).toHaveCount(0);
 });
 
 test("captcha is only required for login, not register or forgot password", async ({ page }) => {
