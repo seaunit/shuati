@@ -20,3 +20,5 @@
       `releases/latest/download/shuati-android.apk` 会缓存上一版（同一 URL 每版复用），
       改成拉唯一 URL 后不再串版本；四个场景（正常 / 缺带版本包 / 别名是旧包 / 清单拉不到）
       已在本地假 curl 测试台里跑通
+- [x] T016 应用内导航加「下载安卓 App」入口（桌面端侧边栏、手机端「更多」），
+      指向公开页 `/download`；补 Playwright 覆盖两个断点

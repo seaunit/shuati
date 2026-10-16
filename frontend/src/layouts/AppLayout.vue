@@ -18,6 +18,9 @@ const nav = computed(() => [
   { href: "/app/stats", label: "统计", icon: "stats" },
   ...(auth.user ? [{ href: "/app/banks", label: "题库管理", icon: "banks" }] : []),
   { href: "/app/pricing", label: "套餐与点数", icon: "pricing" },
+  // 下载页是公开页（/download，不带 /app 前缀），点进来会离开应用壳，这是有意的：
+  // 两个 URL 指向同一份内容会让搜索引擎分不清哪个是正主
+  { href: "/download", label: "下载安卓 App", icon: "download" },
   ...(auth.isAdmin ? [{ href: "/app/admin", label: "后台管理", icon: "admin" }] : []),
 ]);
 const primaryNav = computed(() => nav.value.slice(0, 4));

@@ -39,6 +39,9 @@
   然后覆盖别名，并 MUST 用清单里的 SHA256 校验下载结果、不一致时显式告警。
   同步失败 MUST 保留服务器上已有安装包且 MUST NOT 中断部署（提供 `SHUATI_SKIP_APK=1`、
   `SHUATI_APK_BASE_URL`、`SHUATI_APK_TAG_BASE_URL` 逃生阀）。
+- **FR-010**: 应用内导航 MUST 提供进入下载页的入口（桌面端在侧边栏，手机端收在「更多」面板），
+  入口 MUST 指向公开页 `/download`，MUST NOT 另开 `/app/download` 复制同一份内容
+  （同一内容两个 URL 会让搜索引擎分不清正主）；游客也 MUST 能看到该入口。
 
 ## Success Criteria *(mandatory)*
 
@@ -50,3 +53,5 @@
 - **SC-005**: 打 tag 后，Release 页面能看到三个附件，且
   `https://github.com/seaunit/shuati/releases/latest/download/shuati-android.apk`
   能下载到与 `latest.json` 中 SHA256 一致的包。
+- **SC-006**: Playwright：登录态下桌面端侧边栏、手机端「更多」面板都能看到「下载安卓 App」，
+  指向 `/download` 并真的进得去。

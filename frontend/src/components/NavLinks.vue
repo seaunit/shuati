@@ -8,6 +8,7 @@ import {
   Library,
   Settings,
   Coins,
+  Download,
   type LucideIcon,
 } from "lucide-vue-next";
 
@@ -28,6 +29,7 @@ const icons: Record<string, LucideIcon> = {
   stats: BarChart3,
   banks: Library,
   pricing: Coins,
+  download: Download,
   admin: Settings,
 };
 

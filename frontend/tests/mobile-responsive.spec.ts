@@ -110,6 +110,32 @@ test("download page offers the apk with a qr code and the published version", as
   expect(qrFile.ok()).toBe(true);
 });
 
+test("app nav links to the public download page (mobile: inside 更多)", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.goto("/app");
+
+  // 底部栏只放 4 个主入口 + 更多，下载页收在「更多」面板里
+  await page.getByRole("button", { name: "打开更多菜单" }).click();
+  const entry = page.getByRole("link", { name: "下载安卓 App" });
+  await expect(entry).toBeVisible();
+  await expect(entry).toHaveAttribute("href", "/download");
+
+  await page.route("**/apk/latest.json", (route) => route.fulfill({ json: RELEASE_MANIFEST }));
+  await entry.click();
+  await expect(page).toHaveURL(/\/download$/);
+  await expect(page.getByRole("heading", { name: "下载拾题安卓版" })).toBeVisible();
+});
+
+test("app nav links to the public download page (desktop: sidebar)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockBankList(page, "USER");
+  await page.goto("/app");
+
+  const entry = page.getByTestId("desktop-sidebar").getByRole("link", { name: "下载安卓 App" });
+  await expect(entry).toBeVisible();
+  await expect(entry).toHaveAttribute("href", "/download");
+});
+
 test("captcha is only required for login, not register or forgot password", async ({ page }) => {
   await page.route("**/captcha/image", (route) =>
     route.fulfill({
