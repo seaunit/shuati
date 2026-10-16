@@ -322,7 +322,8 @@ public class BankManageController {
   @PutMapping("/api/manage/questions/{id}")
   public ApiResponse<Void> updateQuestion(
       @PathVariable long id, @RequestBody Map<String, Object> body) {
-    requireManage(bankIdOfQuestion(id));
+    QuestionScope scope = questionScope(id);
+    requireManage(scope.bankId());
     String type = string(body.get("type")).toUpperCase();
     String content = string(body.get("content")).trim();
     String answer = string(body.get("answer")).trim();
@@ -330,13 +331,14 @@ public class BankManageController {
       throw new ApiException(400, "题干不能为空");
     }
     validateQuestion(type, body.get("options"), answer);
+    long unitId = resolveUnitId(body, scope);
     jdbc.update("""
         update question
-           set type = ?, content = ?, options = cast(? as json), answer = ?,
+           set unit_id = ?, type = ?, content = ?, options = cast(? as json), answer = ?,
                key_points = cast(? as json), difficulty = ?, explanation = ?,
                tags = cast(? as json)
          where id = ?
-        """, type, content, writeJson(body.get("options")), answer,
+        """, unitId, type, content, writeJson(body.get("options")), answer,
         writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")), id);
@@ -431,14 +433,48 @@ public class BankManageController {
     return keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
   }
 
-  private long bankIdOfQuestion(long questionId) {
-    List<Long> ids = jdbc.queryForList("""
-        select u.bank_id from question q join unit u on u.id = q.unit_id where q.id = ?
-        """, Long.class, questionId);
-    if (ids.isEmpty()) {
+  /** 题目的归属：题库 + 当前所在单元（换单元和权限判断都要用） */
+  private record QuestionScope(long bankId, long unitId) {}
+
+  private QuestionScope questionScope(long questionId) {
+    List<Map<String, Object>> rows = jdbc.queryForList("""
+        select u.bank_id, q.unit_id from question q join unit u on u.id = q.unit_id
+         where q.id = ?
+        """, questionId);
+    if (rows.isEmpty()) {
       throw new ApiException(404, "题目不存在");
     }
-    return ids.get(0);
+    Map<String, Object> row = rows.get(0);
+    return new QuestionScope(longValue(row.get("bank_id")), longValue(row.get("unit_id")));
+  }
+
+  private long bankIdOfQuestion(long questionId) {
+    return questionScope(questionId).bankId();
+  }
+
+  /**
+   * 编辑时允许换单元。
+   *
+   * <p>前端表单里的「所属单元」下拉框就是这个字段：选中具体单元传单元 id，
+   * 选「默认单元（未分类）」传 null。PUT 只有这一个调用方，所以
+   * null = 用户主动选了未分类（落到该题库的兜底单元）。
+   * 没有这个 key 时保持原单元，避免老客户端把题目莫名其妙挪走。
+   */
+  private long resolveUnitId(Map<String, Object> body, QuestionScope scope) {
+    if (!body.containsKey("unitId")) {
+      return scope.unitId();
+    }
+    long requested = longValue(body.get("unitId"));
+    if (requested == 0) {
+      return defaultUnitId(scope.bankId());
+    }
+    if (requested == scope.unitId()) {
+      return requested;
+    }
+    if (bankIdOfUnit(requested) != scope.bankId()) {
+      throw new ApiException(400, "题目只能移到同一题库下的单元");
+    }
+    return requested;
   }
 
   private String string(Object value) {

@@ -159,6 +159,104 @@ class BankManageQuestionApiTest {
         .contains("说明加速检索");
   }
 
+  /** 回放线上那条路径：编辑一道没有评分要点的简答题，keyPoints 显式为 null */
+  @Test
+  void ownerCanEditShortQuestionWithNullKeyPoints() {
+    String userId = createUser("USER");
+    long unitId = createUnit(createBank(userId, "我的题库"), "简答");
+    authenticate(userId, false);
+
+    long questionId = createQuestion(Map.of(
+        "unitId", unitId, "type", "SHORT", "content", "旧题干", "answer", "旧参考答案"));
+
+    // 前端编辑时提交的结构：keyPoints / options 都是 null（Map.of 不收 null，所以用 LinkedHashMap）
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("bankId", 0L);
+    body.put("unitId", unitId);
+    body.put("type", "SHORT");
+    body.put("content", "新题干");
+    body.put("answer", "新参考答案");
+    body.put("options", null);
+    body.put("keyPoints", null);
+    body.put("difficulty", "HARD");
+    body.put("explanation", "");
+    body.put("tags", List.of());
+
+    controller.updateQuestion(questionId, body);
+
+    Map<String, Object> row = jdbc.queryForMap(
+        "select content, answer, difficulty, key_points from question where id = ?", questionId);
+    assertThat(row.get("content")).isEqualTo("新题干");
+    assertThat(row.get("answer")).isEqualTo("新参考答案");
+    assertThat(row.get("difficulty")).isEqualTo("HARD");
+    assertThat(row.get("key_points")).isNull();
+  }
+
+  /** 编辑弹窗里的「所属单元」下拉框要真的能换单元 */
+  @Test
+  void ownerCanMoveQuestionToAnotherUnitOfTheSameBank() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    long firstUnit = createUnit(bankId, "第一章");
+    long secondUnit = createUnit(bankId, "第二章");
+    authenticate(userId, false);
+    long questionId = insertQuestion(firstUnit, "SINGLE", "换单元的题");
+
+    controller.updateQuestion(
+        questionId, choiceQuestion(Map.of("unitId", secondUnit, "content", "换单元的题")));
+
+    assertThat(unitOf(questionId)).isEqualTo(secondUnit);
+    assertThat(questionCountOfBank(bankId)).isEqualTo(1);
+  }
+
+  /** 不传 unitId 的老请求不能把题目挪走 */
+  @Test
+  void editingWithoutUnitIdKeepsTheCurrentUnit() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    long unitId = createUnit(bankId, "第一章");
+    authenticate(userId, false);
+    long questionId = insertQuestion(unitId, "SINGLE", "原题干");
+
+    controller.updateQuestion(questionId, choiceQuestion(Map.of("content", "只改题干")));
+
+    assertThat(unitOf(questionId)).isEqualTo(unitId);
+  }
+
+  /** 下拉框选「默认单元（未分类）」传 null，落到兜底单元 */
+  @Test
+  void explicitNullUnitIdMovesQuestionToDefaultUnit() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId, "我的题库");
+    long unitId = createUnit(bankId, "第一章");
+    authenticate(userId, false);
+    long questionId = insertQuestion(unitId, "SINGLE", "挪进未分类");
+
+    Map<String, Object> body = new LinkedHashMap<>(choiceQuestion(Map.of("content", "挪进未分类")));
+    body.put("unitId", null);
+    controller.updateQuestion(questionId, body);
+
+    long movedTo = unitOf(questionId);
+    assertThat(movedTo).isNotEqualTo(unitId);
+    assertThat(unitName(movedTo)).isEqualTo("未分类");
+  }
+
+  /** 不能把题目挪到别人的题库里 */
+  @Test
+  void cannotMoveQuestionIntoAnotherBank() {
+    String userId = createUser("USER");
+    long myUnit = createUnit(createBank(userId, "我的题库"), "第一章");
+    long foreignUnit = createUnit(createBank(userId, "我的另一个题库"), "别的单元");
+    authenticate(userId, false);
+    long questionId = insertQuestion(myUnit, "SINGLE", "不许跨库");
+
+    ApiException error = assertThrows(ApiException.class, () -> controller.updateQuestion(
+        questionId, choiceQuestion(Map.of("unitId", foreignUnit, "content", "不许跨库"))));
+
+    assertThat(error.getStatus()).isEqualTo(400);
+    assertThat(unitOf(questionId)).isEqualTo(myUnit);
+  }
+
   @Test
   void badChoiceQuestionIsRefused() {
     String userId = createUser("USER");
