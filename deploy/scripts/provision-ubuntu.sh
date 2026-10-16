@@ -521,16 +521,58 @@ echo "==> 9/9 安装 systemd / Nginx 并启动"
 install -m 0644 "$APP_DIR/deploy/systemd/shuati.service" /etc/systemd/system/shuati.service
 install -m 0644 "$APP_DIR/deploy/systemd/shuati-payments.service" \
   /etc/systemd/system/shuati-payments.service
-if [ ! -f /etc/nginx/conf.d/shuati.conf ] \
-  || ! grep -q 'ssl_certificate' /etc/nginx/conf.d/shuati.conf; then
-  install -m 0644 "$APP_DIR/deploy/nginx/shuati.conf" /etc/nginx/conf.d/shuati.conf
+
+# Nginx 配置：每次部署都重建。
+# 以前这里是"线上已有 ssl_certificate 就整份跳过"（怕覆盖 certbot 改过的证书行），
+# 代价是之后所有 nginx 改动都进不到线上：下载页上线后 /apk/ 规则没加上，于是
+# /apk/shuati-android.apk 掉进 SPA 回退，把一个 2KB 的首页 HTML 当安装包发给用户。
+# 现在改成：按线上现状（域名 + 证书目录）选模板重建，改坏了自动回滚。
+NGINX_CONF=/etc/nginx/conf.d/shuati.conf
+SITE_DOMAIN="${SHUATI_DOMAIN:-seaunit.site}"
+CERT_DIR="/etc/letsencrypt/live/$SITE_DOMAIN"
+LIVE_NAMES=""
+LIVE_CERT=""
+if [ -f "$NGINX_CONF" ]; then
+  LIVE_NAMES="$(sed -n 's/^[[:space:]]*server_name[[:space:]]\+\([^;]*\);.*/\1/p' "$NGINX_CONF" | head -n 1)"
+  LIVE_CERT="$(sed -n 's/^[[:space:]]*ssl_certificate[[:space:]]\+\([^;]*\);.*/\1/p' "$NGINX_CONF" | head -n 1)"
+  if [ -n "$LIVE_NAMES" ]; then
+    SITE_DOMAIN="${LIVE_NAMES%% *}"
+  fi
+  if [ -n "$LIVE_CERT" ]; then
+    CERT_DIR="$(dirname "$LIVE_CERT")"
+  fi
+fi
+
+NGINX_BACKUP=""
+if [ -f "$NGINX_CONF" ]; then
+  NGINX_BACKUP="${NGINX_CONF}.bak.$(date +%Y%m%d%H%M%S)"
+  cp -a "$NGINX_CONF" "$NGINX_BACKUP"
+fi
+if [ -n "$LIVE_CERT" ] && [ ! -f "$LIVE_CERT" ]; then
+  # 线上是 HTTPS 但证书文件不见了：这种时候别拿 HTTP 模板把它降级，保持现状更好排查
+  echo "    ! 线上是 HTTPS，但证书 $LIVE_CERT 不存在，保留现有 Nginx 配置不动"
+elif [ -n "$LIVE_CERT" ]; then
+  echo "    Nginx：正式模板（域名 ${SITE_DOMAIN}，证书 ${CERT_DIR}）"
+  sed -e "s|seaunit\.site www\.seaunit\.site|${LIVE_NAMES:-$SITE_DOMAIN www.$SITE_DOMAIN}|g" \
+    -e "s|/etc/letsencrypt/live/seaunit\.site|$CERT_DIR|g" \
+    "$APP_DIR/deploy/nginx/shuati-prod.conf" >"$NGINX_CONF"
+  chmod 0644 "$NGINX_CONF"
+else
+  echo "    Nginx：临时 HTTP 模板（还没有证书）"
+  install -m 0644 "$APP_DIR/deploy/nginx/shuati.conf" "$NGINX_CONF"
+fi
+if ! nginx -t; then
+  if [ -n "$NGINX_BACKUP" ]; then
+    echo "    ! 新配置没过 nginx -t，回滚到 $NGINX_BACKUP"
+    cp -a "$NGINX_BACKUP" "$NGINX_CONF"
+    nginx -t
+  fi
 fi
 rm -f /etc/nginx/sites-enabled/default
 
 systemctl daemon-reload
 systemctl enable shuati shuati-payments
 systemctl restart shuati shuati-payments
-nginx -t
 systemctl reload nginx
 
 echo "==> 等待后端健康检查"
@@ -550,6 +592,33 @@ if [ "$HEALTH_OK" -ne 1 ]; then
   echo "  journalctl -u shuati-payments -n 80 --no-pager"
   exit 1
 fi
+
+echo "==> 自检：/apk/ 是否真的能下载"
+# 这段是踩过坑之后加的：nginx 少了 /apk/ 规则时，/apk/*.apk 会被 SPA 回退成首页
+# （200 + text/html），用户把这 2KB 存成 .apk，安装时报"解析软件包时出现问题"。
+# 部署时就把这类"看起来成功、实际拿错内容"的问题喊出来。
+APK_BASE_HEADER=(-H "Host: $SITE_DOMAIN")
+APK_BASE_URL="http://127.0.0.1"
+if [ -f "$CERT_DIR/fullchain.pem" ]; then
+  APK_BASE_HEADER=(--resolve "$SITE_DOMAIN:443:127.0.0.1" -k)
+  APK_BASE_URL="https://$SITE_DOMAIN"
+fi
+APK_MANIFEST_TYPE="$(
+  curl -sIL --max-time 20 "${APK_BASE_HEADER[@]}" -o /dev/null -w '%{content_type}' \
+    "$APK_BASE_URL/apk/latest.json" 2>/dev/null || true
+)"
+APK_FILE_TYPE="$(
+  curl -sIL --max-time 20 "${APK_BASE_HEADER[@]}" -o /dev/null -w '%{content_type}' \
+    "$APK_BASE_URL/apk/shuati-android.apk" 2>/dev/null || true
+)"
+case "$APK_MANIFEST_TYPE" in
+  application/json*) echo "    ✓ /apk/latest.json → $APK_MANIFEST_TYPE" ;;
+  *) echo "    ! /apk/latest.json → ${APK_MANIFEST_TYPE:-无响应}（不是 JSON：八成被 SPA 回退成首页了）" ;;
+esac
+case "$APK_FILE_TYPE" in
+  application/vnd.android.package-archive*) echo "    ✓ /apk/shuati-android.apk → $APK_FILE_TYPE" ;;
+  *) echo "    ! /apk/shuati-android.apk → ${APK_FILE_TYPE:-无响应}（不是安装包类型：检查 /apk/ 规则和文件）" ;;
+esac
 
 echo "==> 导入软考真题库（已存在时自动跳过）"
 if [ -s "$BUILD_DIR/db/mysql/soft_exam.sql" ]; then

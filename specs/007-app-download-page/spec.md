@@ -52,6 +52,10 @@
 - **FR-013**: 二维码 MUST 能保存到本地：页面展示位图版本（手机长按即可存相册，
   SVG 存不下来），并提供「保存二维码」下载入口；因此发布产物 MUST 同时包含
   `download-qr.png`（1024×1024）与 `download-qr.svg`。
+- **FR-014**: 部署 MUST 保证 `/apk/` 由 Nginx 静态直接服务（带正确的 apk/json
+  Content-Type，文件不存在时 404），MUST NOT 被 SPA 回退成首页；部署脚本 MUST
+  在结束时自检 `/apk/latest.json` 与 `/apk/shuati-android.apk` 的 Content-Type 并显式告警。
+  Nginx 配置 MUST 每次部署重建（改坏自动回滚），MUST NOT 因为"线上已有证书就整份跳过"。
 
 ## Success Criteria *(mandatory)*
 
@@ -69,3 +73,6 @@
   尺寸各测一次，本地已验证）。
 - **SC-008**: Playwright 用解码器解发布出去的 `download-qr.png`，解出的内容 MUST 等于
   `https://www.seaunit.site/download`（中心叶子挡模块后仍可解）。
+- **SC-009**: 线上 `https://www.seaunit.site/apk/shuati-android.apk` 返回的
+  Content-Type 为 `application/vnd.android.package-archive`、体积与 `latest.json` 的
+  `sizeBytes` 一致（曾出现返回首页 HTML 导致"解析软件包时出现问题"）。

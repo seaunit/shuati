@@ -28,3 +28,7 @@
 - [x] T018 二维码改指下载页而非 APK 直链（`https://www.seaunit.site/download`），
       并出 1024×1024 位图供保存：页面展示 PNG（手机长按可存相册）+「保存二维码」按钮，
       文案同步改成"扫码打开本页"；Playwright 用 jsQR 解发布出去的 PNG 断言内容
+- [x] T019 修线上"下载到的 APK 只有几 KB"：HTTPS 那份 `shuati-prod.conf` 漏了 `/apk/`
+      规则（部署脚本又会跳过有证书的配置），导致 `/apk/*` 掉进 SPA 回退返回首页 HTML。
+      两份模板补齐规则；部署脚本改为每次重建配置（`nginx -t` 不过自动回滚），
+      并在结尾自检 `/apk/` 的 Content-Type

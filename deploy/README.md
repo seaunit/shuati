@@ -329,6 +329,22 @@ cd mobile && npm run publish:apk
 新版 Release 发布后重新部署一次，`https://www.seaunit.site/download` 自动显示新版本号
 （页面读的是 `latest.json`，不缓存），下载按钮与二维码都指向 `/apk/shuati-android.apk`。
 
+**部署脚本会自检这一条**：它会用 `curl` 打本机 Nginx 的 `/apk/latest.json` 与
+`/apk/shuati-android.apk`，分别要求 `application/json` 与
+`application/vnd.android.package-archive`。对不上就说明 `/apk/` 又被 SPA 回退成首页了——
+那会让用户下载到一个 2KB 的 HTML 改名成 `.apk`，安装时报"解析软件包时出现问题"。
+
+### Nginx 配置
+
+每次部署都会**重建** `/etc/nginx/conf.d/shuati.conf`：有证书就用
+`deploy/nginx/shuati-prod.conf`（域名与证书目录从线上那份配置里读出来），
+没证书就用 `deploy/nginx/shuati.conf`；改完先 `nginx -t`，不过就自动回滚到备份
+（`/etc/nginx/conf.d/shuati.conf.bak.<时间戳>`）。
+
+> 以前这里是"线上已有 `ssl_certificate` 就整份跳过"，怕覆盖 certbot 改过的证书行。
+> 代价是之后所有 Nginx 改动都进不到线上——`/apk/` 规则就是这样漏掉的。
+> **改 server 级规则时，两份模板都要改**（HTTP 与 HTTPS 各一份），部署自检会盯着。
+
 ```bash
 sudo journalctl -u shuati -f            # 后端日志
 sudo journalctl -u shuati-payments -f   # 支付侧车日志
