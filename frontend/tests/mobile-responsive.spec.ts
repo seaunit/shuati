@@ -858,6 +858,61 @@ test("an unanswered question can be skipped to the next one (no submit, no recor
   await expect(page.getByText("判定：", { exact: false })).toHaveCount(0);
 });
 
+test("practice header shows both the cursor position and the completed count", async ({ page }) => {
+  const question = (id: number) => ({
+    id,
+    unit_id: 1,
+    type: "SINGLE",
+    content: `第 ${id} 题题干`,
+    options: [{ key: "A", text: "选项 A" }],
+    difficulty: "MEDIUM",
+    images: null,
+    tags: null,
+    status: "ON",
+  });
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: [question(1), question(2), question(3)] },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  // 光标停在第 3 题（位置），但只有 2 道题真提交过（已完成）——跳过的题不该算已完成
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: 3 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 3, answered: 2, correct: 1, answeredIds: [1, 2] },
+      },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+
+  // 位置：光标在哪道题
+  await expect(page.getByText("第 3 / 3 题")).toBeVisible();
+  // 已完成：与题库卡片同一口径（来自范围进度接口），两个数分开写清楚
+  await expect(page.getByTestId("practice-done")).toHaveText("已完成 2 / 3 题");
+});
+
 test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

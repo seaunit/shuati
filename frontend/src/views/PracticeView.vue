@@ -63,6 +63,16 @@ const counts = ref({ answered: 0, correct: 0, partial: 0, wrong: 0 });
 const sessionId = ref<number | null>(null);
 const startedAt = ref(Date.now());
 const resumed = ref(false);
+/**
+ * 「已完成」的口径与题库卡片一致：**这个范围里已提交作答过的题目**（去重、不看顺序）。
+ *
+ * 刷题页还会显示「第 x / y 题」，那是**当前光标位置** —— 跳过几道之后位置会跑在已完成数
+ * 前面，两者本来就不是一回事，所以分开写清楚，别只给一个数让人以为前后矛盾。
+ */
+const scopeAnsweredIds = ref<number[]>([]);
+const scopeTotal = ref(0);
+const doneCount = computed(() => scopeAnsweredIds.value.length);
+const scopeTotalCount = computed(() => scopeTotal.value || questions.value.length);
 
 const current = computed(() => questions.value[index.value]);
 // 只有选择题才回显「你的答案」：简答的长文本再贴一遍太啰嗦
@@ -194,6 +204,10 @@ async function submit() {
       result.value = { ...response };
     }
     counts.value.answered += 1;
+    // 这道题这次提交后就算「已完成」（按题目去重），与题库卡片口径一致
+    if (!scopeAnsweredIds.value.includes(current.value.id)) {
+      scopeAnsweredIds.value = [...scopeAnsweredIds.value, current.value.id];
+    }
     if (result.value.verdict === "CORRECT") counts.value.correct += 1;
     else if (result.value.verdict === "PARTIAL") counts.value.partial += 1;
     else if (result.value.verdict === "WRONG") counts.value.wrong += 1;
@@ -283,9 +297,25 @@ async function finish() {
  * 老规则保留下来是为了不丢历史进度：从没记过位置的账号行为与以前完全一致。
  */
 async function resumeProgress(unitId: number | null, bankId: number | null) {
-  if (wrongRedo.value) return; // 错题重练是一次性题集，不参与光标
+  if (wrongRedo.value) return; // 错题重练是一次性题集，不参与光标与范围进度
 
-  // 1) 光标优先。读不到就往下走老规则，两段各自容错，别让一次失败连累另一种定位
+  // 1) 范围进度（"已完成"）：题库卡片用的是同一个接口，拿它的 answeredIds 当口径，
+  //    这样刷题页与题库卡片不会出现两个数的说法
+  let answeredIds: number[] = [];
+  try {
+    const url = unitId
+      ? `/api/progress/unit/${unitId}`
+      : bankId
+        ? `/api/progress/bank/${bankId}`
+        : "/api/progress/all";
+    const data = await api<{ answeredIds?: number[] }>(url);
+    answeredIds = data.answeredIds ?? [];
+    scopeAnsweredIds.value = answeredIds;
+  } catch {
+    // 进度读取失败不影响练习
+  }
+
+  // 2) 光标优先（"当前停在哪道题"）。读不到就往下走老规则，两段各自容错
   let cursorQuestionId: number | null = null;
   try {
     const cursor = await api<{ questionId: number | null }>(
@@ -305,15 +335,9 @@ async function resumeProgress(unitId: number | null, bankId: number | null) {
     return;
   }
 
-  // 2) 没有光标（或光标题已不在范围内）→ 老的「第一道没答过的题」
+  // 3) 没有光标（或光标题已不在范围内）→ 老的「第一道没答过的题」
   try {
-    const url = unitId
-      ? `/api/progress/unit/${unitId}`
-      : bankId
-        ? `/api/progress/bank/${bankId}`
-        : "/api/progress/all";
-    const data = await api<{ answeredIds?: number[] }>(url);
-    const answered = new Set(data.answeredIds ?? []);
+    const answered = new Set(answeredIds);
     const nextIndex = questions.value.findIndex((item) => !answered.has(item.id));
     if (nextIndex > 0) {
       index.value = nextIndex;
@@ -421,17 +445,22 @@ onMounted(async () => {
       没有可练习的题目
     </div>
     <template v-else-if="current">
-      <header class="mb-4 flex items-start justify-between gap-4">
-        <div class="min-w-0 flex-1">
+      <header class="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <!-- 手机上让这行独占一行，按钮换到下一行，避免"第 x/y 题"被挤到折行 -->
+        <div class="min-w-0 basis-full sm:basis-auto sm:flex-1">
           <p class="text-xs text-oat">
             第 {{ index + 1 }} / {{ questions.length }} 题 · {{ typeLabel(current.type) }}
+            <span class="ml-2">·</span>
+            <span class="ml-1" data-testid="practice-done">
+              已完成 {{ doneCount }} / {{ scopeTotalCount }} 题
+            </span>
           </p>
           <p v-if="resumed" class="mt-1 text-xs text-moss">已从上次进度继续</p>
           <div class="mt-2 h-1.5 w-full max-w-64 overflow-hidden rounded-full bg-mist">
             <div class="h-full rounded-full bg-moss" :style="{ width: progress + '%' }" />
           </div>
         </div>
-        <div class="flex shrink-0 items-center gap-4">
+        <div class="ml-auto flex shrink-0 items-center gap-4">
           <button class="text-sm text-oat transition hover:text-ink" @click="restart">从头开始</button>
           <button class="text-sm text-oat transition hover:text-ink" @click="finish">结束练习</button>
         </div>
