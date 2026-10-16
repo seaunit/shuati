@@ -93,8 +93,42 @@ install -m 0644 "$BUILD_DIR/backend/target/shuati-backend.jar" \
   "$APP_DIR/shuati-backend.jar"
 
 # 安卓包发布目录：下载页与二维码指向 /apk/shuati-android.apk
-# 这里只建目录、不动内容，重新部署不会删掉已经上传的安装包
+# 安装包从 GitHub Release 拉取（不进 Git 仓库，见宪法「客户端版本号与分发」）；
+# 拉取失败时保留服务器上已有版本，不阻断部署。
 install -d -o shuati -g shuati -m 0755 "$APP_DIR/apk"
+APK_BASE_URL="${SHUATI_APK_BASE_URL:-https://github.com/seaunit/shuati/releases/latest/download}"
+if [ "${SHUATI_SKIP_APK:-0}" = "1" ]; then
+  echo "    已设置 SHUATI_SKIP_APK=1，跳过安卓安装包同步"
+else
+  echo "    同步安卓安装包：$APK_BASE_URL"
+  sync_apk_asset() {
+    local asset="$1"
+    local target="$APP_DIR/apk/$asset"
+    if curl -fsSL --retry 3 --connect-timeout 15 --max-time 300 \
+      -o "$target.tmp" "$APK_BASE_URL/$asset"; then
+      mv -f "$target.tmp" "$target"
+      echo "      ✓ $asset（$(du -h "$target" | cut -f1)）"
+    else
+      rm -f "$target.tmp"
+      if [ -s "$target" ]; then
+        echo "      ! 拉取 $asset 失败，保留服务器上已有的版本"
+      else
+        echo "      ! 拉取 $asset 失败，服务器上也没有已发布的安装包（下载页会提示暂无）"
+      fi
+    fi
+  }
+  sync_apk_asset shuati-android.apk
+  sync_apk_asset latest.json
+  # 带版本号的那份也留一份（清单里能读到版本号才拉）
+  APK_VERSION="$(
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+      "$APP_DIR/apk/latest.json" 2>/dev/null | head -n 1
+  )"
+  if [ -n "$APK_VERSION" ]; then
+    sync_apk_asset "shuati-android-$APK_VERSION.apk"
+  fi
+  chown -R shuati:shuati "$APP_DIR/apk"
+fi
 
 rm -rf "$APP_DIR/frontend"
 install -d -o shuati -g shuati -m 0755 "$APP_DIR/frontend"
@@ -509,6 +543,11 @@ echo "后端：http://127.0.0.1:8080/actuator/health"
 echo "支付：http://127.0.0.1:8090/health"
 echo "管理员：${ADMIN_EMAIL}"
 echo "密码：${ADMIN_PASSWORD}"
+if [ -s "$APP_DIR/apk/shuati-android.apk" ]; then
+  echo "安卓包：$(du -h "$APP_DIR/apk/shuati-android.apk" | cut -f1)（下载页 /download，二维码同址）"
+else
+  echo "安卓包：未同步（把 APK 发到 GitHub Release 后重新部署即会自动拉取）"
+fi
 echo
 echo "当前是 HTTP + IP 临时模式，SHUATI_COOKIE_SECURE=${COOKIE_SECURE}"
 echo "域名与证书配好后，把 /etc/shuati/env 改成 SHUATI_COOKIE_SECURE=true 并重启 shuati。"

@@ -51,10 +51,10 @@ versionCode=1       # 每次出包必须 +1（Android 用它判断能不能覆�
 
 `android/app/build.gradle` 从这里读取，所以**不要**在别处再写版本号。
 
-出包 + 生成发布产物与版本清单：
+出包 + 生成发布产物与版本清单 + 发 GitHub Release：
 
 ```powershell
-npm run publish:apk
+npm run publish:apk      # 需要 gh CLI 已登录，或设置 GITHUB_TOKEN
 ```
 
 产物（都在 `mobile/releases/`，**不进 Git**）：
@@ -65,16 +65,26 @@ npm run publish:apk
 | `shuati-android.apk` | 稳定别名的"最新包"，下载页与二维码指向它 |
 | `latest.json` | 版本清单（版本号、体积、SHA256、发布时间、下载地址），下载页只读它 |
 
-然后上传到服务器（Nginx 已把 `/apk/` 指向 `/opt/shuati/apk/`）：
+这三个文件会作为 Release `android-v{版本号}` 的附件上传；服务器上的部署脚本从
+`https://github.com/seaunit/shuati/releases/latest/download/` 拉到 `/opt/shuati/apk/`，
+**平时不需要手动 scp**。
+
+推荐打 tag 让 CI 自动出包发 Release（本机不装 JDK 21 / Android SDK 也行）：
+
+```powershell
+git tag android-v1.0.0
+git push origin android-v1.0.0    # 触发 .github/workflows/android-release.yml
+```
+
+没有 gh CLI、也没有 `GITHUB_TOKEN` 时，脚本会打印手动建 Release 的两步；不想用 Release 也可以
+退回手工上传（Nginx 已把 `/apk/` 指向 `/opt/shuati/apk/`）：
 
 ```powershell
 scp .\releases\shuati-android-1.0.0.apk .\releases\shuati-android.apk .\releases\latest.json <服务器>:/opt/shuati/apk/
-
-# 或者让脚本代传
 $env:SHUATI_DEPLOY_HOST='root@<服务器IP>'; npm run publish:apk
 ```
 
-上传后无需改前端：网页端下载页 `https://www.seaunit.site/download` 会用清单里的新版本号，
+服务器重新部署后无需改前端：网页端下载页 `https://www.seaunit.site/download` 会用清单里的新版本号，
 二维码和下载按钮都指向 `/apk/shuati-android.apk`（下次出包只要覆盖这个文件）。
 
 安装到真机：

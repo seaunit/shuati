@@ -299,20 +299,32 @@ Nginx 已配好 `/pay/webhooks/` → `127.0.0.1:8090` 的反代，且只暴露�
 ### 安卓安装包发布（`/apk/`）
 
 网页端下载页是 `/download`，安装包与版本清单放在 `/apk/`（Nginx 已把 `/apk/` 指向
-`/opt/shuati/apk/`；两个路径必须分开，否则带斜杠访问会撞成目录）。部署脚本只建目录、不清内容，
-重新部署不会删掉已上传的安装包。
+`/opt/shuati/apk/`；两个路径必须分开，否则带斜杠访问会撞成目录）。
+
+安装包**不进 Git 仓库**，走 GitHub Release 分发。部署脚本每次会从
+`https://github.com/seaunit/shuati/releases/latest/download/` 拉这三个附件到 `/opt/shuati/apk/`：
+
+| 附件 | 用途 |
+| --- | --- |
+| `shuati-android.apk` | 稳定别名的最新包，下载页与二维码指向它 |
+| `shuati-android-{版本号}.apk` | 带版本号的产物，留档 |
+| `latest.json` | 版本清单（版本号、体积、SHA256、发布时间），下载页只读它 |
+
+出包与发布（推荐打 tag，交给 CI）：
 
 ```bash
-# 本机出包（版本号在 mobile/version.properties，产物带版本号 + latest.json 清单）
-cd mobile && npm run publish:apk
+# 推荐：打 tag，CI 出包并发 Release（版本号必须与 mobile/version.properties 一致）
+git tag android-v1.0.0 && git push origin android-v1.0.0
 
-# 上传（三个文件一起传：带版本的产物、稳定别名、版本清单）
-scp mobile/releases/shuati-android-*.apk mobile/releases/shuati-android.apk \
-    mobile/releases/latest.json <服务器>:/opt/shuati/apk/
+# 或者本机出包后由脚本发 Release（需要 gh CLI 已登录，或 GITHUB_TOKEN）
+cd mobile && npm run publish:apk
 ```
 
-上传后 `https://www.seaunit.site/download` 自动显示新版本号（页面读的是 `latest.json`，不缓存），
-下载按钮与二维码都指向 `/apk/shuati-android.apk`。
+拉取失败（Release 还没发、GitHub 抖动）**不会中断部署**，服务器上已有的安装包会保留；
+想跳过这一步用 `SHUATI_SKIP_APK=1`，想换镜像源用 `SHUATI_APK_BASE_URL=<基础地址>`。
+
+新版 Release 发布后重新部署一次，`https://www.seaunit.site/download` 自动显示新版本号
+（页面读的是 `latest.json`，不缓存），下载按钮与二维码都指向 `/apk/shuati-android.apk`。
 
 ```bash
 sudo journalctl -u shuati -f            # 后端日志
