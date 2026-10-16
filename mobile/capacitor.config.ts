@@ -8,9 +8,13 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * 2) 网页端发版即 App 最新，不用等应用商店审核；
  * 3) 同源，所以会话 Cookie 与 `/api/**` 都天然可用，不需要 CORS，也不需要改后端。
  *
- * 代价：必须联网（无离线包）。换域名只改这一行。
+ * **入口必须是 `/app/` 而不是站根 `/`**：站根由后端直出 SEO 落地页（给搜索引擎看的），
+ * `/app/` 才是应用壳（题库首页）。App 直接进 `/app/`，用户打开就是可用的题库列表。
+ * 域用带 www 的规范域（站点 canonical 就是它），换域名只改这一行。
+ *
+ * 代价：必须联网（无离线包）。
  */
-const SITE_URL = "https://www.seaunit.site";
+const SITE_URL = "https://www.seaunit.site/app/";
 
 const config: CapacitorConfig = {
   appId: "site.seaunit.shuati",

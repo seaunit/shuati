@@ -7,6 +7,10 @@ Android / iOS 应用（宪法原则 VI「客户端与网页端同源（一份前
 
 `capacitor.config.ts` 里的 `SITE_URL` 指向网页端线上地址，壳用 WebView 直接加载它：
 
+> **入口是 `https://www.seaunit.site/app/`，不是站根。**
+> 站根 `/` 由后端直出 SEO 落地页（给搜索引擎看的），`/app/` 才是应用壳；
+> App 直接进 `/app/`，打开就是题库首页。
+
 - 界面 = 网页端，逐页一致，不存在"两套 UI 要对齐"；
 - 网页端发版 → App 下次打开即最新，不用重新发版审核；
 - 同源，所以登录 Cookie 与 `/api/**` 天然可用，**后端一行不用改**。
@@ -52,7 +56,7 @@ npm run sync
 
 | 要改什么 | 改哪里 |
 | --- | --- |
-| 站点地址（换域名） | `capacitor.config.ts` 的 `SITE_URL` |
+| 站点地址 / 入口路径 | `capacitor.config.ts` 的 `SITE_URL`（`npm run check` 会断言它指向 `/app/`） |
 | 应用名 | `capacitor.config.ts` 的 `appName` + `android/app/src/main/res/values/strings.xml` |
 | 包名 | `capacitor.config.ts` 的 `appId` + `android/app/build.gradle` 的 `applicationId` |
 | 应用图标 | `android/app/src/main/res/mipmap-*/`（与网页端 favicon 同一片叶子） |

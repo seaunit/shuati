@@ -16,7 +16,10 @@ const check = (name, ok, detail = "") => checks.push({ name, ok, detail });
 const config = read("capacitor.config.ts");
 check("appId 是 site.seaunit.shuati", /appId:\s*"site\.seaunit\.shuati"/.test(config));
 check("应用名是拾题", /appName:\s*"拾题"/.test(config));
-check("站点地址是 https 且非空", /const SITE_URL = "https:\/\/[^"]+"/.test(config));
+check(
+  "入口是 /app/（应用壳）而不是站根（那是 SEO 落地页）",
+  /const SITE_URL = "https:\/\/[^"]+\/app\/"/.test(config),
+);
 check("最小 SDK 不低于 26（图标只用自适应图标）", /minSdkVersion = (2[6-9]|[3-9]\d)/.test(read("android/variables.gradle")));
 check(
   "应用名写入 Android strings.xml",

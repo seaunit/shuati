@@ -26,6 +26,8 @@
 **Acceptance Scenarios**：
 
 1. **Given** 已安装 App，**When** 打开，**Then** 直接进入站点首页（App 内不需要再登录一次网页）。
+   （实现期明确：入口是 `https://www.seaunit.site/app/` —— 站根 `/` 是后端直出的 SEO 落地页，
+   `/app/` 才是应用壳；App 打开必须是后者，否则用户看到的是给搜索引擎看的页面。）
 2. **Given** 同时打开浏览器与 App，**When** 对照 首页 / 题库 / 刷题 / 错题本 / 统计 / 我的，
    **Then** 版式、文案、交互逐页一致。
 3. **Given** 在 App 里登录，**When** 杀进程后重开，**Then** 仍是登录态（会话不丢）。
