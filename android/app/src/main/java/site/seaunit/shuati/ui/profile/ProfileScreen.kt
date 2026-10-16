@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 import site.seaunit.shuati.AppContainer
 import site.seaunit.shuati.core.toUserMessage
 import site.seaunit.shuati.data.dto.Catalog
+import site.seaunit.shuati.data.dto.LedgerItem
 import site.seaunit.shuati.data.dto.PointPack
 import site.seaunit.shuati.data.dto.PointsInfo
 import site.seaunit.shuati.ui.components.NoticeBar
@@ -143,28 +145,24 @@ fun ProfileScreen(
             }
 
             if (points.ledger.isNotEmpty()) {
-                item { Text("近期点数流水", fontSize = 13.sp, color = Oat, modifier = Modifier.padding(top = 4.dp)) }
-                items(points.ledger, key = { it.id }) { row ->
-                    SectionBox {
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Text(
-                                row.note ?: reasonLabel(row.reason),
-                                fontSize = 13.sp,
-                                color = Ink,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                if (row.delta >= 0) "+${row.delta}" else "${row.delta}",
-                                fontSize = 13.sp,
-                                color = if (row.delta >= 0) Moss else Ink,
-                            )
-                        }
+                item {
+                    Column(Modifier.padding(top = 4.dp)) {
                         Text(
-                            "余额 ${row.balance_after} · ${row.created_at.orEmpty().take(10)}",
-                            fontSize = 11.sp,
+                            "近期点数流水（近 ${points.ledger.size} 条）",
+                            fontSize = 13.sp,
                             color = Oat,
-                            modifier = Modifier.padding(top = 4.dp),
                         )
+                        // 固定高度的滚动区，和网页端「点数明细」的 max-h-80 overflow-y-auto 一个意思：
+                        // 流水再多也不把页面撑长
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp)
+                                .padding(top = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(points.ledger, key = { it.id }) { row -> LedgerRow(row) }
+                        }
                     }
                 }
             }
@@ -176,6 +174,31 @@ fun ProfileScreen(
                 ) { Text("退出登录", color = Oat, fontSize = 13.sp) }
             }
         }
+    }
+}
+
+@Composable
+private fun LedgerRow(row: LedgerItem) {
+    SectionBox {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(
+                row.note ?: reasonLabel(row.reason),
+                fontSize = 13.sp,
+                color = Ink,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (row.delta >= 0) "+${row.delta}" else "${row.delta}",
+                fontSize = 13.sp,
+                color = if (row.delta >= 0) Moss else Ink,
+            )
+        }
+        Text(
+            "余额 ${row.balance_after} · ${row.created_at.orEmpty().take(10)}",
+            fontSize = 11.sp,
+            color = Oat,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

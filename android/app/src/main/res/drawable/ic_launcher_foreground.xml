@@ -1,15 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  与网页端 frontend/public/favicon.svg 同一个叶子：把 32×32 的图标等比放大 2.25 倍
+  （32 × 2.25 = 72，正好落在自适应图标 108dp 画布的安全区里），路径数据逐字照抄。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 叶片：网页端品牌标志的简笔版本 -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,24 C36,34 30,52 34,66 C38,80 48,88 54,88 C60,88 70,80 74,66 C78,52 72,34 54,24 Z" />
-    <path
-        android:strokeColor="#2F6B45"
-        android:strokeWidth="2.5"
-        android:pathData="M54,30 L54,84" />
+    <group
+        android:translateX="18"
+        android:translateY="18"
+        android:scaleX="2.25"
+        android:scaleY="2.25">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M11,20A7,7 0 0 1 9.8,6.1C15.5,5 17,4.48 19,2c1,2 2,4.18 2,8 0,5.5 -4.78,10 -10,10Z"
+            android:strokeColor="#7D9B76"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M2,21c0,-3 1.85,-5.36 5.08,-6C9.5,14.52 12,13 13,12"
+            android:strokeColor="#7D9B76"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
 </vector>
