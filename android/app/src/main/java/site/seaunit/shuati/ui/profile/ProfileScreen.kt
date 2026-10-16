@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +69,8 @@ fun ProfileScreen(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf("") }
+    // 退出登录被流水那块顶到了下面，点账号栏也能唤起，不必一路滑到底
+    var askLogout by remember { mutableStateOf(false) }
 
     val loader = rememberLoader(isLoggedIn) {
         Pair(container.billing.points(), container.billing.catalog())
@@ -79,7 +84,9 @@ fun ProfileScreen(
                 WeCell(
                     title = container.auth.cachedUser()?.email.orEmpty(),
                     subtitle = "当前套餐：${entitlements.planName}",
+                    showChevron = true,
                     divider = true,
+                    onClick = { askLogout = true },
                 )
             }
             item {
@@ -167,11 +174,41 @@ fun ProfileScreen(
                 WeCell(
                     title = "退出登录",
                     rightText = "",
-                    onClick = { scope.launch { container.auth.logout(); onLoggedOut() } },
+                    onClick = { askLogout = true },
                 )
             }
             item { Spacer(Modifier.padding(bottom = 24.dp)) }
         }
+    }
+
+    if (askLogout) {
+        AlertDialog(
+            onDismissRequest = { askLogout = false },
+            shape = RoundedCornerShape(6.dp),
+            title = { Text("退出登录", fontSize = 17.sp) },
+            text = {
+                Text(
+                    text = "退出后需要重新登录才能继续刷题和同步进度。",
+                    fontSize = 13.sp,
+                    color = Ink,
+                    lineHeight = 19.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askLogout = false
+                    scope.launch {
+                        container.auth.logout()
+                        onLoggedOut()
+                    }
+                }) { Text("退出登录", color = Rose, fontSize = 16.sp) }
+            },
+            dismissButton = {
+                TextButton(onClick = { askLogout = false }) {
+                    Text("取消", color = TextGray, fontSize = 16.sp)
+                }
+            },
+        )
     }
 }
 
