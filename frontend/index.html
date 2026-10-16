@@ -44,7 +44,90 @@
     </script>
   </head>
   <body>
+    <!--
+      首屏启动页：远端首帧之前屏幕上得有东西，不然就是一片空白。
+      样式和结构必须内联在 HTML 里——它要早于 JS/CSS 包下载执行就能画出来。
+      main.ts 在路由首次就绪（含登录态等异步前置）后把它撤掉。
+      版面与 mobile/www/index.html、Android 窗口背景那张图保持一致，接力时才不跳版。
+    -->
+    <div id="boot-splash">
+      <div class="boot-splash__badge">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#7d9b76"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+          <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+        </svg>
+      </div>
+      <p class="boot-splash__name">拾题</p>
+      <p class="boot-splash__tagline">安静地练习，温柔地记住</p>
+      <p class="boot-splash__hint" hidden>网络有点慢，正在继续加载…</p>
+    </div>
+    <style>
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        color: #1a1a1a;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui,
+          sans-serif;
+        transition: opacity 0.22s ease;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #boot-splash.boot-splash--done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .boot-splash__badge {
+        width: 96px;
+        height: 96px;
+        border-radius: 28px;
+        background: #eef1ee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .boot-splash__badge svg {
+        width: 56px;
+        height: 56px;
+      }
+      .boot-splash__name {
+        margin: 22px 0 0;
+        font-size: 34px;
+        font-weight: 700;
+      }
+      .boot-splash__tagline {
+        margin: 10px 0 0;
+        font-size: 15px;
+        color: #8a8f98;
+      }
+      .boot-splash__hint {
+        position: absolute;
+        bottom: 32px;
+        margin: 0;
+        font-size: 12px;
+        color: #b2b2b2;
+      }
+    </style>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      // 兜底：万一 JS 包没跑起来（缓存坏了、断网），启动页也得给个交代，不能一直白着
+      window.setTimeout(function () {
+        var hint = document.querySelector(".boot-splash__hint");
+        if (hint) hint.hidden = false;
+      }, 6000);
+    </script>
   </body>
 </html>

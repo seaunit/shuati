@@ -115,6 +115,23 @@ test("download page offers the apk with a qr code and the published version", as
   expect((await request.get("/download-qr.svg")).ok()).toBe(true);
 });
 
+test("app shell ships the boot splash and drops it once the first route is ready", async ({
+  page,
+  request,
+}) => {
+  // 启动页必须是首屏 HTML 自带的：它要早于 JS 包下载执行就能画出来，
+  // 否则 App 里那段等待就是空白（真机表现为"启动页一闪 → 几秒白"）
+  const shell = await (await request.get("/app")).text();
+  expect(shell).toContain('id="boot-splash"');
+  expect(shell).toContain("安静地练习，温柔地记住");
+
+  await mockBankList(page, "USER");
+  await page.goto("/app");
+  await expect(page.getByTestId("mobile-nav")).toBeVisible();
+  // 首屏就绪后必须撤掉，否则会一直挡着页面
+  await expect(page.locator("#boot-splash")).toHaveCount(0);
+});
+
 test("the published download qr really decodes to the download page", async ({ page }) => {
   const require = createRequire(import.meta.url);
   const qrPng = readFileSync(new URL("../public/download-qr.png", import.meta.url));
