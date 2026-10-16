@@ -33,10 +33,12 @@
   都没有时 MUST 打印手动两步，不得静默跳过）。
 - **FR-008**: 打 tag `android-v{版本号}` MUST 触发 CI 出包并发 Release；
   tag 与 `mobile/version.properties` 不一致时 MUST 直接失败，不允许发错版本。
-- **FR-009**: 部署脚本 MUST 从 `releases/latest/download/` 同步
-  `shuati-android.apk`、`shuati-android-{版本号}.apk`、`latest.json` 到 `/opt/shuati/apk/`；
-  同步失败 MUST 保留服务器上已有安装包且 MUST NOT 中断部署（提供 `SHUATI_SKIP_APK=1`
-  与 `SHUATI_APK_BASE_URL` 逃生阀）。
+- **FR-009**: 部署脚本 MUST 从 GitHub Release 同步安装包与版本清单到 `/opt/shuati/apk/`，
+  且 MUST 以清单为准：先拉 `latest.json`，再按清单里的版本号拉**带版本号的唯一 URL**
+  （稳定别名 `shuati-android.apk` 的 URL 每版相同，会被 CDN 缓存串版本），
+  然后覆盖别名，并 MUST 用清单里的 SHA256 校验下载结果、不一致时显式告警。
+  同步失败 MUST 保留服务器上已有安装包且 MUST NOT 中断部署（提供 `SHUATI_SKIP_APK=1`、
+  `SHUATI_APK_BASE_URL`、`SHUATI_APK_TAG_BASE_URL` 逃生阀）。
 
 ## Success Criteria *(mandatory)*
 

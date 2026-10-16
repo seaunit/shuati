@@ -301,14 +301,16 @@ Nginx 已配好 `/pay/webhooks/` → `127.0.0.1:8090` 的反代，且只暴露�
 网页端下载页是 `/download`，安装包与版本清单放在 `/apk/`（Nginx 已把 `/apk/` 指向
 `/opt/shuati/apk/`；两个路径必须分开，否则带斜杠访问会撞成目录）。
 
-安装包**不进 Git 仓库**，走 GitHub Release 分发。部署脚本每次会从
-`https://github.com/seaunit/shuati/releases/latest/download/` 拉这三个附件到 `/opt/shuati/apk/`：
+安装包**不进 Git 仓库**，走 GitHub Release 分发。部署脚本同步时按这个顺序来：
 
-| 附件 | 用途 |
+| 步骤 | 做什么 |
 | --- | --- |
-| `shuati-android.apk` | 稳定别名的最新包，下载页与二维码指向它 |
-| `shuati-android-{版本号}.apk` | 带版本号的产物，留档 |
-| `latest.json` | 版本清单（版本号、体积、SHA256、发布时间），下载页只读它 |
+| 1 | 拉 `releases/latest/download/latest.json`（版本清单，下载页只读它）；拉不到就保留服务器上已有的包 |
+| 2 | 按清单里的版本号，拉 `releases/download/android-v{版本}/shuati-android-{版本}.apk`——这个 URL 每个版本只出现一次，不会被 CDN 缓存串版本 |
+| 3 | 用它覆盖稳定别名 `shuati-android.apk`（下载页与二维码指向它）；带版本号那份同时留档 |
+| 4 | 用清单里的 SHA256 校验下载结果，不一致会明确告警（CDN 还在发上一版时就是这个现象） |
+
+第 2 步失败（比如手动发的 Release 没带版本号产物）会回退去拉 `releases/latest/download/shuati-android.apk`。
 
 出包与发布（推荐打 tag，交给 CI）：
 
@@ -321,7 +323,8 @@ cd mobile && npm run publish:apk
 ```
 
 拉取失败（Release 还没发、GitHub 抖动）**不会中断部署**，服务器上已有的安装包会保留；
-想跳过这一步用 `SHUATI_SKIP_APK=1`，想换镜像源用 `SHUATI_APK_BASE_URL=<基础地址>`。
+想跳过这一步用 `SHUATI_SKIP_APK=1`；换镜像源用 `SHUATI_APK_BASE_URL=<latest 基础地址>`，
+换 Release 文件地址用 `SHUATI_APK_TAG_BASE_URL=<releases/download 基础地址>`。
 
 新版 Release 发布后重新部署一次，`https://www.seaunit.site/download` 自动显示新版本号
 （页面读的是 `latest.json`，不缓存），下载按钮与二维码都指向 `/apk/shuati-android.apk`。

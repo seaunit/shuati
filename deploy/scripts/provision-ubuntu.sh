@@ -100,32 +100,65 @@ APK_BASE_URL="${SHUATI_APK_BASE_URL:-https://github.com/seaunit/shuati/releases/
 if [ "${SHUATI_SKIP_APK:-0}" = "1" ]; then
   echo "    已设置 SHUATI_SKIP_APK=1，跳过安卓安装包同步"
 else
+  APK_DIR="$APP_DIR/apk"
+  APK_TAG_BASE="${SHUATI_APK_TAG_BASE_URL:-https://github.com/seaunit/shuati/releases/download}"
   echo "    同步安卓安装包：$APK_BASE_URL"
-  sync_apk_asset() {
-    local asset="$1"
-    local target="$APP_DIR/apk/$asset"
-    if curl -fsSL --retry 3 --connect-timeout 15 --max-time 300 \
-      -o "$target.tmp" "$APK_BASE_URL/$asset"; then
-      mv -f "$target.tmp" "$target"
-      echo "      ✓ $asset（$(du -h "$target" | cut -f1)）"
-    else
-      rm -f "$target.tmp"
-      if [ -s "$target" ]; then
-        echo "      ! 拉取 $asset 失败，保留服务器上已有的版本"
-      else
-        echo "      ! 拉取 $asset 失败，服务器上也没有已发布的安装包（下载页会提示暂无）"
+
+  # $1=URL $2=目标文件；失败不留半个文件
+  fetch_apk() {
+    if curl -fsSL --retry 3 --connect-timeout 15 --max-time 300 -o "$2.tmp" "$1"; then
+      mv -f "$2.tmp" "$2"
+      return 0
+    fi
+    rm -f "$2.tmp"
+    return 1
+  }
+
+  # $1=JSON 字段名 $2=JSON 文件（清单是我们自己脚本生成的，按行取足够）
+  apk_json_field() {
+    sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$2" 2>/dev/null |
+      head -n 1
+  }
+
+  if fetch_apk "$APK_BASE_URL/latest.json" "$APK_DIR/latest.json"; then
+    APK_VERSION="$(apk_json_field version "$APK_DIR/latest.json")"
+    APK_SHA="$(apk_json_field sha256 "$APK_DIR/latest.json")"
+    APK_READY=0
+    # 先拉带版本号的产物：这个 URL 每个版本只出现一次，不会被 CDN 缓存串版本；
+    # 稳定别名 shuati-android.apk 的 URL 每版都一样，碰上缓存可能还是上一个包。
+    if [ -n "$APK_VERSION" ]; then
+      if fetch_apk "$APK_TAG_BASE/android-v$APK_VERSION/shuati-android-$APK_VERSION.apk" \
+        "$APK_DIR/shuati-android-$APK_VERSION.apk"; then
+        cp -f "$APK_DIR/shuati-android-$APK_VERSION.apk" "$APK_DIR/shuati-android.apk"
+        APK_READY=1
+        echo "      ✓ shuati-android-$APK_VERSION.apk（$(du -h "$APK_DIR/shuati-android-$APK_VERSION.apk" | cut -f1)），别名已同步"
       fi
     fi
-  }
-  sync_apk_asset shuati-android.apk
-  sync_apk_asset latest.json
-  # 带版本号的那份也留一份（清单里能读到版本号才拉）
-  APK_VERSION="$(
-    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-      "$APP_DIR/apk/latest.json" 2>/dev/null | head -n 1
-  )"
-  if [ -n "$APK_VERSION" ]; then
-    sync_apk_asset "shuati-android-$APK_VERSION.apk"
+    if [ "$APK_READY" = "0" ] &&
+      fetch_apk "$APK_BASE_URL/shuati-android.apk" "$APK_DIR/shuati-android.apk"; then
+      APK_READY=1
+      echo "      ✓ shuati-android.apk（$(du -h "$APK_DIR/shuati-android.apk" | cut -f1)）"
+    fi
+    # 和清单核对：对不上就别让下载页把旧包当新包发出去
+    if [ "$APK_READY" = "1" ] && [ -n "$APK_SHA" ]; then
+      APK_ACTUAL_SHA="$(sha256sum "$APK_DIR/shuati-android.apk" | cut -d ' ' -f1 | tr 'a-z' 'A-Z')"
+      if [ "$APK_ACTUAL_SHA" = "$APK_SHA" ]; then
+        echo "      ✓ SHA256 与清单一致（$APK_SHA）"
+      else
+        echo "      ! SHA256 与清单不一致：实际 $APK_ACTUAL_SHA，清单 $APK_SHA"
+        echo "        （多半是 CDN 还在发上一版，隔几分钟重新部署一次即可）"
+      fi
+    fi
+    if [ "$APK_READY" = "0" ]; then
+      echo "      ! 安装包拉取失败，保留服务器上已有的版本"
+    fi
+  else
+    echo "      ! 拉取 latest.json 失败，保留服务器上已有的版本"
+  fi
+  if [ -s "$APK_DIR/shuati-android.apk" ]; then
+    echo "      当前可供下载：$(du -h "$APK_DIR/shuati-android.apk" | cut -f1)"
+  else
+    echo "      服务器上还没有安装包，下载页会提示暂无"
   fi
   chown -R shuati:shuati "$APP_DIR/apk"
 fi

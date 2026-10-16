@@ -16,3 +16,7 @@
 - [x] T014 首次发布 `android-v1.0.0`：Release 三个附件齐全，手动触发 workflow 走通 CI 出包
       （run 38935256900 绿，1m41s），`releases/latest/download/shuati-android.apk` 实下 SHA256
       与 `latest.json` 一致（1EEA8819…）
+- [x] T015 同步逻辑改为「清单为准 + 优先带版本号 URL + SHA256 校验」：实测发现
+      `releases/latest/download/shuati-android.apk` 会缓存上一版（同一 URL 每版复用），
+      改成拉唯一 URL 后不再串版本；四个场景（正常 / 缺带版本包 / 别名是旧包 / 清单拉不到）
+      已在本地假 curl 测试台里跑通
