@@ -90,6 +90,17 @@
 - 移动端壳的构建要求：壳工程 MUST 能在本机离线构建（依赖版本钉死、不依赖 Android Studio），
   MUST 把构建与出包命令写进文档；产物 MUST NOT 打进任何密钥；
   「远端加载站点」还是「打包本地前端资源」MUST 在 spec / plan 写明，且必须与网页端同一份线上版本。
+- 客户端版本号与分发（每次出包 MUST 遵守）：
+  - 版本号 MUST 单一来源（`mobile/version.properties`）：`versionName` 用语义化版本
+    （`MAJOR.MINOR.PATCH`），`versionCode` 每次出包严格递增；打包脚本 MUST 从这个文件读取，
+    MUST NOT 在多处各写一份。
+  - 产物文件名 MUST 带版本号（`shuati-android-{versionName}.apk`），同时保留一份稳定别名
+    `shuati-android.apk`（下载页与二维码指向它）。
+  - 每次发布 MUST 同时生成版本清单 `latest.json`（版本号、体积、发布时间、下载地址），
+  网页端下载页 MUST 只读这份清单来展示版本，MUST NOT 手写版本号。
+  - 网页端 MUST 提供下载页，同时给出**可点击的下载按钮**与**二维码**（两者指向同一地址）；
+    发布产物 MUST 由发布脚本放到 Nginx 的 `/apk/` 目录下（MUST NOT 进 Git 仓库）；
+    下载页路由与静态产物目录 MUST 分开（页面 `/download`、产物 `/apk/`），避免带斜杠时撞车。
 - 部署形态固定：可执行 jar + systemd + Nginx 反向代理（前后端同域，`/api`、`/captcha` 走反代），
   Cloudflare 在前，真实客户端 IP 取 `CF-Connecting-IP`。
 - 生产配置只经 `/etc/shuati/env`；新增配置项 MUST 同时更新 `deploy/env.example` 与 `deploy/README.md`。
@@ -122,4 +133,4 @@
   `docs/`（限流、验证码、支付等专题说明）。
 - 任何临时破例 MUST 在提交信息中写明原因、影响范围与清理计划。
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-15 | **Last Amended**: 2026-10-16
+**Version**: 1.3.0 | **Ratified**: 2026-10-15 | **Last Amended**: 2026-10-17
