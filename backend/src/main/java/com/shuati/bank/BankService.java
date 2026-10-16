@@ -144,6 +144,85 @@ public class BankService {
     return progressForUnitIds(visibleUnitIds());
   }
 
+  /**
+   * 读练习光标：这个账号在某个范围里最后停在哪道题。
+   *
+   * <p>返回 null 表示还没记过位置 —— 客户端这时回退到老的「第一道没答过的题」规则，
+   * 所以老用户的历史进度不会因为这次改造丢失。
+   */
+  public Long cursor(String scopeType, long scopeId) {
+    String type = normalizeScope(scopeType);
+    requireScopeAccess(type, scopeId);
+    List<Long> ids = jdbc.queryForList("""
+        select question_id from practice_cursor
+         where user_id = ? and scope_type = ? and scope_id = ?
+        """, Long.class, CurrentUser.id(), type, scopeId);
+    return ids.isEmpty() ? null : ids.get(0);
+  }
+
+  /**
+   * 写/清练习光标。
+   *
+   * <p>`questionId` 传 null 表示清空（一轮做完时用），这样下次进入回到「全部答完就从头开始」的老规则。
+   * 写入用 `on duplicate key update`，天然幂等：客户端每切一题调一次也不会写重复行。
+   */
+  public void saveCursor(String scopeType, long scopeId, Long questionId) {
+    String type = normalizeScope(scopeType);
+    requireScopeAccess(type, scopeId);
+    String userId = CurrentUser.id();
+    if (questionId == null) {
+      jdbc.update("""
+          delete from practice_cursor
+           where user_id = ? and scope_type = ? and scope_id = ?
+          """, userId, type, scopeId);
+      return;
+    }
+    Integer exists = jdbc.queryForObject(
+        "select count(*) from question where id = ?", Integer.class, questionId);
+    if (exists == null || exists == 0) {
+      throw new ApiException(404, "题目不存在");
+    }
+    jdbc.update("""
+        insert into practice_cursor (user_id, scope_type, scope_id, question_id)
+        values (?, ?, ?, ?)
+        on duplicate key update question_id = values(question_id)
+        """, userId, type, scopeId, questionId);
+  }
+
+  private String normalizeScope(String scopeType) {
+    String type = scopeType == null ? "" : scopeType.toUpperCase();
+    if (!List.of("ALL", "BANK", "UNIT").contains(type)) {
+      throw new ApiException(400, "练习范围不正确");
+    }
+    return type;
+  }
+
+  /** 光标只能落在看得见的范围里，别让参数把光标写到别人的题库上 */
+  private void requireScopeAccess(String scopeType, long scopeId) {
+    switch (scopeType) {
+      case "BANK" -> {
+        if (scopeId == 0) {
+          throw new ApiException(400, "缺少题库 id");
+        }
+        requireBankAccess(scopeId);
+      }
+      case "UNIT" -> {
+        if (scopeId == 0) {
+          throw new ApiException(400, "缺少单元 id");
+        }
+        List<Long> bankIds = jdbc.queryForList(
+            "select bank_id from unit where id = ?", Long.class, scopeId);
+        if (bankIds.isEmpty()) {
+          throw new ApiException(404, "单元不存在");
+        }
+        requireBankAccess(bankIds.get(0));
+      }
+      default -> {
+        // ALL：所有可见题库的合集，无需额外校验
+      }
+    }
+  }
+
   private List<Map<String, Object>> questionsByUnitIds(List<Long> unitIds, String mode) {
     if (unitIds.isEmpty()) {
       return List.of();

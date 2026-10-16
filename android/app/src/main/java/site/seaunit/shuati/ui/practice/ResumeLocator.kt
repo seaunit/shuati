@@ -24,6 +24,27 @@ object ResumeLocator {
         val index = questions.indexOfFirst { it.id !in answered }
         return if (index > 0) index else 0
     }
+
+    /**
+     * 进入练习时的落位（与网页端同一套，见 specs/004-practice-cursor）：
+     *
+     * 1. **光标优先**：上次停在哪道题就落在哪道题，不管前面有没有刷过
+     *    —— 这是"从头开始 / 上一题之后位置记不住"的修复；
+     * 2. 没有光标，或光标题已经不在当前范围里（被下架/删除）→ 回退到老的
+     *    「第一道没答过的题」规则，保证历史进度不丢。
+     */
+    fun startIndex(
+        questions: List<Question>,
+        cursorQuestionId: Long?,
+        answeredIds: Collection<Long>,
+    ): Int {
+        if (questions.isEmpty()) return 0
+        if (cursorQuestionId != null) {
+            val cursorIndex = questions.indexOfFirst { it.id == cursorQuestionId }
+            if (cursorIndex >= 0) return cursorIndex
+        }
+        return nextIndex(questions, answeredIds)
+    }
 }
 
 /** 选项在作答后的呈现状态 */

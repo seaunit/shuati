@@ -674,6 +674,76 @@ test("practice can restart from the first question whatever the progress is", as
   await expect(page.getByText("已从上次进度继续")).toHaveCount(0);
 });
 
+test("practice lands on the saved cursor even if earlier questions were answered", async ({
+  page,
+}) => {
+  const question = (id: number) => ({
+    id,
+    unit_id: 1,
+    type: "SINGLE",
+    content: `第 ${id} 题题干`,
+    options: [{ key: "A", text: "选项 A" }],
+    difficulty: "MEDIUM",
+    images: null,
+    tags: null,
+    status: "ON",
+  });
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: [question(1), question(2), question(3)] },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  // 三道题全都答过：老规则（第一道没答过的题）会从第 1 题开始，只有光标规则才可能落在第 2 题
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 3, answered: 3, correct: 3, answeredIds: [1, 2, 3] },
+      },
+    }),
+  );
+
+  const cursorWrites: Array<Record<string, unknown>> = [];
+  await page.route("**/api/progress/cursor*", (route) => {
+    if (route.request().method() === "PUT") {
+      cursorWrites.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({ json: { code: 200, message: "ok", data: null } });
+    }
+    // 上次停在第 2 题
+    return route.fulfill({ json: { code: 200, message: "ok", data: { questionId: 2 } } });
+  });
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByText("第 2 / 3 题")).toBeVisible();
+
+  // 切题（上一题）会把新位置写回服务端
+  await page.getByRole("button", { name: "上一题" }).click();
+  await expect(page.getByText("第 1 / 3 题")).toBeVisible();
+  await expect.poll(() => cursorWrites.some((body) => body.questionId === 1)).toBe(true);
+  // 落位那一刻也会记一次（第 2 题），且范围始终是这次练习的 UNIT/1
+  expect(cursorWrites.some((body) => body.questionId === 2)).toBe(true);
+  expect(
+    cursorWrites.every((body) => body.scopeType === "UNIT" && body.scopeId === 1),
+  ).toBe(true);
+});
+
 test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

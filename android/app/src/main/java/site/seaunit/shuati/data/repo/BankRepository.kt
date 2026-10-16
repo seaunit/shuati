@@ -2,8 +2,10 @@ package site.seaunit.shuati.data.repo
 
 import kotlinx.serialization.builtins.ListSerializer
 import site.seaunit.shuati.core.ApiClient
+import site.seaunit.shuati.core.JsonSupport
 import site.seaunit.shuati.data.dto.Bank
 import site.seaunit.shuati.data.dto.BankUnit
+import site.seaunit.shuati.data.dto.CursorResponse
 import site.seaunit.shuati.data.dto.Progress
 import site.seaunit.shuati.data.dto.Question
 
@@ -35,5 +37,24 @@ class BankRepository(private val api: ApiClient) {
             else -> "/api/progress/all"
         }
         return api.get(path, Progress.serializer()) ?: Progress()
+    }
+
+    /** 读练习光标：这个范围里最后停在哪道题；没记过返回 null */
+    suspend fun cursor(scopeType: String, scopeId: Long): Long? =
+        api.get(
+            "/api/progress/cursor?scopeType=$scopeType&scopeId=$scopeId",
+            CursorResponse.serializer(),
+        )?.questionId
+
+    /** 写/清练习光标：questionId 传 null 表示清空（一轮做完） */
+    suspend fun saveCursor(scopeType: String, scopeId: Long, questionId: Long?) {
+        api.putVoid(
+            "/api/progress/cursor",
+            JsonSupport.obj(
+                "scopeType" to scopeType,
+                "scopeId" to scopeId,
+                "questionId" to questionId,
+            ),
+        )
     }
 }

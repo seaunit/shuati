@@ -73,6 +73,10 @@ data class Progress(
     val answeredIds: List<Long> = emptyList(),
 )
 
+/** 练习光标：当前停在哪道题（null 表示还没记过位置） */
+@Serializable
+data class CursorResponse(val questionId: Long? = null)
+
 @Serializable
 data class ChoiceResult(
     val recordId: Long? = null,

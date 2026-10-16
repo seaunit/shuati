@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-vue-next";
 import { api } from "@/api/client";
@@ -52,6 +52,13 @@ const explanationFromLibrary = ref(false);
 // 错题重练模式：题目来自错题本带过来的一组 id
 const wrongIds = ref<number[]>([]);
 const wrongRedo = computed(() => wrongIds.value.length > 0);
+// 本次练习的范围（与建会话、进度接口用的是同一套 scope）
+const activeUnitId = ref<number | null>(null);
+const activeBankId = ref<number | null>(null);
+const scopeType = computed(() =>
+  wrongRedo.value ? "ALL" : activeUnitId.value ? "UNIT" : activeBankId.value ? "BANK" : "ALL",
+);
+const scopeId = computed(() => activeUnitId.value ?? activeBankId.value ?? 0);
 const counts = ref({ answered: 0, correct: 0, partial: 0, wrong: 0 });
 const sessionId = ref<number | null>(null);
 const startedAt = ref(Date.now());
@@ -262,12 +269,43 @@ async function finish() {
       }),
     }).catch(() => null);
   }
+  // 一轮做完清掉光标：下次进入回到「全部答完就从头开始」的老规则
+  await clearCursor();
   // 错题重练做完回错题本，方便看看还剩几道没拿下
   router.push(wrongRedo.value ? "/app/wrong-book" : "/app");
 }
 
-// 续刷：跳过这个范围里已经作答过的题目，从第一道没做过的题接着来
+/**
+ * 落位规则（与安卓端同一套，见 specs/004-practice-cursor）：
+ * 1) 先看「光标」——上次停在当前哪道题就落在哪道题，**不管前面有没有刷过**；
+ * 2) 没有光标（或光标题已不在范围内）才回退到老的「第一道没答过的题」。
+ *
+ * 老规则保留下来是为了不丢历史进度：从没记过位置的账号行为与以前完全一致。
+ */
 async function resumeProgress(unitId: number | null, bankId: number | null) {
+  if (wrongRedo.value) return; // 错题重练是一次性题集，不参与光标
+
+  // 1) 光标优先。读不到就往下走老规则，两段各自容错，别让一次失败连累另一种定位
+  let cursorQuestionId: number | null = null;
+  try {
+    const cursor = await api<{ questionId: number | null }>(
+      `/api/progress/cursor?scopeType=${scopeType.value}&scopeId=${scopeId.value}`,
+    );
+    cursorQuestionId = cursor?.questionId ?? null;
+  } catch {
+    // 光标读不到（未登录/网络问题）时按老规则走
+  }
+  const cursorIndex = cursorQuestionId
+    ? questions.value.findIndex((item) => item.id === cursorQuestionId)
+    : -1;
+  if (cursorIndex >= 0) {
+    index.value = cursorIndex;
+    resumed.value = cursorIndex > 0;
+    resetState();
+    return;
+  }
+
+  // 2) 没有光标（或光标题已不在范围内）→ 老的「第一道没答过的题」
   try {
     const url = unitId
       ? `/api/progress/unit/${unitId}`
@@ -287,9 +325,42 @@ async function resumeProgress(unitId: number | null, bankId: number | null) {
   }
 }
 
+/** 把「当前停在哪道题」记到服务端（切一题写一次；失败不影响做题） */
+async function saveCursor() {
+  if (wrongRedo.value || !current.value) return;
+  await api("/api/progress/cursor", {
+    method: "PUT",
+    body: JSON.stringify({
+      scopeType: scopeType.value,
+      scopeId: scopeId.value,
+      questionId: current.value.id,
+    }),
+  }).catch(() => null);
+}
+
+/** 一轮做完：清掉光标，下次进入回到第 1 题重新开始 */
+async function clearCursor() {
+  if (wrongRedo.value) return;
+  await api("/api/progress/cursor", {
+    method: "PUT",
+    body: JSON.stringify({
+      scopeType: scopeType.value,
+      scopeId: scopeId.value,
+      questionId: null,
+    }),
+  }).catch(() => null);
+}
+
+// 任何一次切题（下一题 / 上一题 / 从头开始 / 落位）都把位置记下来
+watch(index, () => {
+  void saveCursor();
+});
+
 onMounted(async () => {
   const bankId = route.query.bankId ? Number(route.query.bankId) : null;
   const unitId = route.query.unitId ? Number(route.query.unitId) : null;
+  activeBankId.value = bankId;
+  activeUnitId.value = unitId;
   // 错题重练：错题本把当前筛出来的题目 id 带过来，顺序就是错题本里的顺序（最近错的排前面）
   wrongIds.value = (route.query.ids ? String(route.query.ids) : "")
     .split(",")

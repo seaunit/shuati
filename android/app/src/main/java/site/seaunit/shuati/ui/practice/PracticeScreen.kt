@@ -74,6 +74,15 @@ class PracticeState(
     // 错题重练：按这些 id（顺序即错题本顺序）出题
     private val questionIds: List<Long>? = null,
 ) {
+    /** 错题重练是一次性题集，不参与练习光标 */
+    private val useCursor = questionIds == null
+    private val scopeType = when {
+        unitId != null -> "UNIT"
+        bankId != null -> "BANK"
+        else -> "ALL"
+    }
+    private val scopeId = unitId ?: bankId ?: 0L
+
     var questions by mutableStateOf<List<Question>>(emptyList())
         private set
     var index by mutableIntStateOf(0)
@@ -115,10 +124,11 @@ class PracticeState(
         } ?: false
 
     /** 上一题：与网页端一致，往回走会把这一题的作答状态清空重来 */
-    fun prev() {
+    suspend fun prev() {
         if (index <= 0) return
         index -= 1
         resetForCurrent()
+        saveCursor()
     }
 
     /**
@@ -126,11 +136,19 @@ class PracticeState(
      *
      * 只重置"本轮的位置与计数" —— 每道题的作答记录在提交时就已写库，不受影响。
      */
-    fun restart() {
+    suspend fun restart() {
         index = 0
         counts = RoundCounts.Empty
         notice = ""
         resetForCurrent()
+        // 从头开始 = 当前停在第 1 题，所以进度也记在第 1 题
+        saveCursor()
+    }
+
+    /** 把「当前停在哪道题」记到服务端（切一题写一次；失败不影响做题） */
+    private suspend fun saveCursor(targetQuestionId: Long? = current?.id) {
+        if (!useCursor) return
+        runCatching { container.banks.saveCursor(scopeType, scopeId, targetQuestionId) }
     }
 
     suspend fun load() {
@@ -170,17 +188,27 @@ class PracticeState(
                 )
             }.getOrNull()
 
-            // 错题重练不做续做：这些题本来都答过，续做会把它们全跳过，所以固定从第一题开始
-            if (questionIds == null) {
-                val answeredIds = runCatching { container.banks.progress(bankId, unitId) }
+            // 落位：光标优先（当前刷到哪道就落在哪道），没有光标才回退到「第一道没答过的题」；
+            // 错题重练既不看光标也不看已答记录，固定从第一题开始
+            val cursorId = if (useCursor) {
+                runCatching { container.banks.cursor(scopeType, scopeId) }.getOrNull()
+            } else {
+                null
+            }
+            val answeredIds = if (useCursor) {
+                runCatching { container.banks.progress(bankId, unitId) }
                     .getOrNull()?.answeredIds.orEmpty()
-                val next = ResumeLocator.nextIndex(list, answeredIds)
-                if (next > 0) {
-                    index = next
-                    notice = "已为你续上上次的进度"
-                }
+            } else {
+                emptyList()
+            }
+            val next = ResumeLocator.startIndex(list, cursorId, answeredIds)
+            if (next > 0) {
+                index = next
+                notice = "已为你续上上次的进度"
             }
             resetForCurrent()
+            // 落位即记录一次当前位置，这样即使没切题，退出再进也停在同一道
+            saveCursor()
         } catch (e: Throwable) {
             error = e.toUserMessage("题目加载失败")
         } finally {
@@ -258,6 +286,7 @@ class PracticeState(
         if (!isLast) {
             index += 1
             resetForCurrent()
+            saveCursor()
             return false
         }
         finish()
@@ -265,6 +294,8 @@ class PracticeState(
     }
 
     private suspend fun finish() {
+        // 一轮做完清掉光标：下次进入回到「全部答完就从头开始」的老规则
+        saveCursor(null)
         val id = sessionId ?: return
         container.practice.finishSession(
             id,
@@ -318,7 +349,11 @@ fun PracticeScreen(
                     Text(scopeName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Ink)
                     Text("第 ${state.progressText} 题", fontSize = 12.sp, color = TextGray)
                 }
-                WeTextAction("从头开始", color = TextGray, onClick = { state.restart() })
+                WeTextAction(
+                    text = "从头开始",
+                    color = TextGray,
+                    onClick = { scope.launch { state.restart() } },
+                )
                 WeTextAction("退出", color = TextGray, onClick = onExit)
             }
             if (state.questions.isNotEmpty()) {
@@ -494,7 +529,7 @@ private fun PracticeActions(state: PracticeState, onNext: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(
-                onClick = { state.prev() },
+                onClick = { scope.launch { state.prev() } },
                 enabled = state.canGoPrev,
                 shape = RoundedCornerShape(4.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),

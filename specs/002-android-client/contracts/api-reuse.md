@@ -43,6 +43,11 @@
 | 单元题目 | `GET /api/units/{id}/questions?mode=seq` |
 | 全部题目 | `GET /api/questions?mode=seq` |
 | 进度 | `GET /api/progress/bank/{id}` \| `/api/progress/unit/{id}` \| `/api/progress/all` |
+| 练习光标（读） | `GET /api/progress/cursor?scopeType=ALL\|BANK\|UNIT&scopeId=` → `{questionId: number\|null}` |
+| 练习光标（写/清） | `PUT /api/progress/cursor` `{scopeType, scopeId, questionId}`（`questionId=null` 清空） |
+
+进度接口回答"哪些题答过"，光标回答"**当前停在哪道题**"。进入练习时**光标优先**，
+没有光标才回退到「第一道没答过的题」；一轮做完会清空光标（下次从第 1 题重新开始）。
 
 ## 3. 刷题（需登录）
 

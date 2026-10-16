@@ -42,6 +42,34 @@ class ResumeLocatorTest {
         assertEquals(0, ResumeLocator.nextIndex(listOf(question(1)), listOf(1)))
     }
 
+    /**
+     * 落位规则（specs/004-practice-cursor）：光标优先，其次才是"第一道没答过的题"。
+     *
+     * 用户场景：答一题 → 从头开始 → 练到第 2 题 → 退出 → 重进要停在第 2 题，
+     * 哪怕第 1、2 题以前都答过。
+     */
+    @Test
+    fun `cursor wins over the old first-unanswered rule`() {
+        val questions = listOf(question(1), question(2), question(3))
+        // 三道题全答过：老规则会回到第 1 题，光标规则要落在第 2 题
+        assertEquals(1, ResumeLocator.startIndex(questions, cursorQuestionId = 2, answeredIds = listOf(1, 2, 3)))
+        // 光标就在第一题：也按光标走
+        assertEquals(0, ResumeLocator.startIndex(questions, cursorQuestionId = 1, answeredIds = listOf(1, 2, 3)))
+        // 光标落在最后一道：不再往回退
+        assertEquals(2, ResumeLocator.startIndex(questions, cursorQuestionId = 3, answeredIds = emptyList()))
+    }
+
+    @Test
+    fun `stale cursor falls back to the first unanswered question`() {
+        val questions = listOf(question(1), question(2), question(3))
+        // 光标题已经不在范围里（被下架/删除）→ 回退到老规则
+        assertEquals(2, ResumeLocator.startIndex(questions, cursorQuestionId = 99, answeredIds = listOf(1, 2)))
+        // 没有光标 → 老规则
+        assertEquals(1, ResumeLocator.startIndex(questions, cursorQuestionId = null, answeredIds = listOf(1)))
+        // 没有光标且全答过 → 第 1 题
+        assertEquals(0, ResumeLocator.startIndex(questions, cursorQuestionId = null, answeredIds = listOf(1, 2, 3)))
+    }
+
     @Test
     fun `correct option is green selected wrong option is red`() {
         val result = ChoiceResult(verdict = "WRONG", score = 0, correctAnswer = "A")
