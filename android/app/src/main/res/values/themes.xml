@@ -2,8 +2,8 @@
 <resources>
     <!-- 界面全部由 Compose 绘制，这里只负责窗口底与状态栏，避免闪白/闪黑 -->
     <style name="Theme.Shuati" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/paper</item>
-        <item name="android:statusBarColor">@color/paper</item>
+        <item name="android:windowBackground">@color/page_gray</item>
+        <item name="android:statusBarColor">@color/page_gray</item>
         <item name="android:navigationBarColor">@color/paper</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>

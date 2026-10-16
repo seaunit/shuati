@@ -1,16 +1,25 @@
 package site.seaunit.shuati.ui
 
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,7 +30,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -42,8 +54,12 @@ import site.seaunit.shuati.ui.practice.PracticeScreen
 import site.seaunit.shuati.ui.profile.ProfileScreen
 import site.seaunit.shuati.ui.review.StatsScreen
 import site.seaunit.shuati.ui.review.WrongBookScreen
+import site.seaunit.shuati.ui.theme.CellWhite
+import site.seaunit.shuati.ui.theme.HairlineColor
 import site.seaunit.shuati.ui.theme.Moss
 import site.seaunit.shuati.ui.theme.Oat
+import site.seaunit.shuati.ui.theme.PageGray
+import site.seaunit.shuati.ui.theme.TextGray
 
 private const val ROUTE_BANKS = "banks"
 private const val ROUTE_WRONG = "wrong"
@@ -86,6 +102,7 @@ fun AppNav(container: AppContainer) {
         setOf(ROUTE_BANKS, ROUTE_WRONG, ROUTE_STATS, ROUTE_MANAGE, ROUTE_PROFILE)
 
     Scaffold(
+        containerColor = PageGray,
         bottomBar = {
             if (showBottomBar) {
                 BottomBar(route, nav)
@@ -233,29 +250,47 @@ private fun BottomBar(route: String, nav: NavHostController) {
         Tab(ROUTE_MANAGE, "题库管理", Icons.Filled.Edit),
         Tab(ROUTE_PROFILE, "我的", Icons.Filled.Person),
     )
-    NavigationBar {
-        items.forEach { tab ->
-            val selected = route == tab.route
-            NavigationBarItem(
-                selected = selected,
-                onClick = {
-                    if (!selected) {
-                        nav.navigate(tab.route) {
-                            popUpTo(ROUTE_BANKS) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                },
-                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                label = { Text(tab.label, fontSize = 11.sp) },
-                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                    selectedIconColor = Moss,
-                    selectedTextColor = Moss,
-                    unselectedIconColor = Oat,
-                    unselectedTextColor = Oat,
-                ),
-            )
+    // 微信那种底栏：白底 + 一条发丝线、没有胶囊选中块，选中只换图标与文字颜色
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CellWhite)
+            .drawBehind {
+                drawLine(HairlineColor, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
+            }
+            .navigationBarsPadding(),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            items.forEach { tab ->
+                val selected = route == tab.route
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(enabled = !selected) {
+                            nav.navigate(tab.route) {
+                                popUpTo(ROUTE_BANKS) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = tab.label,
+                        tint = if (selected) Moss else TextGray,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = tab.label,
+                        fontSize = 10.sp,
+                        color = if (selected) Moss else TextGray,
+                    )
+                }
+            }
         }
     }
 }

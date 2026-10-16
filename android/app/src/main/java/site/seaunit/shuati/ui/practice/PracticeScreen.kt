@@ -1,7 +1,6 @@
 package site.seaunit.shuati.ui.practice
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,17 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,13 +41,16 @@ import site.seaunit.shuati.core.toUserMessage
 import site.seaunit.shuati.data.dto.ChoiceResult
 import site.seaunit.shuati.data.dto.EssayResult
 import site.seaunit.shuati.data.dto.Question
+import site.seaunit.shuati.ui.components.Hairline
 import site.seaunit.shuati.ui.components.NoticeBar
-import site.seaunit.shuati.ui.components.SectionBox
+import site.seaunit.shuati.ui.components.WeButton
+import site.seaunit.shuati.ui.components.WeTag
+import site.seaunit.shuati.ui.components.WeTextAction
+import site.seaunit.shuati.ui.theme.CellWhite
 import site.seaunit.shuati.ui.theme.Ink
-import site.seaunit.shuati.ui.theme.Mist
 import site.seaunit.shuati.ui.theme.Moss
-import site.seaunit.shuati.ui.theme.Oat
 import site.seaunit.shuati.ui.theme.Rose
+import site.seaunit.shuati.ui.theme.TextGray
 
 /**
  * 刷题状态。
@@ -103,7 +103,9 @@ class PracticeState(
     val isLast: Boolean get() = index >= questions.lastIndex
     val progressText: String get() = "${index + 1} / ${questions.size}"
     val canSubmit: Boolean
-        get() = current?.let { if (it.isShort) textAnswer.isNotBlank() else selected.isNotEmpty() } ?: false
+        get() = current?.let {
+            if (it.isShort) textAnswer.isNotBlank() else selected.isNotEmpty()
+        } ?: false
 
     suspend fun load() {
         loading = true
@@ -261,23 +263,31 @@ fun PracticeScreen(
     LaunchedEffect(bankId, unitId) { state.load() }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(scopeName, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
-                Text("第 ${state.progressText} 题", fontSize = 12.sp, color = Oat)
+        // 顶部：白色通栏 + 进度，微信那种"标题条"
+        Column(Modifier.fillMaxWidth().background(CellWhite)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 6.dp, top = 12.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(scopeName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Ink)
+                    Text("第 ${state.progressText} 题", fontSize = 12.sp, color = TextGray)
+                }
+                WeTextAction("退出", color = TextGray, onClick = onExit)
             }
-            TextButton(onClick = onExit) { Text("退出", color = Oat, fontSize = 13.sp) }
-        }
-
-        if (state.questions.isNotEmpty()) {
-            LinearProgressIndicator(
-                progress = { (state.index + 1).toFloat() / state.questions.size },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                color = Moss,
-            )
+            if (state.questions.isNotEmpty()) {
+                LinearProgressIndicator(
+                    progress = { (state.index + 1).toFloat() / state.questions.size },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Moss,
+                    trackColor = Color(0xFFE8E8E8),
+                )
+                Spacer(Modifier.height(1.dp))
+            } else {
+                Hairline()
+            }
         }
 
         when {
@@ -285,8 +295,11 @@ fun PracticeScreen(
                 CircularProgressIndicator(color = Moss)
             }
 
-            state.current == null -> Column(Modifier.padding(20.dp)) {
-                NoticeBar(state.error.ifBlank { "这个范围里还没有上架的题目" }, error = state.error.isNotBlank())
+            state.current == null -> Column(Modifier.padding(16.dp)) {
+                NoticeBar(
+                    state.error.ifBlank { "这个范围里还没有上架的题目" },
+                    error = state.error.isNotBlank(),
+                )
             }
 
             else -> PracticeBody(state = state, onNext = {
@@ -304,36 +317,39 @@ private fun PracticeBody(state: PracticeState, onNext: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .verticalScroll(rememberScrollState()),
     ) {
-        NoticeBar(state.notice)
+        if (state.notice.isNotBlank() || state.error.isNotBlank()) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                NoticeBar(state.notice)
+                if (state.error.isNotBlank()) {
+                    Spacer(Modifier.padding(top = 6.dp))
+                    NoticeBar(state.error, error = true)
+                }
+            }
+        }
 
-        SectionBox {
+        // 题干块
+        Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    when {
+                WeTag(
+                    text = when {
                         question.isShort -> "简答"
                         question.isMulti -> "多选"
                         else -> "单选"
                     },
-                    fontSize = 11.sp,
-                    color = Oat,
-                    modifier = Modifier
-                        .background(Mist, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    color = TextGray,
                 )
                 Text(
-                    difficultyLabel(question.difficulty),
-                    fontSize = 11.sp,
-                    color = Oat,
-                    modifier = Modifier.padding(start = 8.dp),
+                    text = "  ${difficultyLabel(question.difficulty)}",
+                    fontSize = 12.sp,
+                    color = TextGray,
                 )
             }
             Text(
-                question.content,
-                fontSize = 15.sp,
+                text = question.content,
+                fontSize = 17.sp,
+                lineHeight = 26.sp,
                 color = Ink,
                 modifier = Modifier.padding(top = 10.dp),
             )
@@ -341,88 +357,99 @@ private fun PracticeBody(state: PracticeState, onNext: () -> Unit) {
                 Text(
                     "该题含图片，请在网页端查看",
                     fontSize = 12.sp,
-                    color = Oat,
-                    modifier = Modifier.padding(top = 6.dp),
+                    color = TextGray,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
+
+        Spacer(Modifier.height(10.dp))
 
         if (question.isShort) {
-            OutlinedTextField(
-                value = state.textAnswer,
-                onValueChange = { state.textAnswer = it },
-                label = { Text("你的答案", fontSize = 13.sp) },
-                enabled = !state.submitted,
-                minLines = 3,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            question.options.orEmpty().forEach { option ->
-                val mark = AnswerRules.mark(option.key, state.selected, state.choiceResult)
-                OptionRow(
-                    key = option.key,
-                    text = option.text,
-                    mark = mark,
-                    picked = state.selected.contains(option.key),
+            Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
+                OutlinedTextField(
+                    value = state.textAnswer,
+                    onValueChange = { state.textAnswer = it },
+                    label = { Text("你的答案", fontSize = 13.sp) },
                     enabled = !state.submitted,
-                    onClick = { state.toggle(option.key) },
+                    minLines = 4,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().background(CellWhite)) {
+                question.options.orEmpty().forEachIndexed { index, option ->
+                    if (index > 0) Hairline(startIndent = 50.dp)
+                    OptionRow(
+                        optionKey = option.key,
+                        text = option.text,
+                        mark = AnswerRules.mark(option.key, state.selected, state.choiceResult),
+                        picked = state.selected.contains(option.key),
+                        enabled = !state.submitted,
+                        onClick = { state.toggle(option.key) },
+                    )
+                }
             }
         }
 
-        NoticeBar(state.error, error = true)
+        Spacer(Modifier.height(14.dp))
 
         if (!state.submitted) {
-            Button(
+            WeButton(
+                text = if (state.submitting) "提交中…" else if (question.isShort) "提交给 AI 判分" else "提交答案",
                 onClick = { scope.launch { state.submit() } },
                 enabled = state.canSubmit && !state.submitting,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Ink),
-            ) {
-                if (state.submitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Moss)
-                } else {
-                    Text(if (question.isShort) "提交给 AI 判分" else "提交答案", fontSize = 15.sp)
-                }
-            }
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
         } else {
             ResultBlock(state)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 OutlinedButton(
                     onClick = { scope.launch { state.loadExplanation() } },
                     enabled = !state.explanationLoading,
+                    shape = RoundedCornerShape(4.dp),
                 ) {
                     Text(
-                        if (state.explanation.isBlank()) "AI 解析" else "重新生成解析",
-                        fontSize = 13.sp,
+                        text = when {
+                            state.explanationLoading -> "生成中…"
+                            state.explanation.isBlank() -> "AI 解析"
+                            else -> "重新生成"
+                        },
+                        fontSize = 15.sp,
                         color = Moss,
                     )
                 }
-                Button(
+                WeButton(
+                    text = if (state.isLast) "完成本轮" else "下一题",
                     onClick = onNext,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Ink),
-                ) {
-                    Text(if (state.isLast) "完成本轮" else "下一题", fontSize = 14.sp)
-                }
+                )
             }
         }
 
         if (state.explanation.isNotBlank()) {
-            SectionBox {
+            Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
                 Text(
-                    if (state.explanationFromLibrary) "来自解析库" else "本次 AI 解析",
-                    fontSize = 11.sp,
-                    color = Oat,
+                    text = if (state.explanationFromLibrary) "来自解析库" else "本次 AI 解析",
+                    fontSize = 12.sp,
+                    color = TextGray,
                 )
                 Text(
-                    state.explanation,
-                    fontSize = 13.sp,
+                    text = state.explanation,
+                    fontSize = 15.sp,
+                    lineHeight = 24.sp,
                     color = Ink,
-                    modifier = Modifier.padding(top = 6.dp),
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
+
+        Spacer(Modifier.padding(bottom = 24.dp))
     }
 }
 
@@ -435,42 +462,82 @@ private fun ResultBlock(state: PracticeState) {
     val color = when (verdict) {
         "CORRECT" -> Moss
         "WRONG" -> Rose
-        else -> Oat
+        else -> TextGray
     }
 
-    SectionBox {
-        Text(AnswerRules.verdictLabel(verdict), fontSize = 15.sp, color = color, fontWeight = FontWeight.Medium)
+    Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
+        Text(
+            text = AnswerRules.verdictLabel(verdict),
+            fontSize = 17.sp,
+            color = color,
+            fontWeight = FontWeight.Medium,
+        )
         if (choice != null) {
             Text(
-                "正确答案：${choice.correctAnswer} · 得分 ${choice.score}",
-                fontSize = 13.sp,
+                text = "正确答案：${choice.correctAnswer} · 得分 ${choice.score}",
+                fontSize = 14.sp,
                 color = Ink,
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
         if (essay != null) {
             essay.score?.let {
-                Text("得分 $it / 10", fontSize = 13.sp, color = Ink, modifier = Modifier.padding(top = 6.dp))
+                Text(
+                    "得分 $it / 10",
+                    fontSize = 14.sp,
+                    color = Ink,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
             essay.feedback?.hit_points?.takeIf { it.isNotEmpty() }?.let {
-                Text("命中要点：${it.joinToString("；")}", fontSize = 12.sp, color = Moss, modifier = Modifier.padding(top = 6.dp))
+                Text(
+                    "命中要点：${it.joinToString("；")}",
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = Moss,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
             essay.feedback?.missed_points?.takeIf { it.isNotEmpty() }?.let {
-                Text("遗漏要点：${it.joinToString("；")}", fontSize = 12.sp, color = Rose, modifier = Modifier.padding(top = 4.dp))
+                Text(
+                    "遗漏要点：${it.joinToString("；")}",
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = Rose,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
             essay.feedback?.comment?.takeIf { it.isNotBlank() }?.let {
-                Text(it, fontSize = 12.sp, color = Ink, modifier = Modifier.padding(top = 4.dp))
+                Text(
+                    it,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = Ink,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
             essay.referenceAnswer?.takeIf { it.isNotBlank() }?.let {
-                Text("参考答案：$it", fontSize = 12.sp, color = Oat, modifier = Modifier.padding(top = 6.dp))
+                Text(
+                    "参考答案：$it",
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = TextGray,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
             if (essay.degraded) {
-                Text("AI 暂不可用，请自行判定：", fontSize = 12.sp, color = Oat, modifier = Modifier.padding(top = 8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "AI 暂不可用，请自行判定：",
+                    fontSize = 13.sp,
+                    color = TextGray,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+                Row {
                     listOf("CORRECT" to "答对了", "PARTIAL" to "部分对", "WRONG" to "答错了").forEach { (key, label) ->
-                        TextButton(onClick = { scope.launch { state.selfEval(key) } }) {
-                            Text(label, fontSize = 12.sp, color = Moss)
-                        }
+                        WeTextAction(
+                            text = label,
+                            onClick = { scope.launch { state.selfEval(key) } },
+                        )
                     }
                 }
             }
@@ -480,39 +547,54 @@ private fun ResultBlock(state: PracticeState) {
 
 @Composable
 private fun OptionRow(
-    key: String,
+    optionKey: String,
     text: String,
     mark: OptionMark,
     picked: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val border = when (mark) {
+    val accent = when (mark) {
         OptionMark.CORRECT -> Moss
         OptionMark.WRONG -> Rose
-        OptionMark.NORMAL -> if (picked) Moss else Mist
+        OptionMark.NORMAL -> if (picked) Moss else TextGray
     }
     val background = when (mark) {
-        OptionMark.CORRECT -> Moss.copy(alpha = 0.08f)
-        OptionMark.WRONG -> Rose.copy(alpha = 0.08f)
-        OptionMark.NORMAL -> Color.White
+        OptionMark.CORRECT -> Moss.copy(alpha = 0.06f)
+        OptionMark.WRONG -> Rose.copy(alpha = 0.06f)
+        OptionMark.NORMAL -> Color.Transparent
     }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(background, RoundedCornerShape(10.dp))
-            .border(1.dp, border, RoundedCornerShape(10.dp))
+            .background(background)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(key, fontSize = 13.sp, color = border, fontWeight = FontWeight.Medium)
         Text(
-            text,
-            fontSize = 14.sp,
-            color = Ink,
-            modifier = Modifier.padding(start = 10.dp).weight(1f),
+            text = optionKey,
+            color = accent,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.width(22.dp),
         )
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+            color = Ink,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
+        )
+        if (mark == OptionMark.CORRECT || mark == OptionMark.WRONG) {
+            Text(
+                text = if (mark == OptionMark.CORRECT) "正确" else "你选的",
+                color = accent,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
 }
 

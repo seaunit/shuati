@@ -9,4 +9,6 @@
     <color name="oat">#6B7280</color>
     <!-- 图标底板：与 frontend/public/favicon.svg 里那个圆角方块同色 -->
     <color name="icon_background">#EEF1EE</color>
+    <!-- 页面浅灰底（微信那层灰），状态栏跟它对齐 -->
+    <color name="page_gray">#EDEDED</color>
 </resources>

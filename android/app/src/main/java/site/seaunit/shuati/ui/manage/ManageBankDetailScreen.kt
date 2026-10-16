@@ -1,10 +1,11 @@
 package site.seaunit.shuati.ui.manage
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -12,10 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
@@ -37,9 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -49,20 +49,25 @@ import site.seaunit.shuati.data.dto.Bank
 import site.seaunit.shuati.data.dto.BankUnit
 import site.seaunit.shuati.data.dto.EmailCodeSent
 import site.seaunit.shuati.data.dto.Question
+import site.seaunit.shuati.ui.components.Hairline
 import site.seaunit.shuati.ui.components.NoticeBar
-import site.seaunit.shuati.ui.components.SectionBox
+import site.seaunit.shuati.ui.components.SectionHeader
+import site.seaunit.shuati.ui.components.WeButton
+import site.seaunit.shuati.ui.components.WeCell
+import site.seaunit.shuati.ui.components.WeTag
+import site.seaunit.shuati.ui.components.WeTextAction
+import site.seaunit.shuati.ui.theme.CellWhite
 import site.seaunit.shuati.ui.theme.Ink
-import site.seaunit.shuati.ui.theme.Mist
 import site.seaunit.shuati.ui.theme.Moss
-import site.seaunit.shuati.ui.theme.Oat
 import site.seaunit.shuati.ui.theme.Rose
+import site.seaunit.shuati.ui.theme.TextGray
 
 private val OPTION_KEYS = listOf("A", "B", "C", "D", "E", "F", "G", "H")
 
 /**
  * 题库维护状态：与网页端 `BankManageView.vue` 的能力一一对应。
  *
- * 权限判定完全交给服务端（`requireManage`），客户端只负责把服务端的 403/404 文案显示出来。
+ * 权限判定完全交给服务端（`requireManage`），客户端只负责把 403/404 的文案显示出来。
  */
 class ManageBankState(
     private val container: AppContainer,
@@ -88,7 +93,7 @@ class ManageBankState(
     var error by mutableStateOf("")
         private set
 
-    val unitName: (Long) -> String = { id -> units.firstOrNull { it.id == id }?.name ?: "未分类" }
+    fun unitNameOf(id: Long): String = units.firstOrNull { it.id == id }?.name ?: "未分类"
 
     suspend fun load() {
         loading = true
@@ -131,7 +136,7 @@ class ManageBankState(
 
     suspend fun changeFilter(value: String) {
         filter = value
-        runCatching { refreshQuestions() }.onFailure { error = it.toUserMessage("加载题目失败") }
+        reloadQuestions()
     }
 
     suspend fun reloadQuestions() {
@@ -198,11 +203,12 @@ class ManageBankState(
         busy = true
         error = ""
         try {
+            val body = payload as JsonObject
             if (existingId == null) {
-                container.manage.createQuestion(payload as kotlinx.serialization.json.JsonObject)
+                container.manage.createQuestion(body)
                 notice = "题目已新增"
             } else {
-                container.manage.updateQuestion(existingId, payload as kotlinx.serialization.json.JsonObject)
+                container.manage.updateQuestion(existingId, body)
                 notice = "题目已保存"
             }
             refreshQuestions()
@@ -225,10 +231,6 @@ class ManageBankState(
             error = e.toUserMessage("删除失败")
             false
         }
-    }
-
-    fun clearNotice() {
-        notice = ""
     }
 
     fun clearError() {
@@ -291,13 +293,15 @@ fun ManageBankDetailScreen(
     if (renaming != null) {
         AlertDialog(
             onDismissRequest = { renaming = null },
-            title = { Text("重命名单元", fontSize = 16.sp) },
+            shape = RoundedCornerShape(6.dp),
+            title = { Text("重命名单元", fontSize = 17.sp) },
             text = {
                 OutlinedTextField(
                     value = renameInput,
                     onValueChange = { renameInput = it },
                     label = { Text("单元名称", fontSize = 13.sp) },
                     singleLine = true,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.fillMaxWidth(),
                 )
             },
@@ -308,208 +312,256 @@ fun ManageBankDetailScreen(
                         state.renameUnit(target.id, renameInput)
                         renaming = null
                     }
-                }) { Text("保存", color = Moss) }
+                }) { Text("保存", color = Moss, fontSize = 16.sp) }
             },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text("取消", color = Oat) } },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) {
+                    Text("取消", color = TextGray, fontSize = 16.sp)
+                }
+            },
         )
     }
 
     Column(Modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 6.dp, top = 14.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                state.bank?.name ?: "题库管理",
-                fontSize = 16.sp,
+                text = state.bank?.name ?: "题库管理",
+                fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onBack) { Text("返回", color = Oat, fontSize = 13.sp) }
+            WeTextAction("返回", onClick = onBack, color = TextGray)
         }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            item { NoticeBar(state.notice) }
-            item { NoticeBar(state.error, error = true) }
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    NoticeBar(state.notice)
+                    if (state.error.isNotBlank()) {
+                        Spacer(Modifier.padding(top = 6.dp))
+                        NoticeBar(state.error, error = true)
+                    }
+                }
+            }
 
             // ---- 题库信息 ----
+            item { SectionHeader("题库信息") }
             item {
-                SectionBox {
-                    Text("题库信息", fontSize = 13.sp, color = Oat)
+                Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
                     OutlinedTextField(
                         value = state.name,
                         onValueChange = { state.name = it },
                         label = { Text("名称", fontSize = 13.sp) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = state.description,
                         onValueChange = { state.description = it },
                         label = { Text("描述（可选）", fontSize = 13.sp) },
                         singleLine = true,
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     )
+                    WeButton(
+                        text = if (state.busy) "保存中…" else "保存",
+                        onClick = { scope.launch { state.saveBank() } },
+                        enabled = !state.busy,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
                     ) {
-                        Button(
-                            onClick = { scope.launch { state.saveBank() } },
-                            enabled = !state.busy,
-                            colors = ButtonDefaults.buttonColors(containerColor = Ink),
-                        ) { Text("保存", fontSize = 14.sp) }
-                        OutlinedButton(onClick = { state.clearError(); deleteOpen = true }) {
-                            Text("删除题库", fontSize = 13.sp, color = Rose)
-                        }
+                        WeTextAction(
+                            text = "删除题库",
+                            color = Rose,
+                            onClick = { state.clearError(); deleteOpen = true },
+                        )
                     }
                 }
             }
 
             // ---- 单元 ----
+            item { SectionHeader("单元") }
             item {
-                SectionBox {
-                    Text("单元", fontSize = 13.sp, color = Oat)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CellWhite)
+                        .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = unitInput,
+                        onValueChange = { unitInput = it },
+                        label = { Text("新单元名称", fontSize = 12.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    WeTextAction(
+                        text = "新增",
+                        enabled = unitInput.isNotBlank() && !state.busy,
+                        onClick = {
+                            scope.launch {
+                                state.createUnit(unitInput)
+                                if (state.error.isBlank()) unitInput = ""
+                            }
+                        },
+                    )
+                }
+                Hairline()
+            }
+            items(state.units, key = { it.id }) { unit ->
+                Column(Modifier.fillMaxWidth().background(CellWhite)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedTextField(
-                            value = unitInput,
-                            onValueChange = { unitInput = it },
-                            label = { Text("新单元名称", fontSize = 12.sp) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        OutlinedButton(
-                            enabled = unitInput.isNotBlank() && !state.busy,
-                            onClick = {
-                                scope.launch {
-                                    state.createUnit(unitInput)
-                                    if (state.error.isBlank()) unitInput = ""
-                                }
-                            },
-                        ) { Text("新增", fontSize = 13.sp, color = Moss) }
-                    }
-                    state.units.forEach { unit ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(unit.name, fontSize = 14.sp, color = Ink)
-                                Text(
-                                    "${unit.question_count} 题" +
-                                        if (unit.off_count > 0) "（${unit.off_count} 已下架）" else "",
-                                    fontSize = 11.sp,
-                                    color = Oat,
-                                )
-                            }
-                            TextButton(onClick = { renaming = unit; renameInput = unit.name }) {
-                                Text("重命名", fontSize = 12.sp, color = Moss)
-                            }
-                            TextButton(onClick = { scope.launch { state.deleteUnit(unit.id) } }) {
-                                Text("删除", fontSize = 12.sp, color = Rose)
-                            }
+                        Column(Modifier.weight(1f)) {
+                            Text(unit.name, color = Ink, fontSize = 16.sp)
+                            Text(
+                                text = "${unit.question_count} 题" +
+                                    if (unit.off_count > 0) "（${unit.off_count} 已下架）" else "",
+                                color = TextGray,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
                         }
+                        WeTextAction(
+                            text = "重命名",
+                            onClick = { renaming = unit; renameInput = unit.name },
+                        )
+                        WeTextAction(
+                            text = "删除",
+                            color = Rose,
+                            onClick = { scope.launch { state.deleteUnit(unit.id) } },
+                        )
                     }
+                    Hairline(startIndent = 16.dp)
                 }
             }
 
             // ---- 题目 ----
+            item { SectionHeader("题目") }
             item {
-                SectionBox {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("题目", fontSize = 13.sp, color = Oat, modifier = Modifier.weight(1f))
-                        Button(
-                            // 打开表单前清掉上一次的报错，否则会带着旧错误进来、保存成功也不关窗
-                            onClick = { state.clearError(); editing = null; formOpen = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Ink),
-                        ) { Text("新增题目", fontSize = 13.sp) }
-                    }
+                Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
                     OutlinedTextField(
                         value = state.keyword,
                         onValueChange = { state.keyword = it },
                         label = { Text("检索题干", fontSize = 12.sp) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Row(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         listOf("ALL" to "全部", "ON" to "已上架", "OFF" to "已下架").forEach { (key, label) ->
                             val selected = state.filter == key
-                            TextButton(onClick = { scope.launch { state.changeFilter(key) } }) {
-                                Text(
-                                    label,
-                                    fontSize = 12.sp,
-                                    color = if (selected) Moss else Oat,
-                                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                                )
-                            }
+                            WeTextAction(
+                                text = label,
+                                color = if (selected) Moss else TextGray,
+                                onClick = {
+                                    if (!selected) scope.launch { state.changeFilter(key) }
+                                },
+                            )
                         }
                     }
+                    WeButton(
+                        text = "新增题目",
+                        onClick = { state.clearError(); editing = null; formOpen = true },
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
                 }
+                Hairline()
             }
 
-            item {
-                if (state.questions.isEmpty()) {
-                    Text("没有符合条件的题目", fontSize = 13.sp, color = Oat)
+            if (state.questions.isEmpty()) {
+                item {
+                    Text(
+                        "没有符合条件的题目",
+                        color = TextGray,
+                        fontSize = 14.sp,
+                        modifier = Modifier.fillMaxWidth().background(CellWhite).padding(16.dp),
+                    )
                 }
             }
 
             items(state.questions, key = { it.id }) { question ->
-                SectionBox {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(typeLabel(question.type), fontSize = 11.sp, color = Oat)
-                        Text(
-                            "  ${state.unitName(question.unit_id)}",
-                            fontSize = 11.sp,
-                            color = Oat,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            if (question.status == "ON") "已上架" else "已下架",
-                            fontSize = 11.sp,
-                            color = if (question.status == "ON") Moss else Oat,
-                        )
-                    }
-                    Text(
-                        question.content,
-                        fontSize = 14.sp,
-                        color = Ink,
-                        maxLines = 2,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextButton(onClick = { state.clearError(); editing = question; formOpen = true }) {
-                            Text("编辑", fontSize = 12.sp, color = Moss)
-                        }
-                        TextButton(onClick = { scope.launch { state.toggleStatus(question) } }) {
-                            Text(
-                                if (question.status == "ON") "下架" else "上架",
-                                fontSize = 12.sp,
-                                color = Ink,
-                            )
-                        }
-                        TextButton(onClick = { scope.launch { state.deleteQuestion(question.id) } }) {
-                            Text("删除", fontSize = 12.sp, color = Rose)
-                        }
-                    }
-                }
+                QuestionRow(
+                    question = question,
+                    unitName = state.unitNameOf(question.unit_id),
+                    onEdit = { state.clearError(); editing = question; formOpen = true },
+                    onToggle = { scope.launch { state.toggleStatus(question) } },
+                    onDelete = { scope.launch { state.deleteQuestion(question.id) } },
+                )
             }
+
+            item { Spacer(Modifier.padding(bottom = 24.dp)) }
         }
+    }
+}
+
+@Composable
+private fun QuestionRow(
+    question: Question,
+    unitName: String,
+    onEdit: () -> Unit,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().background(CellWhite)) {
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                WeTag(typeLabel(question.type), color = TextGray)
+                Text(
+                    text = "  $unitName",
+                    color = TextGray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                WeTag(
+                    text = if (question.status == "ON") "已上架" else "已下架",
+                    color = if (question.status == "ON") Moss else TextGray,
+                )
+            }
+            Text(
+                text = question.content,
+                color = Ink,
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WeTextAction("编辑", onClick = onEdit)
+            WeTextAction(
+                text = if (question.status == "ON") "下架" else "上架",
+                color = TextGray,
+                onClick = onToggle,
+            )
+            WeTextAction("删除", color = Rose, onClick = onDelete)
+        }
+        Hairline(startIndent = 16.dp)
     }
 }
 
@@ -537,14 +589,16 @@ private fun DeleteBankDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("删除题库", fontSize = 16.sp) },
+        shape = RoundedCornerShape(6.dp),
+        title = { Text("删除题库", fontSize = 17.sp) },
         text = {
             Column {
                 Text(
-                    "题库下的单元、题目以及相关练习记录会一并删除，无法恢复。" +
+                    text = "题库下的单元、题目以及相关练习记录会一并删除，无法恢复。" +
                         "验证码会发到你的注册邮箱：${container.auth.cachedUser()?.email.orEmpty()}",
                     fontSize = 13.sp,
                     color = Ink,
+                    lineHeight = 19.sp,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -556,9 +610,11 @@ private fun DeleteBankDialog(
                         onValueChange = { code = it },
                         label = { Text("邮箱验证码", fontSize = 12.sp) },
                         singleLine = true,
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(
+                    WeTextAction(
+                        text = if (cooldown > 0) "${cooldown} 秒后重发" else "发送验证码",
                         enabled = !sending && cooldown == 0,
                         onClick = {
                             sending = true
@@ -574,13 +630,7 @@ private fun DeleteBankDialog(
                                 }
                             }
                         },
-                    ) {
-                        Text(
-                            if (cooldown > 0) "${cooldown} 秒后重发" else "发送验证码",
-                            fontSize = 12.sp,
-                            color = Moss,
-                        )
-                    }
+                    )
                 }
                 if (localError.isNotBlank()) {
                     Column(Modifier.padding(top = 8.dp)) { NoticeBar(localError, error = true) }
@@ -598,9 +648,11 @@ private fun DeleteBankDialog(
                         if (ok) onDeleted()
                     }
                 },
-            ) { Text(if (busy) "删除中…" else "确认删除", color = Rose) }
+            ) { Text(if (busy) "删除中…" else "确认删除", color = Rose, fontSize = 16.sp) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = Oat) } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消", color = TextGray, fontSize = 16.sp) }
+        },
     )
 }
 
@@ -713,14 +765,21 @@ private fun QuestionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEdit) "编辑题目" else "新增题目", fontSize = 16.sp) },
+        shape = RoundedCornerShape(6.dp),
+        title = { Text(if (isEdit) "编辑题目" else "新增题目", fontSize = 17.sp) },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                // 所属单元
                 Box {
-                    OutlinedButton(onClick = { unitMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { unitMenu = true },
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Text(
-                            "所属单元：" + (unitId?.let { id -> units.firstOrNull { it.id == id }?.name } ?: "默认单元（未分类）"),
+                            text = "所属单元：" + (
+                                unitId?.let { id -> units.firstOrNull { it.id == id }?.name }
+                                    ?: "默认单元（未分类）"
+                                ),
                             fontSize = 13.sp,
                             color = Ink,
                         )
@@ -739,29 +798,26 @@ private fun QuestionDialog(
                     }
                 }
 
-                // 题型
                 Row(
-                    modifier = Modifier.padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     listOf("SINGLE" to "单选", "MULTI" to "多选", "SHORT" to "简答").forEach { (key, label) ->
-                        TextButton(onClick = {
-                            if (type != key && key != "SHORT") {
-                                // 从简答切到选择题：题干外的东西重新来过，
-                                // 否则简答文本会被当成选项字母
-                                picked = emptySet()
-                                options = listOf("", "", "", "")
-                            }
-                            type = key
-                            formError = ""
-                        }) {
-                            Text(
-                                label,
-                                fontSize = 13.sp,
-                                color = if (type == key) Moss else Oat,
-                                fontWeight = if (type == key) FontWeight.Medium else FontWeight.Normal,
-                            )
-                        }
+                        WeTextAction(
+                            text = label,
+                            color = if (type == key) Moss else TextGray,
+                            onClick = {
+                                if (type != key) {
+                                    if (key != "SHORT") {
+                                        // 从简答切到选择题：选项与答案重新开始
+                                        picked = emptySet()
+                                        options = listOf("", "", "", "")
+                                    }
+                                    type = key
+                                }
+                                formError = ""
+                            },
+                        )
                     }
                 }
 
@@ -770,6 +826,7 @@ private fun QuestionDialog(
                     onValueChange = { content = it },
                     label = { Text("题干", fontSize = 12.sp) },
                     minLines = 3,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 )
 
@@ -779,12 +836,13 @@ private fun QuestionDialog(
                         onValueChange = { shortAnswer = it },
                         label = { Text("参考答案", fontSize = 12.sp) },
                         minLines = 3,
+                        shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     )
                     Text(
                         "评分要点不用填：留空后由 AI 判分时自行提炼",
                         fontSize = 11.sp,
-                        color = Oat,
+                        color = TextGray,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 } else {
@@ -792,23 +850,19 @@ private fun QuestionDialog(
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            TextButton(onClick = {
-                                val key = OPTION_KEYS[index]
-                                picked = if (type == "MULTI") {
-                                    if (picked.contains(key)) picked - key else picked + key
-                                } else {
-                                    setOf(key)
-                                }
-                            }) {
-                                Text(
-                                    OPTION_KEYS[index],
-                                    fontSize = 13.sp,
-                                    color = if (picked.contains(OPTION_KEYS[index])) Moss else Oat,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
+                            WeTextAction(
+                                text = OPTION_KEYS[index],
+                                color = if (picked.contains(OPTION_KEYS[index])) Moss else TextGray,
+                                onClick = {
+                                    val key = OPTION_KEYS[index]
+                                    picked = if (type == "MULTI") {
+                                        if (picked.contains(key)) picked - key else picked + key
+                                    } else {
+                                        setOf(key)
+                                    }
+                                },
+                            )
                             OutlinedTextField(
                                 value = text,
                                 onValueChange = { newText ->
@@ -816,41 +870,44 @@ private fun QuestionDialog(
                                 },
                                 label = { Text("选项 ${OPTION_KEYS[index]}", fontSize = 12.sp) },
                                 singleLine = true,
+                                shape = RoundedCornerShape(4.dp),
                                 modifier = Modifier.weight(1f),
                             )
                             if (options.size > 2) {
-                                TextButton(onClick = {
-                                    options = options.toMutableList().also { it.removeAt(index) }
-                                }) { Text("×", fontSize = 14.sp, color = Oat) }
+                                WeTextAction(
+                                    text = "×",
+                                    color = TextGray,
+                                    onClick = {
+                                        options = options.toMutableList().also { it.removeAt(index) }
+                                    },
+                                )
                             }
                         }
                     }
-                    Row(modifier = Modifier.padding(top = 4.dp)) {
-                        TextButton(
+                    Row(modifier = Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        WeTextAction(
+                            text = "加选项",
                             enabled = options.size < OPTION_KEYS.size,
                             onClick = { options = options + "" },
-                        ) { Text("加选项", fontSize = 12.sp, color = Moss) }
+                        )
                         Text(
-                            "当前答案：" + picked.sorted().joinToString("").ifEmpty { "未选" },
+                            text = "当前答案：" + picked.sorted().joinToString("").ifEmpty { "未选" },
                             fontSize = 11.sp,
-                            color = Oat,
-                            modifier = Modifier.padding(top = 14.dp),
+                            color = TextGray,
                         )
                     }
                 }
 
                 Row(
-                    modifier = Modifier.padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     listOf("EASY" to "简单", "MEDIUM" to "中等", "HARD" to "困难").forEach { (key, label) ->
-                        TextButton(onClick = { difficulty = key }) {
-                            Text(
-                                label,
-                                fontSize = 12.sp,
-                                color = if (difficulty == key) Moss else Oat,
-                            )
-                        }
+                        WeTextAction(
+                            text = label,
+                            color = if (difficulty == key) Moss else TextGray,
+                            onClick = { difficulty = key },
+                        )
                     }
                 }
 
@@ -859,6 +916,7 @@ private fun QuestionDialog(
                     onValueChange = { tags = it },
                     label = { Text("标签（可选，逗号分隔）", fontSize = 12.sp) },
                     singleLine = true,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
                 OutlinedTextField(
@@ -866,6 +924,7 @@ private fun QuestionDialog(
                     onValueChange = { explanation = it },
                     label = { Text("解析（可选）", fontSize = 12.sp) },
                     minLines = 2,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
 
@@ -881,9 +940,11 @@ private fun QuestionDialog(
             TextButton(
                 enabled = !saving,
                 onClick = { buildPayload()?.let(onSubmit) },
-            ) { Text(if (saving) "保存中…" else "保存", color = Moss) }
+            ) { Text(if (saving) "保存中…" else "保存", color = Moss, fontSize = 16.sp) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = Oat) } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消", color = TextGray, fontSize = 16.sp) }
+        },
     )
 }
 

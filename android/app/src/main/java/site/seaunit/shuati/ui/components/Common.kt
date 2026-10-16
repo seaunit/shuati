@@ -2,10 +2,16 @@ package site.seaunit.shuati.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -20,14 +26,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import site.seaunit.shuati.core.UiState
 import site.seaunit.shuati.core.toUserMessage
-import site.seaunit.shuati.ui.theme.Mist
+import site.seaunit.shuati.ui.theme.CellWhite
+import site.seaunit.shuati.ui.theme.HairlineColor
 import site.seaunit.shuati.ui.theme.Moss
 import site.seaunit.shuati.ui.theme.Rose
+import site.seaunit.shuati.ui.theme.TextGray
+import site.seaunit.shuati.ui.theme.TextHint
 
 /**
  * 极简异步三态。
@@ -88,33 +101,88 @@ fun <T> StateHost(
     }
 }
 
-/** 提示条：错误用 rose，普通提示用 moss（与网页端的 notice 条同一套语义） */
+/** 提示条：错误用 rose，普通提示用 moss；方角薄条，和微信的提示条一样不抢视线 */
 @Composable
 fun NoticeBar(message: String, modifier: Modifier = Modifier, error: Boolean = false) {
     if (message.isBlank()) return
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
         color = if (error) Rose.copy(alpha = 0.08f) else Moss.copy(alpha = 0.08f),
     ) {
         Text(
             text = message,
             color = if (error) Rose else Moss,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
 
-/** 分组容器：与网页端的「卡片」一致，但不再套第二层卡片 */
+/** 分组小标题：浅灰小字，块的上面留白由调用方控制 */
 @Composable
-fun SectionBox(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        color = androidx.compose.ui.graphics.Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Mist),
+fun SectionHeader(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = TextGray,
+        fontSize = 13.sp,
+        modifier = modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp),
+    )
+}
+
+/** 主按钮：通栏、方角、牌子绿底白字（微信那种"绿条"按钮） */
+@Composable
+fun WeButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    danger: Boolean = false,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = if (danger) Rose else Moss,
+            contentColor = CellWhite,
+            disabledContainerColor = if (danger) Rose.copy(alpha = 0.4f) else Moss.copy(alpha = 0.4f),
+            disabledContentColor = CellWhite,
+        ),
+        modifier = modifier.fillMaxWidth().height(44.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
     ) {
-        Column(Modifier.padding(14.dp)) { content() }
+        Text(text, fontSize = 16.sp)
     }
+}
+
+/** 行内文字动作（下架 / 删除 / 重命名这类）：微信里就是一段彩色小字 */
+@Composable
+fun WeTextAction(
+    text: String,
+    onClick: () -> Unit,
+    color: Color = Moss,
+    enabled: Boolean = true,
+) {
+    Text(
+        text = text,
+        color = if (enabled) color else TextHint,
+        fontSize = 14.sp,
+        modifier = Modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    )
+}
+
+/** 发丝分隔线；`startIndent` 用来做微信那种"左边留出图标宽度"的缩进线 */
+@Composable
+fun Hairline(startIndent: Dp = 0.dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .padding(start = startIndent)
+            .height(0.5.dp)
+            .background(HairlineColor),
+    )
 }
