@@ -234,6 +234,18 @@ async function next() {
   }
 }
 
+/**
+ * 从头开始这一轮：不管已经刷到第几题、进度是多少，都回到第 1 题重来。
+ *
+ * 只重置"本轮的位置与计数"——每道题的作答记录在提交时就已经写库，不受影响。
+ */
+function restart() {
+  index.value = 0;
+  counts.value = { answered: 0, correct: 0, partial: 0, wrong: 0 };
+  resumed.value = false;
+  resetState();
+}
+
 async function finish() {
   if (sessionId.value) {
     const answered = counts.value.answered;
@@ -348,7 +360,10 @@ onMounted(async () => {
             <div class="h-full rounded-full bg-moss" :style="{ width: progress + '%' }" />
           </div>
         </div>
-        <button class="shrink-0 text-sm text-oat transition hover:text-ink" @click="finish">结束练习</button>
+        <div class="flex shrink-0 items-center gap-4">
+          <button class="text-sm text-oat transition hover:text-ink" @click="restart">从头开始</button>
+          <button class="text-sm text-oat transition hover:text-ink" @click="finish">结束练习</button>
+        </div>
       </header>
 
       <article class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-6">

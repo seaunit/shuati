@@ -621,6 +621,59 @@ test("practice resumes from the first unanswered question", async ({ page }) => 
   await expect(page.getByText("已从上次进度继续")).toBeVisible();
 });
 
+test("practice can restart from the first question whatever the progress is", async ({ page }) => {
+  const question = (id: number) => ({
+    id,
+    unit_id: 1,
+    type: "SINGLE",
+    content: `第 ${id} 题题干`,
+    options: [{ key: "A", text: "选项 A" }],
+    difficulty: "MEDIUM",
+    images: null,
+    tags: null,
+    status: "ON",
+  });
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: [question(1), question(2), question(3)] },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  // 进度已经刷到第 3 题
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 3, answered: 2, correct: 1, answeredIds: [1, 2] },
+      },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByText("第 3 / 3 题")).toBeVisible();
+
+  // 不管进度几何，都能回到第 1 题重来
+  await page.getByRole("button", { name: "从头开始" }).click();
+  await expect(page.getByText("第 1 / 3 题")).toBeVisible();
+  await expect(page.getByText("已从上次进度继续")).toHaveCount(0);
+});
+
 test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

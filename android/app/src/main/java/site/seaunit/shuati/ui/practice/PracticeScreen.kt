@@ -102,10 +102,7 @@ class PracticeState(
 
     private var sessionId: Long? = null
     private var startedAt = System.currentTimeMillis()
-    private var answered = 0
-    private var correct = 0
-    private var partial = 0
-    private var wrong = 0
+    private var counts = RoundCounts.Empty
 
     val current: Question? get() = questions.getOrNull(index)
     val submitted: Boolean get() = choiceResult != null || essayResult != null
@@ -121,6 +118,18 @@ class PracticeState(
     fun prev() {
         if (index <= 0) return
         index -= 1
+        resetForCurrent()
+    }
+
+    /**
+     * 从头开始这一轮：不管刷到第几题、进度是多少，都回到第 1 题重来。
+     *
+     * 只重置"本轮的位置与计数" —— 每道题的作答记录在提交时就已写库，不受影响。
+     */
+    fun restart() {
+        index = 0
+        counts = RoundCounts.Empty
+        notice = ""
         resetForCurrent()
     }
 
@@ -201,14 +210,7 @@ class PracticeState(
                     System.currentTimeMillis() - startedAt,
                 )
                 essayResult = result
-                result?.let {
-                    answered += 1
-                    when (it.verdict) {
-                        "CORRECT" -> correct += 1
-                        "PARTIAL" -> partial += 1
-                        else -> wrong += 1
-                    }
-                }
+                result?.let { counts = counts.plus(it.verdict) }
             } else {
                 val result = container.practice.submitChoice(
                     question.id,
@@ -216,10 +218,7 @@ class PracticeState(
                     System.currentTimeMillis() - startedAt,
                 )
                 choiceResult = result
-                result?.let {
-                    answered += 1
-                    if (it.verdict == "CORRECT") correct += 1 else wrong += 1
-                }
+                result?.let { counts = counts.plus(it.verdict) }
             }
         } catch (e: Throwable) {
             // 402 点数不足、429 限流都用服务端原文，不做本地改写
@@ -267,8 +266,14 @@ class PracticeState(
 
     private suspend fun finish() {
         val id = sessionId ?: return
-        val score = if (answered > 0) Math.round(correct * 100f / answered) else null
-        container.practice.finishSession(id, answered, correct, partial, wrong, score)
+        container.practice.finishSession(
+            id,
+            counts.answered,
+            counts.correct,
+            counts.partial,
+            counts.wrong,
+            counts.score,
+        )
     }
 
     private fun resetForCurrent() {
@@ -313,6 +318,7 @@ fun PracticeScreen(
                     Text(scopeName, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Ink)
                     Text("第 ${state.progressText} 题", fontSize = 12.sp, color = TextGray)
                 }
+                WeTextAction("从头开始", color = TextGray, onClick = { state.restart() })
                 WeTextAction("退出", color = TextGray, onClick = onExit)
             }
             if (state.questions.isNotEmpty()) {
