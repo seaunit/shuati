@@ -5,17 +5,26 @@ Android / iOS 应用（宪法原则 VI「客户端与网页端同源（一份前
 
 ## 它怎么工作
 
-`capacitor.config.ts` 里的 `SITE_URL` 指向网页端线上地址，壳用 WebView 直接加载它：
+启动方式是「**本地启动页 → 远端应用**」：
+
+1. 不带 `server.url`，Capacitor 先加载本地 `www/index.html` —— 也就是**品牌启动页**
+   （叶子 + 拾题 + 「安静地练习，温柔地记住」），本地文件不依赖网络，冷启动秒开、没有白屏；
+2. 启动页展示完品牌（至少 700ms，顺便预热连接）后跳转到线上应用 `https://www.seaunit.site/app/`。
 
 > **入口是 `https://www.seaunit.site/app/`，不是站根。**
 > 站根 `/` 由后端直出 SEO 落地页（给搜索引擎看的），`/app/` 才是应用壳；
-> App 直接进 `/app/`，打开就是题库首页。
+> App 进入的是 `/app/`，打开就是题库首页。
+
+> **跳转目标必须同时写进 `capacitor.config.ts` 的 `server.allowNavigation`**，
+> 否则 Capacitor 会把它当成外部链接交给系统浏览器（用户就"跳出 App"了）。
+> 冷启动瞬间的窗口底色由 `res/values/splash.xml` + `styles.xml` 铺成本地启动页同色，避免闪白。
 
 - 界面 = 网页端，逐页一致，不存在"两套 UI 要对齐"；
 - 网页端发版 → App 下次打开即最新，不用重新发版审核；
 - 同源，所以登录 Cookie 与 `/api/**` 天然可用，**后端一行不用改**。
 
-代价：必须联网（不做离线包）。换域名只改 `capacitor.config.ts` 里的 `SITE_URL`。
+代价：必须联网（不做离线包）。换域名要改两处：`www/index.html` 的 `SITE_URL` 与
+`capacitor.config.ts` 的 `allowNavigation`（`npm run check` 会同时校验这两个）。
 
 ## 构建（本机，不需要 Android Studio）
 
@@ -56,7 +65,9 @@ npm run sync
 
 | 要改什么 | 改哪里 |
 | --- | --- |
-| 站点地址 / 入口路径 | `capacitor.config.ts` 的 `SITE_URL`（`npm run check` 会断言它指向 `/app/`） |
+| 站点地址 / 入口路径 | `www/index.html` 的 `SITE_URL`（`npm run check` 断言它指向 `/app/`） |
+| 启动页样式（logo / 文案 / 底色） | `www/index.html`（同一份也用于 iOS） |
+| 启动瞬间的窗口底色 | `android/app/src/main/res/values/splash.xml` + `styles.xml` |
 | 应用名 | `capacitor.config.ts` 的 `appName` + `android/app/src/main/res/values/strings.xml` |
 | 包名 | `capacitor.config.ts` 的 `appId` + `android/app/build.gradle` 的 `applicationId` |
 | 应用图标 | `android/app/src/main/res/mipmap-*/`（与网页端 favicon 同一片叶子） |

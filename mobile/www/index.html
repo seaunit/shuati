@@ -2,11 +2,128 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>拾题</title>
+    <style>
+      :root {
+        --bg: #f7f7f7;
+        --badge: #eef1ee;
+        --leaf: #7d9b76;
+        --ink: #1a1a1a;
+        --gray: #8a8f98;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui,
+          sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      body.ready {
+        opacity: 1;
+      }
+
+      .badge {
+        width: 96px;
+        height: 96px;
+        border-radius: 28px;
+        background: var(--badge);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .badge svg {
+        width: 56px;
+        height: 56px;
+      }
+
+      h1 {
+        margin: 22px 0 0;
+        font-size: 34px;
+        font-weight: 700;
+      }
+
+      p {
+        margin: 10px 0 0;
+        font-size: 15px;
+        color: var(--gray);
+      }
+
+      .hint {
+        position: fixed;
+        bottom: 32px;
+        font-size: 12px;
+        color: #b2b2b2;
+      }
+    </style>
   </head>
-  <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;color:#6B7280">
-    <!-- 远端加载模式下这个文件不会展示，仅作为 webDir 占位 -->
-    正在连接拾题…
+  <body>
+    <!-- 叶子路径与网页端 frontend/public/favicon.svg 逐字一致 -->
+    <div class="badge">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="var(--leaf)"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+        <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+      </svg>
+    </div>
+    <h1>拾题</h1>
+    <p>安静地练习，温柔地记住</p>
+    <div class="hint">正在进入…</div>
+
+    <script>
+      // 站点入口：**一处可配**（宪法 v1.2.0 要求写明远端加载还是本地资源）。
+      // 这里的模式是「本地启动页 → 远端应用」：启动页是本地文件，不依赖网络、秒开；
+      // 展示品牌后再跳到线上应用，所以 App 里的界面始终与网页端同一份实现。
+      // 跳转目标必须同时写进 capacitor.config.ts 的 server.allowNavigation，否则会被系统浏览器接管。
+      var SITE_URL = "https://www.seaunit.site/app/";
+
+      // 品牌至少露出这么久，避免一闪而过
+      var MIN_SHOW_MS = 700;
+      var startedAt = Date.now();
+
+      document.body.classList.add("ready");
+
+      // 先把连接热起来，跳转后首屏更快（no-cors：只要能建立连接即可）
+      try {
+        fetch(SITE_URL, { mode: "no-cors" }).catch(function () {});
+      } catch (error) {
+        /* 预热失败不影响跳转 */
+      }
+
+      var wait = Math.max(0, MIN_SHOW_MS - (Date.now() - startedAt));
+      setTimeout(function () {
+        document.body.style.opacity = "0";
+        setTimeout(function () {
+          window.location.replace(SITE_URL);
+        }, 200);
+      }, wait);
+    </script>
   </body>
 </html>

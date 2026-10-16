@@ -32,6 +32,20 @@
   壳的 `SITE_URL` 改为 `https://www.seaunit.site/app/`，
   `npm run check` 增加一条断言（入口必须以 `/app/` 结尾），文档同步说明。
 
+## Phase 5: 品牌启动页（用户反馈）
+
+- [x] T013 启动页：改成「本地启动页 → 远端应用」模式
+  - `www/index.html` = 品牌启动页（叶子与 favicon 同一条路径 + 拾题 + 「安静地练习，温柔地记住」），
+    淡入、至少露出 700ms、顺便 `fetch` 预热连接，然后 `location.replace` 到线上 `/app/`
+  - `capacitor.config.ts` 去掉 `server.url`（改由启动页跳转），并加
+    `server.allowNavigation=[www.seaunit.site, seaunit.site]`（不加就会被系统浏览器接管）；
+    `backgroundColor` 与启动页同色，避免闪白
+  - `res/values/splash.xml` + `styles.xml`：冷启动窗口底色铺成同色纯色（不用模板 splash 图，避免跳色）
+  - `npm run check` 扩到 11 项：本地启动页 / 品牌内容 / 跳转目标 / allowNavigation 全覆盖
+  - 证据：包内 `assets/public/index.html` 含叶子 svg + 拾题 + 标语，跳转目标
+    `https://www.seaunit.site/app/`；`assets/capacitor.config.json` 无 `server.url` 且
+    `allowNavigation` 就位；APK 4.19 MB
+
 ## 依赖与顺序
 
 - Phase 1 先做（壳配置决定后面怎么生成平台工程）

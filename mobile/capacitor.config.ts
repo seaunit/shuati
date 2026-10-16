@@ -1,35 +1,35 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * 站点地址：**一处可配**（宪法 v1.2.0「技术栈与部署约束」要求写明远端加载还是本地资源）。
+ * 启动方式：**本地启动页 → 远端应用**（宪法 v1.2.0 要求写明远端加载还是本地资源）。
  *
- * 这里用「远端加载」：壳直接打开网页端同一份线上版本，于是
- * 1) 界面与手机浏览器看到的**必然一致**（就是同一份实现，不存在两边对齐）；
- * 2) 网页端发版即 App 最新，不用等应用商店审核；
- * 3) 同源，所以会话 Cookie 与 `/api/**` 都天然可用，不需要 CORS，也不需要改后端。
+ * 1. 不带 `server.url`：Capacitor 加载本地 `www/index.html`，也就是品牌启动页
+ *    （叶子 + 拾题 + 一句话），本地文件不依赖网络，冷启动秒开、没有白屏；
+ * 2. 启动页展示完品牌后跳转到线上应用 `https://www.seaunit.site/app/`，
+ *    所以 App 里的界面始终与网页端同一份实现，网页端发版 App 即最新；
+ * 3. **跳转目标必须写进下面的 `allowNavigation`**，否则 Capacitor 会把它当成外部链接
+ *    交给系统浏览器（那样就"跳出 App"了）。
  *
- * **入口必须是 `/app/` 而不是站根 `/`**：站根由后端直出 SEO 落地页（给搜索引擎看的），
- * `/app/` 才是应用壳（题库首页）。App 直接进 `/app/`，用户打开就是可用的题库列表。
- * 域用带 www 的规范域（站点 canonical 就是它），换域名只改这一行。
+ * 站点入口 URL 只写在一个地方：`www/index.html` 里的 `SITE_URL`（启动页要跳的目标）。
+ * 换域名时改 `www/index.html` 的 SITE_URL + 这里的 allowNavigation。
  *
- * 代价：必须联网（无离线包）。
+ * 代价：必须联网（不做离线包）。
  */
-const SITE_URL = "https://www.seaunit.site/app/";
-
 const config: CapacitorConfig = {
   appId: "site.seaunit.shuati",
   appName: "拾题",
-  // 远端加载模式下 webDir 只是占位（CLI 需要一个存在的目录），不会被使用
   webDir: "www",
   server: {
-    url: SITE_URL,
+    // 允许在 App 内部导航到站点（含 www 与非 www，避免用户被跳去浏览器）
+    allowNavigation: ["www.seaunit.site", "seaunit.site"],
     cleartext: false,
     androidScheme: "https",
   },
   android: {
     allowMixedContent: false,
   },
-  backgroundColor: "#FFFFFF",
+  // 与启动页同色，避免启动瞬间闪白
+  backgroundColor: "#F7F7F7",
 };
 
 export default config;
