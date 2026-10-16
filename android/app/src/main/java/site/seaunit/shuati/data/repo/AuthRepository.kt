@@ -17,6 +17,16 @@ class AuthRepository(
 
     suspend fun me(): User? = api.get("/api/me", User.serializer())?.also { store.user = it }
 
+    /**
+     * 冷启动校准登录态：未登录时服务端会返回 401，这里按"没登录"处理，
+     * 不触发会话过期提示（游客打开 App 不该被弹登录框）。
+     */
+    suspend fun probeMe(): User? {
+        val user = api.get("/api/me", User.serializer(), notifyUnauthorized = false)
+        store.user = user
+        return user
+    }
+
     suspend fun login(
         email: String,
         password: String,

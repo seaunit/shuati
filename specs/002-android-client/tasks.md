@@ -132,6 +132,7 @@
 - [x] T038 [P] 写 `android/README.md`：构建、安装、改 BASE_URL、常见故障（SDK 路径、明文 HTTP）
 - [x] T039 跑通 `gradlew.bat :app:testDebugUnitTest`（11 条全绿）与 `:app:assembleDebug`（app-debug.apk 12.78 MB，SC-005 ≤ 20 MB）
 - [ ] T040 按 [quickstart.md](./quickstart.md) 在真机走一遍 10 条验收清单，记录结果（含 SC-004 与网页端交叉核对）
+  — 待用户安装 `app-debug.apk` 后一次性验收
 - [x] T041 更新根 `README.md` 与 `AGENTS.md` 的目录说明，加入 `android/`，并说明安卓端「同源」约束
 
 ---

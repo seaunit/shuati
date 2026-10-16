@@ -73,7 +73,7 @@ fun ProfileScreen(
         Pair(container.billing.points(), container.billing.catalog())
     }
 
-    StateHost(state = loader.state, onRetry = { }) { (points, catalog) ->
+    StateHost(state = loader.state, onRetry = loader.retry) { (points, catalog) ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -81,7 +81,18 @@ fun ProfileScreen(
         ) {
             item {
                 SectionBox {
-                    Text(container.auth.cachedUser()?.email.orEmpty(), fontSize = 14.sp, color = Ink)
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(
+                            container.auth.cachedUser()?.email.orEmpty(),
+                            fontSize = 14.sp,
+                            color = Ink,
+                            modifier = Modifier.weight(1f),
+                        )
+                        // 支付在浏览器里完成，回来后点一下刷新就能看到新余额
+                        TextButton(onClick = loader.retry) {
+                            Text("刷新", color = Oat, fontSize = 13.sp)
+                        }
+                    }
                     Text(
                         "当前套餐：${points.entitlements.planName}",
                         fontSize = 12.sp,

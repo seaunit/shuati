@@ -34,7 +34,7 @@ fun WrongBookScreen(container: AppContainer, isLoggedIn: Boolean) {
     }
     val loader = rememberLoader(Unit) { container.review.wrongBook() }
 
-    StateHost(state = loader.state, onRetry = { }) { items ->
+    StateHost(state = loader.state, onRetry = loader.retry) { items ->
         if (items.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(20.dp)) {
                 Text("错题本是空的，说明还没有答错的题", color = Oat, fontSize = 13.sp)
@@ -85,7 +85,7 @@ fun StatsScreen(container: AppContainer, isLoggedIn: Boolean) {
     }
     val loader = rememberLoader(Unit) { container.review.stats() }
 
-    StateHost(state = loader.state, onRetry = { }) { stats -> StatsBody(stats) }
+    StateHost(state = loader.state, onRetry = loader.retry) { stats -> StatsBody(stats) }
 }
 
 @Composable

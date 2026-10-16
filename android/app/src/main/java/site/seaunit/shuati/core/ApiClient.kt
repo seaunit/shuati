@@ -43,9 +43,22 @@ class ApiClient(
     /** 401 回调：由 UI 层注册，负责清会话并跳登录 */
     var onUnauthorized: (() -> Unit)? = null
 
-    suspend fun <T> get(path: String, serializer: KSerializer<T>): T? =
+    /**
+     * @param notifyUnauthorized 探测性请求（如冷启动问 `/api/me`）传 false：
+     *   未登录本来就该是 401，不需要触发"会话过期"提示 —— 与网页端 `/api/me` 的
+     *   `redirectOn401: false` 是同一个意思。
+     */
+    suspend fun <T> get(
+        path: String,
+        serializer: KSerializer<T>,
+        notifyUnauthorized: Boolean = true,
+    ): T? =
         withContext(Dispatchers.IO) {
-            execute(Request.Builder().url(resolve(path)).get().build(), serializer)
+            execute(
+                Request.Builder().url(resolve(path)).get().build(),
+                serializer,
+                notifyUnauthorized,
+            )
         }
 
     suspend fun <T> post(path: String, body: JsonElement, serializer: KSerializer<T>): T? =
@@ -75,7 +88,11 @@ class ApiClient(
         post(path, body, JsonElement.serializer())
     }
 
-    private fun <T> execute(request: Request, serializer: KSerializer<T>): T? {
+    private fun <T> execute(
+        request: Request,
+        serializer: KSerializer<T>,
+        notifyUnauthorized: Boolean = true,
+    ): T? {
         http.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             val envelope = runCatching {
@@ -84,7 +101,7 @@ class ApiClient(
 
             val failed = !response.isSuccessful || envelope == null || envelope.code != 200
             if (failed) {
-                if (response.code == 401) {
+                if (response.code == 401 && notifyUnauthorized) {
                     onUnauthorized?.invoke()
                 }
                 throw ApiException(failureMessage(response.code, envelope?.message, raw), response.code)

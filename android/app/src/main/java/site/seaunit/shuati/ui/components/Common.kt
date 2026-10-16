@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -38,6 +39,9 @@ class Loader<T> {
     var state by mutableStateOf<UiState<T>>(UiState.Loading)
         private set
 
+    /** 交给界面上的「重试」按钮：自增一次就让 rememberLoader 重新执行 */
+    internal var retry: () -> Unit = {}
+
     suspend fun run(block: suspend () -> T) {
         state = UiState.Loading
         state = try {
@@ -51,8 +55,10 @@ class Loader<T> {
 @Composable
 fun <T> rememberLoader(vararg keys: Any?, block: suspend () -> T): Loader<T> {
     val loader = remember(*keys) { Loader<T>() }
+    var attempt by remember(*keys) { mutableIntStateOf(0) }
+    loader.retry = { attempt += 1 }
     val current by rememberUpdatedState(block)
-    LaunchedEffect(*keys) { loader.run { current() } }
+    LaunchedEffect(*keys, attempt) { loader.run { current() } }
     return loader
 }
 

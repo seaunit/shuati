@@ -42,23 +42,47 @@ fun BankListScreen(
 ) {
     val loader = rememberLoader(isLoggedIn) { container.banks.banks() }
 
-    StateHost(state = loader.state, onRetry = { }) { banks ->
-        if (banks.isEmpty()) {
-            Column(Modifier.fillMaxSize().padding(24.dp)) {
-                Text("还没有可刷的题库", color = Oat, fontSize = 14.sp)
-            }
-            return@StateHost
-        }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(banks, key = { it.id }) { bank ->
-                BankRow(
-                    bank = bank,
-                    onClick = { if (isLoggedIn) onOpenBank(bank.id, bank.name) else onNeedLogin() },
-                )
+            Text(
+                if (isLoggedIn) {
+                    container.auth.cachedUser()?.email.orEmpty()
+                } else {
+                    "未登录，仅可浏览公共题库"
+                },
+                fontSize = 12.sp,
+                color = Oat,
+                modifier = Modifier.weight(1f),
+            )
+            // 游客只能看公共题库，给一个明确的登录入口，别让人找了半天
+            if (!isLoggedIn) {
+                OutlinedButton(onClick = onNeedLogin) {
+                    Text("登录", fontSize = 13.sp, color = Moss)
+                }
+            }
+        }
+
+        StateHost(state = loader.state, onRetry = loader.retry) { banks ->
+            if (banks.isEmpty()) {
+                Column(Modifier.fillMaxWidth().padding(24.dp)) {
+                    Text("还没有可刷的题库", color = Oat, fontSize = 14.sp)
+                }
+                return@StateHost
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(banks, key = { it.id }) { bank ->
+                    BankRow(
+                        bank = bank,
+                        onClick = { if (isLoggedIn) onOpenBank(bank.id, bank.name) else onNeedLogin() },
+                    )
+                }
             }
         }
     }
@@ -115,7 +139,7 @@ fun UnitListScreen(
             ) { Text("整库刷题", fontSize = 13.sp) }
         }
 
-        StateHost(state = loader.state, onRetry = { }) { units ->
+        StateHost(state = loader.state, onRetry = loader.retry) { units ->
             if (units.isEmpty()) {
                 Column(Modifier.padding(16.dp)) { Text("这个题库还没有单元", color = Oat, fontSize = 13.sp) }
                 return@StateHost

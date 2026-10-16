@@ -61,6 +61,12 @@ fun AppNav(container: AppContainer) {
     var loggedIn by remember { mutableStateOf(container.auth.cachedUser() != null) }
     val expired by container.sessionExpired.collectAsState()
 
+    // 冷启动校准：本地缓存只负责首屏，真实登录态以服务端为准
+    LaunchedEffect(Unit) {
+        val user = runCatching { container.auth.probeMe() }.getOrNull()
+        loggedIn = user != null
+    }
+
     // 任意接口 401 → 清会话并回登录页（spec FR-010）
     LaunchedEffect(expired) {
         if (expired) {
