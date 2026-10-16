@@ -10,6 +10,7 @@ import site.seaunit.shuati.core.SessionStore
 import site.seaunit.shuati.data.repo.AuthRepository
 import site.seaunit.shuati.data.repo.BankRepository
 import site.seaunit.shuati.data.repo.BillingRepository
+import site.seaunit.shuati.data.repo.ManageRepository
 import site.seaunit.shuati.data.repo.PracticeRepository
 import site.seaunit.shuati.data.repo.ReviewRepository
 
@@ -27,6 +28,7 @@ class AppContainer(context: Context) {
     val practice = PracticeRepository(api)
     val review = ReviewRepository(api)
     val billing = BillingRepository(api)
+    val manage = ManageRepository(api)
 
     private val _sessionExpired = MutableStateFlow(false)
 

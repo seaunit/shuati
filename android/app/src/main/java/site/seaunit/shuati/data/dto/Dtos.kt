@@ -38,6 +38,7 @@ data class BankUnit(
     val sort: Int = 0,
     val question_count: Int = 0,
     val answered_count: Int = 0,
+    val off_count: Int = 0,
 )
 
 @Serializable
@@ -51,8 +52,12 @@ data class Question(
     val content: String,
     val options: List<QuestionOption>? = null,
     val difficulty: String? = null,
+    // 后端这两列都是 JSON：images 全库为 NULL、tags 大多数为 NULL，
+    // 靠 JsonSupport 的 coerceInputValues 把 null 收回默认值
     val tags: List<String> = emptyList(),
     val images: List<String> = emptyList(),
+    val answer: String? = null,
+    val key_points: List<String>? = null,
     val status: String? = null,
     val explanation: String? = null,
 ) {
@@ -98,6 +103,10 @@ data class Explanation(val explanation: String = "")
 
 @Serializable
 data class SessionCreated(val id: Long)
+
+/** 新建类接口统一返回 `{id}`（题库 / 单元 / 题目） */
+@Serializable
+data class IdResponse(val id: Long = 0)
 
 @Serializable
 data class WrongBookItem(

@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
@@ -35,6 +36,8 @@ import site.seaunit.shuati.ui.auth.LoginScreen
 import site.seaunit.shuati.ui.auth.RegisterScreen
 import site.seaunit.shuati.ui.banks.BankListScreen
 import site.seaunit.shuati.ui.banks.UnitListScreen
+import site.seaunit.shuati.ui.manage.ManageBankDetailScreen
+import site.seaunit.shuati.ui.manage.ManageBankListScreen
 import site.seaunit.shuati.ui.practice.PracticeScreen
 import site.seaunit.shuati.ui.profile.ProfileScreen
 import site.seaunit.shuati.ui.review.StatsScreen
@@ -46,6 +49,7 @@ private const val ROUTE_BANKS = "banks"
 private const val ROUTE_WRONG = "wrong"
 private const val ROUTE_STATS = "stats"
 private const val ROUTE_PROFILE = "profile"
+private const val ROUTE_MANAGE = "manage"
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
@@ -78,7 +82,8 @@ fun AppNav(container: AppContainer) {
 
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route.orEmpty()
-    val showBottomBar = route in setOf(ROUTE_BANKS, ROUTE_WRONG, ROUTE_STATS, ROUTE_PROFILE)
+    val showBottomBar = route in
+        setOf(ROUTE_BANKS, ROUTE_WRONG, ROUTE_STATS, ROUTE_MANAGE, ROUTE_PROFILE)
 
     Scaffold(
         bottomBar = {
@@ -152,6 +157,30 @@ fun AppNav(container: AppContainer) {
 
             composable(ROUTE_WRONG) { WrongBookScreen(container, loggedIn) }
             composable(ROUTE_STATS) { StatsScreen(container, loggedIn) }
+
+            composable(ROUTE_MANAGE) {
+                ManageBankListScreen(
+                    container = container,
+                    isLoggedIn = loggedIn,
+                    onOpenBank = { id, name -> nav.navigate("manage/$id/${Uri.encode(name)}") },
+                    onLogin = { nav.navigate("login") },
+                )
+            }
+
+            composable(
+                route = "manage/{bankId}/{bankName}",
+                arguments = listOf(
+                    navArgument("bankId") { type = NavType.LongType },
+                    navArgument("bankName") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val bankId = backStackEntry.arguments?.getLong("bankId") ?: 0L
+                ManageBankDetailScreen(
+                    container = container,
+                    bankId = bankId,
+                    onBack = { nav.popBackStack() },
+                )
+            }
             composable(ROUTE_PROFILE) {
                 ProfileScreen(
                     container = container,
@@ -201,6 +230,7 @@ private fun BottomBar(route: String, nav: NavHostController) {
         Tab(ROUTE_BANKS, "题库", Icons.Filled.Home),
         Tab(ROUTE_WRONG, "错题本", Icons.Filled.Warning),
         Tab(ROUTE_STATS, "统计", Icons.Filled.List),
+        Tab(ROUTE_MANAGE, "题库管理", Icons.Filled.Edit),
         Tab(ROUTE_PROFILE, "我的", Icons.Filled.Person),
     )
     NavigationBar {

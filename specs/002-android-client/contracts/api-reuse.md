@@ -74,10 +74,31 @@
 后端 `createOrder` 目前只允许 `kind = PACK`（纯点数制），客户端的商品来源就是 `GET /api/plans`
 返回的 `packs`，与网页端同一份目录、同一个下单接口、同一个支付页（spec FR-012）。
 
-## 6. 明确不做的接口
+## 6. 题库管理（需登录；权限由服务端判定）
 
-- 全部 `/api/admin/**`（管理能力只在网页端）
-- 全部 `/api/manage/**`（题库维护只在网页端）
+网页端早就有题库管理，安卓端复用同一套接口，不做任何本地权限判断 ——
+有没有维护权由服务端 `requireManage` 决定，客户端只负责把 403/404 的文案显示出来。
+
+| 用途 | 请求 |
+| --- | --- |
+| 我维护的题库 | `GET /api/manage/banks` |
+| 新建空题库 | `POST /api/manage/banks` `{name}` → `{id}`（受平台题库数量上限约束） |
+| 改题库名 / 描述 | `PATCH /api/manage/banks/{id}` `{name, description}` |
+| 删除题库发码 | `POST /api/manage/banks/{id}/delete-code` → `{cooldownSeconds, expiresInSeconds}` |
+| 删除题库 | `POST /api/manage/banks/{id}/delete` `{code}`（DELETE_BANK 专用码，不可复用其它场景） |
+| 单元列表 | `GET /api/manage/banks/{id}/units` |
+| 新增单元 | `POST /api/manage/units` `{bankId, name}` |
+| 单元改名 | `PATCH /api/manage/units/{id}` `{name}` |
+| 删除单元 | `DELETE /api/manage/units/{id}`（单元下还有题会被拒） |
+| 题目列表 | `GET /api/manage/banks/{id}/questions?status=ALL\|ON\|OFF&q=` |
+| 新增题目 | `POST /api/manage/questions` `{bankId, unitId, type, content, answer, options, keyPoints, difficulty, explanation, tags}` |
+| 编辑题目 | `PUT /api/manage/questions/{id}`（**整题改写，注意是 PUT 不是 PATCH**；`unitId` 传 null 表示移到「未分类」） |
+| 上下架 | `PATCH /api/manage/questions/{id}/status` `{status}` |
+| 删除题目 | `DELETE /api/manage/questions/{id}` |
+
+## 7. 明确不做的接口
+
+- 全部 `/api/admin/**`（平台管理能力只在网页端）
 - `/api/import/**`（文档解析成题库只在网页端）
 - `GET /api/orders`（历史订单只在网页端看，安卓端不做订单列表）
 

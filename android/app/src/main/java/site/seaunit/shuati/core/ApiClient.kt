@@ -1,6 +1,7 @@
 package site.seaunit.shuati.core
 
 import java.util.concurrent.TimeUnit
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
@@ -88,6 +89,31 @@ class ApiClient(
         post(path, body, JsonElement.serializer())
     }
 
+    suspend fun patchVoid(path: String, body: JsonElement = JsonNull) {
+        patch(path, body, JsonElement.serializer())
+    }
+
+    suspend fun putVoid(path: String, body: JsonElement = JsonNull) {
+        withContext(Dispatchers.IO) {
+            execute(
+                Request.Builder()
+                    .url(resolve(path))
+                    .put(body.toString().toRequestBody(JSON_MEDIA))
+                    .build(),
+                JsonElement.serializer(),
+            )
+        }
+    }
+
+    suspend fun deleteVoid(path: String) {
+        withContext(Dispatchers.IO) {
+            execute(
+                Request.Builder().url(resolve(path)).delete().build(),
+                JsonElement.serializer(),
+            )
+        }
+    }
+
     private fun <T> execute(
         request: Request,
         serializer: KSerializer<T>,
@@ -104,6 +130,10 @@ class ApiClient(
                 if (response.code == 401 && notifyUnauthorized) {
                     onUnauthorized?.invoke()
                 }
+                if (envelope == null) {
+                    // 解析失败时把原始响应留在 Logcat 里，别让线上问题只能靠猜
+                    Log.w(TAG, "响应无法解析（HTTP ${response.code}）：${raw.take(500)}")
+                }
                 throw ApiException(failureMessage(response.code, envelope?.message, raw), response.code)
             }
             return envelope.data
@@ -117,6 +147,7 @@ class ApiClient(
             status == 401 -> "请先登录"
             status == 429 -> "请求过于频繁，请稍后再试"
             status >= 500 -> "服务器内部错误"
+            status in 200..299 -> "返回数据无法解析（HTTP $status），请重试或反馈"
             raw.isBlank() -> "网络异常，请检查网络后重试（HTTP $status）"
             else -> "请求失败（HTTP $status）"
         }
@@ -126,6 +157,7 @@ class ApiClient(
         if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
 
     private companion object {
+        const val TAG = "ApiClient"
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     }
 }

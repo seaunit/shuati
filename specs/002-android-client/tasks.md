@@ -198,3 +198,20 @@
   32×32 等比放大 2.25 倍塞进 108dp 画布安全区，底板用 favicon 的 `#EEF1EE`，描边 `#7D9B76`
 - [x] T044 点数流水不要把页面撑长 → 改成固定高度（`heightIn(max = 300dp)`）的滚动区，
   与网页端「点数明细」的 `max-h-80 overflow-y-auto` 同一口径，并在标题里标出条数
+
+## 验收反馈修正（用户第二轮真机反馈）
+
+- [x] T045 刷题报"HTTP 200" → 根因是 `question.images`（全库 NULL）与 `tags`（多数 NULL）
+  返回 `null`，DTO 里是非空 `List`，库在显式 null 上直接抛异常，表现成 HTTP 200 却报错。
+  修：`JsonSupport` 打开 `coerceInputValues`；解析失败时把原始响应写进 Logcat 并把文案
+  改成"返回数据无法解析（HTTP 200）"；补 `DtoDecodeTest` 3 条（含不加该开关会抛异常的反证）
+- [x] T046 [US5] 新增 `data/repo/ManageRepository.kt`：题库 / 单元 / 题目的增删改查 + 上下架 + 删除题库验证码
+- [x] T047 [US5] 新增 `ui/manage/ManageBankListScreen.kt`：我维护的题库列表 + 新建空题库
+- [x] T048 [US5] 新增 `ui/manage/ManageBankDetailScreen.kt`：题库信息、单元增删改、题目列表（状态筛选 + 题干检索）、
+  新增/编辑题目弹窗（题型、单元、选项与正确答案、难度、标签、解析）、上下架、删除，删除题库走邮箱验证码
+- [x] T049 底部导航加第 5 个入口「题库管理」并接上路由
+- [x] T050 契约与规格回写：`contracts/api-reuse.md` 把 `/api/manage/**` 从"不做"移到正式契约（§6）；
+  `spec.md` 补 US5 与验收场景
+
+> 仍未实现（明确留到下一轮）：网页端的「导入题目」文档解析流程（`/api/import/**`）。
+> 安卓端要做的话需要文件选择 + 上传 + 解析任务轮询 + 结果勾选，是独立一块，本轮不合并。
