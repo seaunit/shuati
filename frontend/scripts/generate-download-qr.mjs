@@ -3,10 +3,14 @@
  * 生成下载页的品牌二维码（静态 SVG，页面运行时不引依赖）。
  *
  * 为什么留一个脚本而不是直接贴一张图：
- *   1. 二维码内容就是下载地址，域名一变必须重新生成，脚本是唯一来源；
+ *   1. 二维码内容是下载页地址，域名一变必须重新生成，脚本是唯一来源；
  *   2. 中心要盖品牌叶子，会挡住模块，必须用 **H 级纠错**（30% 冗余）才扫得出来——
  *      这个参数不能靠"下次随手重新生成"记着；
  *   3. 静区（quiet zone）也在这里统一加，省得谁导出时裁掉导致扫不出来。
+ *
+ * 产出两份：
+ *   - download-qr.svg：矢量原图（页面缩放不糊，也方便印刷）
+ *   - download-qr.png：1024×1024 位图，给手机长按保存/转发用（SVG 存不下来）
  *
  * 用法：
  *   npm run qr:download
@@ -17,10 +21,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import QRCode from "qrcode";
+import sharp from "sharp";
 
 const frontendDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const siteBase = (process.env.SHUATI_SITE_BASE ?? "https://www.seaunit.site").replace(/\/+$/, "");
-const targetUrl = `${siteBase}/apk/shuati-android.apk`;
+// 扫出来的是**下载页**，不是 APK 直链：直链在微信/部分浏览器里会被拦，
+// 而且用户落地就能看到版本、安装说明和常见问题
+const targetUrl = `${siteBase}/download`;
 
 const MARGIN = 4; // 静区宽度（模块数），低于 4 很多扫码器会识别不稳
 const BADGE = 13; // 中心叶子徽标边长（模块数）；再大就明显吃掉可读余量了
@@ -71,8 +78,15 @@ const svg = `<?xml version="1.0" encoding="utf-8"?>
 </svg>
 `;
 
-const output = join(frontendDir, "public", "download-qr.svg");
-writeFileSync(output, svg, "utf8");
+const svgPath = join(frontendDir, "public", "download-qr.svg");
+const pngPath = join(frontendDir, "public", "download-qr.png");
+writeFileSync(svgPath, svg, "utf8");
+await sharp(Buffer.from(svg), { density: 384 })
+  .resize(1024, 1024, { fit: "contain", background: "#ffffff" })
+  .png({ compressionLevel: 9 })
+  .toFile(pngPath);
+
 console.log(`二维码内容：${targetUrl}`);
 console.log(`纠错等级：H ｜ 版本：${(size - 17) / 4} ｜ 模块：${size}×${size} ｜ 中心徽标：${BADGE}×${BADGE}`);
-console.log(`已写入：${output}`);
+console.log(`已写入：${svgPath}`);
+console.log(`已写入：${pngPath}（1024×1024，供手机长按保存/转发）`);

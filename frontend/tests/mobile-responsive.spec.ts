@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+
 import { expect, test } from "@playwright/test";
 
 test.use({
@@ -100,16 +103,47 @@ test("download page offers the apk with a qr code and the published version", as
   // 点击下载指向静态产物（/apk/ 与页面路由 /download 分开，避免带斜杠撞车）
   await expect(page.getByTestId("download-apk")).toHaveAttribute("href", "/apk/shuati-android.apk");
 
-  // 二维码：构建时可能被内联成 data URL，所以只断言"渲染出来了且是 SVG"
+  // 二维码用位图展示：手机长按图片才能存进相册（SVG 存不下来）
   const qr = page.getByTestId("download-qr");
   await expect(qr).toBeVisible();
-  const qrSrc = (await qr.getAttribute("src")) ?? "";
-  expect(qrSrc.includes("svg")).toBe(true);
-  // 定制二维码：中心品牌叶子画在 SVG 里，下面是产品名与标语
+  expect((await qr.getAttribute("src")) ?? "").toContain("png");
+  // 定制二维码：下面是产品名与标语，另给一个「保存二维码」入口
   await expect(page.getByText("安静地练习，温柔地记住")).toBeVisible();
-  // 静态文件本身也必须发布出去（public 目录随构建产物一起部署）
-  const qrFile = await request.get("/download-qr.svg");
-  expect(qrFile.ok()).toBe(true);
+  await expect(page.getByTestId("save-qr")).toHaveAttribute("download", "shuati-download-qr.png");
+  // 位图与矢量原图都必须发布出去（public 目录随构建产物一起部署）
+  expect((await request.get("/download-qr.png")).ok()).toBe(true);
+  expect((await request.get("/download-qr.svg")).ok()).toBe(true);
+});
+
+test("the published download qr really decodes to the download page", async ({ page }) => {
+  const require = createRequire(import.meta.url);
+  const qrPng = readFileSync(new URL("../public/download-qr.png", import.meta.url));
+  const jsqrSource = readFileSync(require.resolve("jsqr"), "utf8");
+
+  // 二维码印出去就改不了了，用解码器兜住：内容必须还是下载页地址，
+  // 中心叶子挡掉模块后也要扫得出来
+  await page.setContent(
+    `<body style="margin:0"><img id="q" src="data:image/png;base64,${qrPng.toString("base64")}"></body>`,
+  );
+  await page.addScriptTag({ content: jsqrSource });
+
+  const decoded = await page.evaluate(() => {
+    const img = document.getElementById("q") as HTMLImageElement;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(img, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const decode = (
+      window as unknown as {
+        jsQR: (pixels: Uint8ClampedArray, w: number, h: number) => { data: string } | null;
+      }
+    ).jsQR;
+    return decode(data, width, height)?.data ?? null;
+  });
+
+  expect(decoded).toBe("https://www.seaunit.site/download");
 });
 
 test("app nav links to the public download page (mobile: inside 更多)", async ({ page }) => {

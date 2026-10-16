@@ -25,3 +25,6 @@
 - [x] T017 二维码品牌化：生成脚本 `npm run qr:download`（H 级纠错 + 静区 + 中心叶子徽标），
       QR 卡下方补「拾题 + 安静地练习，温柔地记住」；用解码器实测 640px 与页面实际尺寸
       176px 都能解出 `https://www.seaunit.site/apk/shuati-android.apk`
+- [x] T018 二维码改指下载页而非 APK 直链（`https://www.seaunit.site/download`），
+      并出 1024×1024 位图供保存：页面展示 PNG（手机长按可存相册）+「保存二维码」按钮，
+      文案同步改成"扫码打开本页"；Playwright 用 jsQR 解发布出去的 PNG 断言内容

@@ -83,22 +83,32 @@ onMounted(async () => {
 
     <section class="mt-6 grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
       <div class="rounded-2xl border border-mist bg-white p-4 text-center">
+        <!-- 用 PNG 而不是 SVG 展示：手机长按图片能存进相册，SVG 存不下来 -->
         <img
-          src="/download-qr.svg"
-          alt="扫码下载拾题安卓版"
+          src="/download-qr.png"
+          alt="扫码打开拾题下载页"
           data-testid="download-qr"
           class="mx-auto h-44 w-44"
         />
         <p class="mt-3 text-sm font-semibold tracking-tight text-ink">拾题</p>
         <p class="mt-0.5 text-xs text-oat">安静地练习，温柔地记住</p>
+        <a
+          href="/download-qr.png"
+          download="shuati-download-qr.png"
+          data-testid="save-qr"
+          class="mt-3 inline-flex items-center gap-1.5 rounded-full border border-mist px-3 py-1.5 text-xs text-ink transition hover:border-moss"
+        >
+          <Download class="h-3.5 w-3.5 text-moss" />
+          保存二维码
+        </a>
       </div>
       <div>
         <p class="flex items-center gap-2 text-sm font-medium text-ink">
           <QrCode class="h-4 w-4 text-moss" />
-          手机扫码直接下载
+          手机扫码打开本页
         </p>
         <p class="mt-2 text-sm leading-relaxed text-oat">
-          用手机相机或浏览器扫码，会直接下载同一份安装包；也可以把本页链接发到手机上再点「下载 APK」。
+          用手机相机或微信扫一扫，会在手机上打开这个下载页；长按二维码可以存到相册，转给朋友也能扫。
         </p>
       </div>
     </section>
@@ -109,7 +119,7 @@ onMounted(async () => {
         安装说明
       </h2>
       <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-oat">
-        <li>点击「下载 APK」（或扫码），下载完成后在通知里点开安装。</li>
+        <li>点击「下载 APK」，下载完成后在通知里点开安装（扫码的话就是在本页点这个按钮）。</li>
         <li>系统提示"未知来源"时，允许本次安装即可（这是我们直接分发的安装包，未上应用商店）。</li>
         <li>如果之前装过旧版本，请先卸载再安装：包名相同但签名不同，覆盖安装会失败。</li>
       </ol>

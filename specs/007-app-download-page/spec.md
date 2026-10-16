@@ -44,9 +44,14 @@
   （同一内容两个 URL 会让搜索引擎分不清正主）；游客也 MUST 能看到该入口。
 - **FR-011**: 下载页二维码 MUST 是品牌化的：二维码本体为静态 SVG（页面运行时不引二维码库），
   中心嵌品牌叶子图标，下方配产品名与标语；中心图标会遮挡模块，纠错等级 MUST 为 H；
-  二维码内容 MUST 是完整可扫的绝对下载地址（MUST NOT 用相对路径），
+  二维码内容 MUST 是完整可扫的绝对地址（MUST NOT 用相对路径），
   且 MUST 留静区；生成 MUST 可复现（`npm run qr:download`，换域名时用
   `SHUATI_SITE_BASE` 重新生成），MUST NOT 靠手工贴图。
+- **FR-012**: 二维码 MUST 指向**下载页**（`/download`），MUST NOT 直链 APK：
+  直链在微信等内置浏览器里容易被拦，且用户落地看不到版本与安装说明。
+- **FR-013**: 二维码 MUST 能保存到本地：页面展示位图版本（手机长按即可存相册，
+  SVG 存不下来），并提供「保存二维码」下载入口；因此发布产物 MUST 同时包含
+  `download-qr.png`（1024×1024）与 `download-qr.svg`。
 
 ## Success Criteria *(mandatory)*
 
@@ -62,3 +67,5 @@
   指向 `/download` 并真的进得去。
 - **SC-007**: 用二维码解码器实测：品牌化二维码能解出下载地址（原始尺寸与页面实际显示
   尺寸各测一次，本地已验证）。
+- **SC-008**: Playwright 用解码器解发布出去的 `download-qr.png`，解出的内容 MUST 等于
+  `https://www.seaunit.site/download`（中心叶子挡模块后仍可解）。
