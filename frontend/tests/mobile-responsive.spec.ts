@@ -744,6 +744,86 @@ test("practice lands on the saved cursor even if earlier questions were answered
   ).toBe(true);
 });
 
+test("an unanswered question can be skipped to the next one (no submit, no record)", async ({
+  page,
+}) => {
+  const question = (id: number) => ({
+    id,
+    unit_id: 1,
+    type: "SINGLE",
+    content: `第 ${id} 题题干`,
+    options: [{ key: "A", text: "选项 A" }, { key: "B", text: "选项 B" }],
+    difficulty: "MEDIUM",
+    images: null,
+    tags: null,
+    status: "ON",
+  });
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: [question(1), question(2), question(3)] },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 3, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+
+  const cursorWrites: Array<Record<string, unknown>> = [];
+  await page.route("**/api/progress/cursor*", (route) => {
+    if (route.request().method() === "PUT") {
+      cursorWrites.push(route.request().postDataJSON() as Record<string, unknown>);
+      return route.fulfill({ json: { code: 200, message: "ok", data: null } });
+    }
+    return route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } });
+  });
+
+  const submits: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/practice/submit")) submits.push(request.url());
+  });
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByText("第 1 / 3 题")).toBeVisible();
+
+  // 没选答案也能「下一题」＝跳过
+  await page.getByTestId("skip-next").click();
+  await expect(page.getByText("第 2 / 3 题")).toBeVisible();
+
+  // 跳过不发提交请求 → 0 分、不生成作答记录（也就不会进错题本）
+  expect(submits).toHaveLength(0);
+  // 跳过也记进度：写回的光标是"跳过去之后的那道题"
+  await expect.poll(() => cursorWrites.some((body) => body.questionId === 2)).toBe(true);
+  // 三个按钮（上一题 / 提交答案 / 下一题）在 390px 宽的手机上不能撑出横向滚动
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    ),
+  ).toBe(false);
+
+  // 回来时那一题仍是未作答，可以正常作答
+  await page.getByRole("button", { name: "上一题" }).click();
+  await expect(page.getByText("第 1 / 3 题")).toBeVisible();
+  await expect(page.getByRole("button", { name: "提交答案" })).toBeVisible();
+  await expect(page.getByText("判定：", { exact: false })).toHaveCount(0);
+});
+
 test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

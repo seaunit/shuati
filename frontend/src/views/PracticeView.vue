@@ -554,9 +554,18 @@ onMounted(async () => {
             <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
             提交答案
           </button>
+          <!--
+            下一题不依赖"是否已提交"：没作答也能往下走，相当于跳过（0 分）。
+            跳过不发提交请求，所以不会生成作答记录，也不会进错题本；进度照记。
+          -->
           <button
-            v-else
-            class="flex shrink-0 items-center gap-1 rounded-xl bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-ink/90 sm:px-5"
+            class="flex shrink-0 items-center gap-1 rounded-xl px-3 py-2.5 text-sm transition sm:px-4"
+            :class="
+              result
+                ? 'bg-ink text-white hover:bg-ink/90'
+                : 'border border-mist bg-white/80 text-ink hover:border-moss'
+            "
+            data-testid="skip-next"
             @click="next"
           >
             {{ index < questions.length - 1 ? "下一题" : "完成练习" }}
