@@ -6,7 +6,8 @@
     <title>拾题</title>
     <style>
       :root {
-        --bg: #f7f7f7;
+        /* 与网页端页面底色（--color-paper）保持一致，三处接力时不跳色 */
+        --bg: #ffffff;
         --badge: #eef1ee;
         --leaf: #7d9b76;
         --ink: #1a1a1a;
@@ -99,31 +100,49 @@
 
     <script>
       // 站点入口：**一处可配**（宪法 v1.2.0 要求写明远端加载还是本地资源）。
-      // 这里的模式是「本地启动页 → 远端应用」：启动页是本地文件，不依赖网络、秒开；
-      // 展示品牌后再跳到线上应用，所以 App 里的界面始终与网页端同一份实现。
+      // 模式仍是「本地启动页 → 远端应用」：启动页是本地文件、不依赖网络，秒开；
+      // 展示品牌后再跳到线上应用，App 里的界面始终与网页端同一份实现。
       // 跳转目标必须同时写进 capacitor.config.ts 的 server.allowNavigation，否则会被系统浏览器接管。
+      //
+      // 品牌为什么会一直亮着：跳过去之后等远端首帧的那几百毫秒，露出的是**窗口背景**
+      // （res/drawable/splash_brand.xml 里同一张品牌图，WebView 背景设成透明）。
+      // 所以这里**不能**先把自己淡出再跳——那 200ms 的空白就是这么来的。
       var SITE_URL = "https://www.seaunit.site/app/";
 
       // 品牌至少露出这么久，避免一闪而过
       var MIN_SHOW_MS = 700;
+      // 预热最多等这么久；等不到也先进，剩下的由窗口背景接着兜
+      var MAX_WARM_MS = 1200;
       var startedAt = Date.now();
+      var entered = false;
 
       document.body.classList.add("ready");
 
-      // 先把连接热起来，跳转后首屏更快（no-cors：只要能建立连接即可）
-      try {
-        fetch(SITE_URL, { mode: "no-cors" }).catch(function () {});
-      } catch (error) {
-        /* 预热失败不影响跳转 */
+      function enterSite() {
+        if (entered) return;
+        entered = true;
+        // 不淡出：保持启动页画着，让下一份文档的首帧接上来
+        window.location.replace(SITE_URL);
       }
 
-      var wait = Math.max(0, MIN_SHOW_MS - (Date.now() - startedAt));
-      setTimeout(function () {
-        document.body.style.opacity = "0";
-        setTimeout(function () {
-          window.location.replace(SITE_URL);
-        }, 200);
-      }, wait);
+      // 预热连接（跨海链路握手不便宜），跳过去能更快出首帧
+      var warm;
+      try {
+        warm = fetch(SITE_URL, { mode: "no-cors" }).catch(function () {});
+      } catch (error) {
+        warm = Promise.resolve(); // 预热失败不影响跳转
+      }
+
+      var warmSettled = Promise.race([
+        Promise.resolve(warm),
+        new Promise(function (resolve) {
+          setTimeout(resolve, MAX_WARM_MS);
+        }),
+      ]);
+
+      warmSettled.then(function () {
+        setTimeout(enterSite, Math.max(0, MIN_SHOW_MS - (Date.now() - startedAt)));
+      });
     </script>
   </body>
 </html>

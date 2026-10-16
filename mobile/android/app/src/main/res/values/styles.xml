@@ -13,6 +13,11 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!--
+          系统启动画面撤掉之后、WebView 画出第一帧之前，窗口就用这张品牌图兜着。
+          WebView 背景在 capacitor.config.ts 里设成透明，所以这段等待露出的是它。
+        -->
+        <item name="android:windowBackground">@drawable/splash_brand</item>
     </style>
 
 

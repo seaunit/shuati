@@ -9,7 +9,28 @@ Android / iOS 应用（宪法原则 VI「客户端与网页端同源（一份前
 
 1. 不带 `server.url`，Capacitor 先加载本地 `www/index.html` —— 也就是**品牌启动页**
    （叶子 + 拾题 + 「安静地练习，温柔地记住」），本地文件不依赖网络，冷启动秒开、没有白屏；
-2. 启动页展示完品牌（至少 700ms，顺便预热连接）后跳转到线上应用 `https://www.seaunit.site/app/`。
+2. 启动页至少露 700ms（顺便预热连接）后跳转到线上应用 `https://www.seaunit.site/app/`。
+
+### 品牌为什么"一直在"，不是一闪而过
+
+从冷启动到网页端首屏之间有实实在在的等待（跨海链路 TTFB 常有半秒上下），只靠本地启动页兜不住：
+它一跳走，屏幕上就什么都没有了。所以品牌是**四层接力**，四处的版面和配色必须一致：
+
+| 层 | 谁 | 盖住哪一段 |
+| --- | --- | --- |
+| ① | `res/drawable/splash_brand.xml`（窗口背景）+ WebView 背景透明 | 系统启动画面撤掉后，到 WebView 画出第一帧之前 |
+| ② | `www/index.html`（本地启动页） | 冷启动最初几百毫秒 |
+| ③ | 还是 ① | ② 跳走之后、远端首帧之前的等待（这段就是以前"几秒空白"的来源） |
+| ④ | `frontend/index.html` 里内联的首屏启动页 | 远端 HTML 到了、但 Vue 还没渲染出首屏的那段 |
+
+关键点：② MUST NOT 在跳转前把自己淡出（那 200ms 空白就是这么来的）；① 要能露出来，
+WebView 背景必须是透明的（`capacitor.config.ts` 的 `backgroundColor: "#FFFFFF00"`）。
+品牌图由脚本生成，改版面后重跑：
+
+```powershell
+cd mobile
+npm run splash:mark      # 重新生成 res/drawable-nodpi/splash_brand_mark.png
+```
 
 > **入口是 `https://www.seaunit.site/app/`，不是站根。**
 > 站根 `/` 由后端直出 SEO 落地页（给搜索引擎看的），`/app/` 才是应用壳；

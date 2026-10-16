@@ -28,8 +28,14 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
-  // 与启动页同色，避免启动瞬间闪白
-  backgroundColor: "#F7F7F7",
+  /**
+   * WebView 背景设为**透明**（#RRGGBBAA，最后两位是 alpha）。
+   *
+   * 这样从 App 启动到远端网页端画出第一帧之间的每一段等待，露出的是窗口背景
+   * （`res/drawable/splash_brand.xml` 里那张品牌图），而不是一片空白。
+   * 远端首帧一画出来就被页面自己的白底盖住，正常使用看不到这层。
+   */
+  backgroundColor: "#FFFFFF00",
 };
 
 export default config;

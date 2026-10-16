@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 冷启动时窗口先铺这个底色（与本地启动页同色），避免出现白屏或跳色 -->
+<!--
+  冷启动时窗口先铺这个底色。用纯白，与网页端页面底色的 color-paper 变量一致：
+  启动页、等待远端的空窗期、网页端首屏三者之间不能跳色，否则看起来就是"一闪一变"。
+-->
 <resources>
-    <color name="splash_background">#F7F7F7</color>
+    <color name="splash_background">#FFFFFF</color>
 </resources>

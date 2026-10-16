@@ -64,3 +64,15 @@
 - 不打 IPA（需要 Mac + Xcode）；只保证"同一份前端 + 同一套配置能加 iOS 平台"
 - 不做推送、原生分享、离线缓存等原生能力
 - 不改 `frontend/` 与 `backend/` 的任何业务代码
+
+## 追加任务（2026-10-17：修「启动页一闪 → 几秒空白」）
+
+- [x] T012 生成品牌图：`mobile/scripts/generate-splash-mark.mjs`（`npm run splash:mark`），
+      产出 `res/drawable-nodpi/splash_brand_mark.png`，版面与启动页一致
+- [x] T013 原生兜底：`res/drawable/splash_brand.xml` 垫窗口背景、`AppTheme.NoActionBar`
+      设 `windowBackground`、底色统一纯白、WebView 背景设透明（`#FFFFFF00`）
+- [x] T014 本地启动页不再淡出跳转；改为预热连接后立刻跳（最多等 1200ms）
+- [x] T015 网页端首屏启动页（`frontend/index.html` 内联 + `main.ts` 路由就绪后撤掉），
+      并补 Playwright 断言（首屏 HTML 自带启动页、应用渲染后必须撤掉）
+- [x] T016 出包核对：APK versionName=1.0.1 / versionCode=2，包内含
+      `splash_brand_mark.png`、`splash_brand.xml` 与新版 `assets/public/index.html`

@@ -89,6 +89,13 @@
 - **FR-010**: App MUST 有**品牌启动页**（叶子 + 拾题 + 一句话），且 MUST 是本地资源
   （不依赖网络、冷启动秒开、不闪白）；展示完品牌后跳转到线上应用入口 `/app/`。
   跳转目标 MUST 同时列进壳的 `allowNavigation`，MUST NOT 被系统浏览器接管。
+- **FR-011**: 从冷启动到网页端首屏之间 MUST NOT 出现无内容的白屏：品牌 MUST 全程可见。
+  做法是四层接力，四处的版面/配色 MUST 一致（同一张品牌图、同一个底色）：
+  ① Android 窗口背景（`res/drawable/splash_brand.xml`，配合 WebView 背景透明）
+  ② 本地启动页 `www/index.html` ③ 等待远端首帧期间继续露出 ①
+  ④ 网页端首屏启动页（`frontend/index.html` 内联，路由首次就绪后撤掉）。
+  本地启动页 MUST NOT 在跳转前把自己淡出（那会留下一段空白）。
+  品牌图 MUST 由脚本生成（`npm run splash:mark`），MUST NOT 手工贴图。
 
 ### Key Entities
 

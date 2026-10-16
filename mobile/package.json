@@ -10,7 +10,8 @@
     "sync:android": "cap sync android",
     "apk": "node scripts/build-android.mjs",
     "publish:apk": "node scripts/publish-apk.mjs",
-    "check": "node scripts/check-config.mjs"
+    "check": "node scripts/check-config.mjs",
+    "splash:mark": "node scripts/generate-splash-mark.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",
+    "sharp": "^0.35.5",
     "typescript": "^5.9.3"
   }
 }

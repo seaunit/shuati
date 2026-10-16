@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  窗口背景：品牌图垫在 WebView 下面。
+
+  配合 capacitor.config.ts 里把 WebView 背景设成透明（#FFFFFF00），这样从 App 启动到
+  远端网页端画出第一帧之间的每一段等待，看到的都是这张启动页，而不是空白：
+  系统启动画面 → 本地启动页 → 等待远端（露出这张） → 网页端首屏启动页 → 应用。
+
+  图是 3 倍图放 drawable-nodpi（不按密度缩放），显示尺寸在这里用 dp 指定。
+  重新生成：cd mobile && npm run splash:mark
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item
+        android:width="200dp"
+        android:height="200dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_brand_mark" />
+</layer-list>
