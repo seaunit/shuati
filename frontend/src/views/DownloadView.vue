@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { Download, QrCode, ShieldCheck } from "lucide-vue-next";
+// 走构建产物拿这张图：文件名带内容指纹，换图就是换 URL，不会被缓存糊弄
+import qrCard from "@/assets/download-qr.png";
 
 /**
  * 安卓包下载页（公开页，不需要登录）。
@@ -88,13 +90,13 @@ onMounted(async () => {
           产品名与标语已经画在图里了（保存/转发出去都认得），页面不再重复写一遍。
         -->
         <img
-          src="/download-qr.png"
+          :src="qrCard"
           alt="扫码打开拾题下载页"
           data-testid="download-qr"
           class="mx-auto w-40"
         />
         <a
-          href="/download-qr.png"
+          :href="qrCard"
           download="shuati-download-qr.png"
           data-testid="save-qr"
           class="mt-3 inline-flex items-center gap-1.5 rounded-full border border-mist px-3 py-1.5 text-xs text-ink transition hover:border-moss"

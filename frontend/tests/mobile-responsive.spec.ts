@@ -109,12 +109,16 @@ test("download page offers the apk with a qr code and the published version", as
   expect((await qr.getAttribute("src")) ?? "").toContain("png");
   // 定制二维码：产品名与标语画在图里（保存下来的图片才是完整的），另给一个保存入口
   await expect(page.getByTestId("save-qr")).toHaveAttribute("download", "shuati-download-qr.png");
-  // 位图与矢量原图都必须发布出去（public 目录随构建产物一起部署）
-  const png = Buffer.from(await (await request.get("/download-qr.png")).body());
+  // 走构建产物发布，文件名带内容指纹：换图就是换 URL，不会被缓存拿旧图糊弄
+  const cardSrc = (await qr.getAttribute("src")) ?? "";
+  // 构建后是 /assets/download-qr-<hash>.png，dev 下 vite 直接给源文件路径
+  expect(cardSrc).toMatch(/download-qr[\w.-]*\.png$/);
+  // 保存按钮和展示的必须是同一张
+  await expect(page.getByTestId("save-qr")).toHaveAttribute("href", cardSrc);
+  const png = Buffer.from(await (await request.get(cardSrc)).body());
   // PNG 的 IHDR 里宽高在第 16/20 字节：竖版卡片才说明文字真的画进去了
   expect(png.readUInt32BE(16)).toBe(1024);
   expect(png.readUInt32BE(20)).toBeGreaterThan(1024);
-  expect((await request.get("/download-qr.svg")).ok()).toBe(true);
 });
 
 test("app shell ships the boot splash and drops it once the first route is ready", async ({
@@ -136,7 +140,7 @@ test("app shell ships the boot splash and drops it once the first route is ready
 
 test("the published download qr really decodes to the download page", async ({ page }) => {
   const require = createRequire(import.meta.url);
-  const qrPng = readFileSync(new URL("../public/download-qr.png", import.meta.url));
+  const qrPng = readFileSync(new URL("../src/assets/download-qr.png", import.meta.url));
   const jsqrSource = readFileSync(require.resolve("jsqr"), "utf8");
 
   // 二维码印出去就改不了了，用解码器兜住：内容必须还是下载页地址，

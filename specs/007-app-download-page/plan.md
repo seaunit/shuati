@@ -11,7 +11,7 @@
 | 发布脚本 | `mobile/scripts/publish-apk.mjs`：读版本 → 出包 → 复制成 `releases/shuati-android-{版本}.apk` 与别名 → 生成 `latest.json` → 发 GitHub Release `android-v{版本}`（优先 `gh` CLI，其次 `GITHUB_TOKEN` API，都没有就打印手动两步）；`releases/` 进 gitignore；`SHUATI_DEPLOY_HOST` 的 scp 只作兜底 |
 | 自动发布 | `.github/workflows/android-release.yml`：`push` tag `android-v*`（或手动触发）→ 校验 tag 与 `version.properties` 一致 → `npm ci` → `npm run publish:apk`（用 `secrets.GITHUB_TOKEN` 自动发 Release） |
 | 下载页 | `frontend/src/views/DownloadView.vue` + 公开路由 `/download`：读 `/apk/latest.json`，给出下载按钮与二维码；文本说明安装步骤与常见问题 |
-| 二维码 | `frontend/scripts/generate-download-qr.mjs`（`npm run qr:download`）产出两份静态资源：`download-qr.svg`（矢量原图）与 `download-qr.png`（1024×1024，给手机长按保存/转发）。H 级纠错 + 4 模块静区，内容为下载页地址，中心画白底叶子徽标；`qrcode`/`sharp` 只作 devDependency，页面运行时不引二维码库 |
+| 二维码 | `frontend/scripts/generate-download-qr.mjs`（`npm run qr:download`）产出两份资源到 `frontend/src/assets/`：`download-qr.svg`（矢量原图）与 `download-qr.png`（竖版整张卡片，给手机长按保存/转发）。H 级纠错 + 4 模块静区，内容为下载页地址，中心白底叶子徽标，下面画产品名与标语；下载页 `import` 位图，构建时带内容指纹文件名（放 `public/` 时踩过陈旧缓存：图换了文件名没变，用户还看上一版） |
 | 服务器 | Nginx：`/apk/` → `root /opt/shuati; try_files $uri =404`（apk MIME、清单 no-store、带版本号产物长缓存）；部署脚本从 `releases/latest/download/` 拉三个附件进 `/opt/shuati/apk/`（失败保留旧包、不中断部署） |
 | 入口 | 登录页页脚加「下载安卓 App」链接 |
 

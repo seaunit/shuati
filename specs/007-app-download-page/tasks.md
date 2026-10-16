@@ -5,7 +5,7 @@
 - [x] T003 版本号单一来源 `mobile/version.properties` + `build.gradle` 顶层读取
 - [x] T004 `publish-apk.mjs`：带版本号产物 + 稳定别名 + `latest.json` + 打印/执行上传
 - [x] T005 网页端下载页 `/download`（清单驱动版本 + 下载按钮 + 二维码 + 安装说明）
-- [x] T006 静态二维码 `frontend/public/download-qr.svg`（指向 `/apk/shuati-android.apk`）
+- [x] T006 静态二维码 `frontend/src/assets/download-qr.svg`（指向下载页地址）
 - [x] T007 Nginx `/apk/` 与部署脚本建目录（重新部署不删已上传的包）
 - [x] T008 Playwright 下载页用例 + 前端构建回归
 - [x] T009 出包核对：versionName=1.0.0 / versionCode=1；`latest.json` 与产物 SHA256 一致

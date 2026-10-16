@@ -9,8 +9,12 @@
  *   3. 静区（quiet zone）也在这里统一加，省得谁导出时裁掉导致扫不出来。
  *
  * 产出两份：
- *   - download-qr.svg：矢量原图（缩放不糊，也方便印刷）
- *   - download-qr.png：位图，给手机长按保存/转发用（SVG 存不下来）
+ *   - src/assets/download-qr.svg：矢量原图（缩放不糊，也方便印刷）
+ *   - src/assets/download-qr.png：位图，给手机长按保存/转发用（SVG 存不下来）
+ *
+ * 放在 src/assets 而不是 public：下载页 import 它，构建时会带上内容指纹文件名，
+ * 改了图就是换了个 URL，不会被浏览器/CDN 拿旧缓存糊弄（放 public 时踩过：
+ * 图换了、文件名没变，用户看到的还是上一版，缓存 4 小时）。
  *
  * 两张图都是**完整卡片**：二维码 + 中心叶子 + 产品名 + 标语。
  * 文字必须画进图里——只挂在 HTML 上的话，用户长按保存或点「保存二维码」拿到的
@@ -99,8 +103,8 @@ const svg = `<?xml version="1.0" encoding="utf-8"?>
 </svg>
 `;
 
-const svgPath = join(frontendDir, "public", "download-qr.svg");
-const pngPath = join(frontendDir, "public", "download-qr.png");
+const svgPath = join(frontendDir, "src", "assets", "download-qr.svg");
+const pngPath = join(frontendDir, "src", "assets", "download-qr.png");
 writeFileSync(svgPath, svg, "utf8");
 const pngWidth = 1024;
 const pngHeight = Math.round((pngWidth * cardHeight) / qrSide);
