@@ -13,4 +13,6 @@
 - [x] T011 发布改走 GitHub Release：`publish-apk.mjs` 自动建 Release 并上传三个附件（无凭据时打印手动两步）
 - [x] T012 新增 `.github/workflows/android-release.yml`：打 tag `android-v*` 出包并发 Release（tag 与版本号一致性校验）
 - [x] T013 部署脚本从 `releases/latest/download/` 同步 APK 到 `/opt/shuati/apk/`（失败保留旧包；`SHUATI_SKIP_APK=1` / `SHUATI_APK_BASE_URL` 可覆盖）
-- [ ] T014 打 tag `android-v1.0.0` 触发首次 CI 发布，核对 Release 附件与 `releases/latest/download/` 可下载
+- [x] T014 首次发布 `android-v1.0.0`：Release 三个附件齐全，手动触发 workflow 走通 CI 出包
+      （run 38935256900 绿，1m41s），`releases/latest/download/shuati-android.apk` 实下 SHA256
+      与 `latest.json` 一致（1EEA8819…）
