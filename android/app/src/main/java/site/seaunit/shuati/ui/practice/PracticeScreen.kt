@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,7 +32,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +52,7 @@ import site.seaunit.shuati.ui.components.WeButton
 import site.seaunit.shuati.ui.components.WeTag
 import site.seaunit.shuati.ui.components.WeTextAction
 import site.seaunit.shuati.ui.theme.CellWhite
+import site.seaunit.shuati.ui.theme.HairlineColor
 import site.seaunit.shuati.ui.theme.Ink
 import site.seaunit.shuati.ui.theme.Moss
 import site.seaunit.shuati.ui.theme.Rose
@@ -101,11 +107,19 @@ class PracticeState(
     val current: Question? get() = questions.getOrNull(index)
     val submitted: Boolean get() = choiceResult != null || essayResult != null
     val isLast: Boolean get() = index >= questions.lastIndex
+    val canGoPrev: Boolean get() = index > 0
     val progressText: String get() = "${index + 1} / ${questions.size}"
     val canSubmit: Boolean
         get() = current?.let {
             if (it.isShort) textAnswer.isNotBlank() else selected.isNotEmpty()
         } ?: false
+
+    /** 上一题：与网页端一致，往回走会把这一题的作答状态清空重来 */
+    fun prev() {
+        if (index <= 0) return
+        index -= 1
+        resetForCurrent()
+    }
 
     suspend fun load() {
         loading = true
@@ -302,20 +316,23 @@ fun PracticeScreen(
                 )
             }
 
-            else -> PracticeBody(state = state, onNext = {
-                scope.launch { if (state.next()) onExit() }
-            })
+            else -> {
+                // 内容可滚动、操作条钉在底部：手机上不用滚到最后才能点提交
+                PracticeBody(state = state, modifier = Modifier.weight(1f))
+                PracticeActions(state = state, onNext = {
+                    scope.launch { if (state.next()) onExit() }
+                })
+            }
         }
     }
 }
 
 @Composable
-private fun PracticeBody(state: PracticeState, onNext: () -> Unit) {
-    val scope = rememberCoroutineScope()
+private fun PracticeBody(state: PracticeState, modifier: Modifier = Modifier) {
     val question = state.current ?: return
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
@@ -393,46 +410,13 @@ private fun PracticeBody(state: PracticeState, onNext: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-
-        if (!state.submitted) {
-            WeButton(
-                text = if (state.submitting) "提交中…" else if (question.isShort) "提交给 AI 判分" else "提交答案",
-                onClick = { scope.launch { state.submit() } },
-                enabled = state.canSubmit && !state.submitting,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        } else {
+        if (state.submitted) {
+            Spacer(Modifier.height(10.dp))
             ResultBlock(state)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = { scope.launch { state.loadExplanation() } },
-                    enabled = !state.explanationLoading,
-                    shape = RoundedCornerShape(4.dp),
-                ) {
-                    Text(
-                        text = when {
-                            state.explanationLoading -> "生成中…"
-                            state.explanation.isBlank() -> "AI 解析"
-                            else -> "重新生成"
-                        },
-                        fontSize = 15.sp,
-                        color = Moss,
-                    )
-                }
-                WeButton(
-                    text = if (state.isLast) "完成本轮" else "下一题",
-                    onClick = onNext,
-                    modifier = Modifier.weight(1f),
-                )
-            }
         }
 
         if (state.explanation.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
             Column(Modifier.fillMaxWidth().background(CellWhite).padding(16.dp)) {
                 Text(
                     text = if (state.explanationFromLibrary) "来自解析库" else "本次 AI 解析",
@@ -450,6 +434,77 @@ private fun PracticeBody(state: PracticeState, onNext: () -> Unit) {
         }
 
         Spacer(Modifier.padding(bottom = 24.dp))
+    }
+}
+
+/**
+ * 底部操作条：上一题 / AI 解析 / 提交答案或下一题。
+ *
+ * 与网页端一致：没提交时是「提交答案」，提交后才出现「AI 解析」和「下一题 · 完成练习」，
+ * 会做的题可以直接提交，不需要先滚到底部找按钮。
+ */
+@Composable
+private fun PracticeActions(state: PracticeState, onNext: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CellWhite)
+            .drawBehind {
+                drawLine(HairlineColor, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
+            },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = { state.prev() },
+                enabled = state.canGoPrev,
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp),
+            ) {
+                Text("上一题", fontSize = 15.sp, color = Ink)
+            }
+
+            if (state.submitted) {
+                OutlinedButton(
+                    onClick = { scope.launch { state.loadExplanation() } },
+                    enabled = !state.explanationLoading,
+                    shape = RoundedCornerShape(4.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+                ) {
+                    Text(
+                        text = when {
+                            state.explanationLoading -> "生成中…"
+                            state.explanation.isBlank() -> "AI 解析"
+                            else -> "重新生成"
+                        },
+                        fontSize = 15.sp,
+                        color = Moss,
+                    )
+                }
+                WeButton(
+                    text = if (state.isLast) "完成练习" else "下一题",
+                    onClick = onNext,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                WeButton(
+                    text = when {
+                        state.submitting -> "提交中…"
+                        state.current?.isShort == true -> "提交给 AI 判分"
+                        else -> "提交答案"
+                    },
+                    onClick = { scope.launch { state.submit() } },
+                    enabled = state.canSubmit && !state.submitting,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
 
@@ -562,7 +617,8 @@ private fun OptionRow(
     val background = when (mark) {
         OptionMark.CORRECT -> Moss.copy(alpha = 0.06f)
         OptionMark.WRONG -> Rose.copy(alpha = 0.06f)
-        OptionMark.NORMAL -> Color.Transparent
+        // 未提交但已勾选：给一层很浅的绿底，和网页端 chosen 态一个意思
+        OptionMark.NORMAL -> if (picked) Moss.copy(alpha = 0.05f) else Color.Transparent
     }
 
     Row(
@@ -587,13 +643,51 @@ private fun OptionRow(
             color = Ink,
             modifier = Modifier.weight(1f).padding(start = 12.dp),
         )
-        if (mark == OptionMark.CORRECT || mark == OptionMark.WRONG) {
-            Text(
-                text = if (mark == OptionMark.CORRECT) "正确" else "你选的",
-                color = accent,
+        // 未提交时给出明确的选中标记（跟着网页端的"已选/未选"语义，但用国产 App 常见的勾选圈）
+        when (mark) {
+            OptionMark.NORMAL -> SelectionDot(
+                checked = picked,
+                checkedColor = Moss,
+            )
+            OptionMark.CORRECT -> Text(
+                text = "正确",
+                color = Moss,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(start = 8.dp),
             )
+            OptionMark.WRONG -> Text(
+                text = "你选的",
+                color = Rose,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+}
+
+/** 选项右侧的勾选圈：选中是实心绿圈 + 白勾，未选是灰色空心圈 */
+@Composable
+private fun SelectionDot(checked: Boolean, checkedColor: Color) {
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .background(if (checked) checkedColor else Color.Transparent)
+            .drawBehind {
+                if (!checked) {
+                    // 空心圈：1.5dp 灰边（按密度换算，避免细得看不见）
+                    val strokePx = 1.5.dp.toPx()
+                    drawCircle(
+                        color = Color(0xFFC8C8C8),
+                        radius = size.minDimension / 2f - strokePx / 2f,
+                        style = Stroke(width = strokePx),
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (checked) {
+            Text("✓", color = CellWhite, fontSize = 12.sp)
         }
     }
 }

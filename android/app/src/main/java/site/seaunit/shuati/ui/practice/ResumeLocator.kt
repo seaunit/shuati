@@ -11,12 +11,18 @@ import site.seaunit.shuati.data.dto.Question
  */
 object ResumeLocator {
 
-    /** 已经答过的题目 id 集合里，找到第一道没答过的题的下标；找不到返回列表长度 - 1 */
+    /**
+     * 续做定位：找第一道没答过的题。
+     *
+     * 与网页端 `PracticeView.resumeProgress` 完全一致：只在 `下标 > 0` 时跳转，
+     * 所以「全部答完」（找不到未答题，下标为 -1）时回到第 1 题 —— 刷完一轮再进来是重新开始，
+     * 而不是停在最后一题。
+     */
     fun nextIndex(questions: List<Question>, answeredIds: Collection<Long>): Int {
         if (questions.isEmpty()) return 0
         val answered = answeredIds.toSet()
         val index = questions.indexOfFirst { it.id !in answered }
-        return if (index >= 0) index else questions.lastIndex
+        return if (index > 0) index else 0
     }
 }
 

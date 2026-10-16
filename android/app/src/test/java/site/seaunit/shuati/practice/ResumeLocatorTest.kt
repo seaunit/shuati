@@ -32,10 +32,12 @@ class ResumeLocatorTest {
         assertEquals(0, ResumeLocator.nextIndex(questions, listOf(99)))
     }
 
+    /** 与网页端一致：全部答完 = 从头再来，而不是停在最后一题 */
     @Test
-    fun `all answered stays on the last question`() {
+    fun `all answered starts over from the first question`() {
         val questions = listOf(question(1), question(2))
-        assertEquals(1, ResumeLocator.nextIndex(questions, listOf(1, 2)))
+        assertEquals(0, ResumeLocator.nextIndex(questions, listOf(1, 2)))
+        assertEquals(0, ResumeLocator.nextIndex(listOf(question(1)), listOf(1)))
     }
 
     @Test
