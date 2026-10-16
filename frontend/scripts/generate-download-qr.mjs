@@ -76,12 +76,15 @@ const leafScale = leafSize / 24;
 
 // 卡片：上面二维码，下面产品名与标语（文字画进图里，保存/转发出去都认得）
 const qrSide = total * UNIT;
-// 字号按卡片宽度等比算（二维码版本会随内容长度变，写死数字就会溢出被裁）：
-// 标语 11 个全角字，取 0.07 倍宽度 → 约 0.77 倍卡片宽，两边还留得下边距
-const nameSize = Math.round(qrSide * 0.13);
+// 字号按卡片宽度等比算（二维码版本会随内容长度变，写死数字就会溢出被裁）。
+// 两者关系照着网页端原来的排版来：产品名只比标语大一档（14px : 12px），
+// 靠字重（700）拉开层次就够；之前是 1.8 倍，看上去头重脚轻。
+// 标语 11 个全角字取 0.07 倍宽度 → 约 0.77 倍卡片宽，两边还留得下边距。
 const taglineSize = Math.round(qrSide * 0.07);
-const nameBaseline = qrSide + Math.round(qrSide * 0.16) + Math.round(nameSize * 0.72);
-const taglineBaseline = nameBaseline + Math.round(taglineSize * 1.3);
+const nameSize = Math.round(taglineSize * 1.17);
+// 二维码下方留白收一点，整体往上靠
+const nameBaseline = qrSide + Math.round(qrSide * 0.09) + Math.round(nameSize * 0.72);
+const taglineBaseline = nameBaseline + Math.round(taglineSize * 1.25);
 const cardHeight = taglineBaseline + Math.round(taglineSize * 0.45);
 
 const svg = `<?xml version="1.0" encoding="utf-8"?>
