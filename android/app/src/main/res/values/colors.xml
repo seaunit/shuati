@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 与网页端 frontend/src/styles/main.css 同一套色板 -->
+<resources>
+    <color name="ink">#17181A</color>
+    <color name="paper">#FFFFFF</color>
+    <color name="mist">#E9EBEE</color>
+    <color name="moss">#2F6B45</color>
+    <color name="rose">#B42318</color>
+    <color name="oat">#6B7280</color>
+</resources>

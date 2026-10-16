@@ -8,9 +8,12 @@
 ```
 backend/   Spring Boot 后端（Java 17 + Maven + Flyway）
 frontend/  Vue 3 前端（Vite + Pinia + Tailwind 4）
+android/   安卓客户端（Kotlin + Jetpack Compose，复用同一套 /api）
+payments/  Waffo Pancake 支付侧车（Node）
 db/        Supabase → MySQL 迁移脚本与说明
 deploy/    Nginx / systemd / 构建部署脚本
 docs/      设计与实施计划
+specs/     SDD 规格产物（spec / plan / tasks，按功能编号）
 ```
 
 ## 本地开发
@@ -43,6 +46,7 @@ npm --prefix frontend run dev
 ```bash
 mvn -f backend/pom.xml test        # 需要本机 MySQL 的 shuati_test 库
 npm --prefix frontend run build    # 类型检查 + 生产构建
+cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug   # 安卓端（JDK 17 + Android SDK）
 ```
 
 ## 生产部署

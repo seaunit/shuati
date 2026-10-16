@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 叶片：网页端品牌标志的简笔版本 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 C36,34 30,52 34,66 C38,80 48,88 54,88 C60,88 70,80 74,66 C78,52 72,34 54,24 Z" />
+    <path
+        android:strokeColor="#2F6B45"
+        android:strokeWidth="2.5"
+        android:pathData="M54,30 L54,84" />
+</vector>

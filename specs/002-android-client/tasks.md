@@ -1,0 +1,188 @@
+# Tasks: 拾题安卓客户端
+
+**Input**: Design documents from `/specs/002-android-client/`
+
+**Prerequisites**: [plan.md](./plan.md)、[spec.md](./spec.md)、[research.md](./research.md)、
+[data-model.md](./data-model.md)、[contracts/api-reuse.md](./contracts/api-reuse.md)、[quickstart.md](./quickstart.md)
+
+**Tests**: 后端行为不可回归 + 宪法 III 要求证据，因此本功能包含 JVM 单元测试任务（不含 instrumented 测试，
+本机无模拟器镜像，理由见 plan.md）。
+
+**Organization**: 按用户故事分阶段，每个故事可独立实现、独立验证。
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: 可与同阶段其它任务并行（不同文件、无依赖）
+- **[Story]**: 对应 spec.md 的用户故事
+
+## Path Conventions
+
+单个模块 Android 工程，模块根为 `android/app/`，Kotlin 源码包为
+`android/app/src/main/java/site/seaunit/shuati/`，测试在 `android/app/src/test/java/site/seaunit/shuati/`。
+
+---
+
+## Phase 1: Setup
+
+**Purpose**: 建出能用本机现有 SDK + Gradle 缓存出包的工程骨架
+
+- [x] T001 创建 `android/` 目录骨架：`settings.gradle.kts`、`build.gradle.kts`、`gradle.properties`、`gradle/libs.versions.toml`（钉死 AGP 8.12.0 / Kotlin 2.1.20 / Gradle 9.3.1 / compose 1.11.0-beta02 系列 / okhttp 4.12.0 / kotlinx-serialization-json 1.6.3）
+- [x] T002 [P] 生成 Gradle wrapper 并指向 9.3.1：`android/gradle/wrapper/gradle-wrapper.properties`、`android/gradlew`、`android/gradlew.bat`
+- [x] T003 [P] 写 `android/.gitignore`（`local.properties`、`.gradle/`、`build/`、`*.iml`）与 `android/local.properties`（`sdk.dir` 指向本机 SDK，不入库）
+- [x] T004 [P] 建 `android/app/build.gradle.kts`：namespace/applicationId `site.seaunit.shuati`、minSdk 26、compileSdk 36、targetSdk 36、BuildConfig 字段 `BASE_URL`（默认 `https://www.seaunit.site`）、debug 允许明文 HTTP
+- [x] T005 [P] 建 `android/app/src/main/AndroidManifest.xml`（单 Activity、`allowBackup="false"`、网络权限、debug 的 `usesCleartextTraffic`）
+- [x] T006 [P] 建主题与色彩资源 `android/app/src/main/res/values/{themes,colors,strings}.xml`：白底 + ink 文字 + moss 主色，术语与网页端一致
+- [x] T007 [P] 建应用图标与占位资源 `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` + 矢量前景（复用网页端叶片标志的纯色版本）
+
+**Checkpoint**: `gradlew.bat :app:assembleDebug` 能出一个空壳 APK
+
+---
+
+## Phase 2: Foundational（阻塞所有用户故事）
+
+**Purpose**: API 客户端、会话、错误口径、导航壳 —— 四条故事都依赖
+
+**⚠️ 必须全部完成后再开始任何用户故事**
+
+- [x] T008 实现 `core/ApiEnvelope.kt`（含 `ApiException`）：解析 `{code,message,data}`，非 200/非 2xx 一律抛带 `message` 原文与 HTTP 状态码的异常（对应 [contracts/api-reuse.md](./contracts/api-reuse.md) §0）
+- [x] T009 实现 `core/SessionStore.kt`（含 `CookieStorage` / `PersistentCookieJar`）：把 `shuati_token` Cookie 存进应用私有 SharedPreferences，重启后自动带上；不打印 Cookie 值
+- [x] T010 实现 `core/ApiClient.kt`：OkHttp + kotlinx.serialization；写请求统一加 `X-Requested-With: ShuatiApp`；401 触发 `onUnauthorized` 回调；提供 `get/post/patch/postVoid` 泛型方法
+- [x] T011 [P] 建 `data/dto/Dtos.kt`：Bank/BankUnit/Question/Option/ChoiceResult/EssayResult/Progress/WrongBookItem/StatsMe/Entitlements/PointPack/Catalog/OrderCreated —— 字段名与后端 JSON 逐字一致（见 [data-model.md](./data-model.md)）
+- [x] T012 [P] 建 `core/UiState.kt`：`Loading / Ready / Failed(message)`，`Failed.message` 只允许放服务端原文或断网兜底文案
+- [x] T013 实现 `data/repo/AuthRepository.kt`：登录、注册、注册发码、找回密码、找回发码、退出、`/api/me`（契约 §1）
+- [x] T014 实现 `MainActivity.kt` + `ui/AppNav.kt` 导航壳：底部四个入口（题库 / 错题本 / 统计 / 我的）+ 登录等全屏页；未登录时错题本、统计、我的引导登录
+- [x] T015 建 `ui/theme/Theme.kt`：与网页端一致的色板（ink/paper/mist/moss/rose/oat），控件用 Material3 默认形状
+
+> 实现偏差（已回写文档）：没有引入 ViewModel —— 应用是单 Activity + Compose 导航，
+> 旋转与尺寸变化已在 manifest 用 `configChanges` 兜住，改用 `ui/components/Common.kt` 里的
+> `Loader` + `rememberLoader` 承担异步三态，少一层工厂样板。
+
+**Checkpoint**: 无凭据启动 App 能进首页壳；任意接口 401 能回到登录页
+
+---
+
+## Phase 3: User Story 1 - 登录后在手机上刷题（Priority: P1）🎯 MVP
+
+**Goal**: 登录 → 选题库/单元 → 答题（选择即时判定、简答 AI 判分）→ AI 解析 → 退出重进能续做
+
+**Independent Test**: 用测试账号登录，答 1 道选择题 + 1 道简答题，点一次 AI 解析，杀掉应用重进确认停在第 3 题
+
+- [x] T016 [P] [US1] 实现 `data/repo/PracticeRepository.kt`：建/结束会话、选择题提交、简答提交、AI 解析、自评（契约 §3）；题目与进度走 `data/repo/BankRepository.kt`（契约 §2）
+- [x] T017 [US1] 实现登录页 `ui/auth/AuthScreens.kt#LoginScreen`：邮箱 + 密码 + 图形验证码（`GET /captcha/image` 转 Bitmap，点图刷新），文案与网页端一致
+- [x] T018 [US1] 登录态与验证码刷新用 Compose 状态 + `rememberCoroutineScope` 承担（见上方偏差说明），未单独建 AuthViewModel
+- [x] T019 [P] [US1] 实现 `ui/banks/BankScreens.kt#BankListScreen`：公共题库列表 + 进度（`answered_count/question_count`）+ 未登录可浏览、点进去引导登录
+- [x] T020 [US1] 实现 `ui/banks/BankScreens.kt#UnitListScreen`：进入题库看单元与各自进度，提供「整库刷题」入口
+- [x] T021 [US1] 实现 `ui/practice/PracticeScreen.kt#PracticeState`：加载题目 → 建会话 → 拉进度定位续做题目（`answeredIds` 里第一道未答的）→ 提交 → 下一题 → 结束会话
+- [x] T022 [US1] 选择题交互：单选/多选选择器、提交后正确项标绿、错选标红、显示得分（`ui/practice/ResumeLocator.kt#AnswerRules`）
+- [x] T023 [US1] 简答交互：多行输入、提交后展示 `verdict/score/feedback(命中点/漏点)/referenceAnswer`；`degraded=true` 时提供自评按钮
+- [x] T024 [US1] AI 解析交互：非空 `explanation` 直接展示并标「来自解析库」；点「AI 解析 / 重新生成解析」调接口；失败用服务端原文提示
+- [x] T025 [US1] 点数不足（402）与限流（429）走同一条错误透出路径，服务端文案原样显示
+
+**Checkpoint**: US1 独立可测，且与网页端对同一题目的判定一致
+
+---
+
+## Phase 4: User Story 2 - 新用户注册与找回密码（Priority: P1）
+
+**Goal**: App 内完成注册与找回密码，不必去网页端
+
+**Independent Test**: 新邮箱注册成功并直接进入已登录状态；再用该邮箱走一次找回密码并用新密码登录
+
+- [x] T026 [P] [US2] 实现注册页 `ui/auth/AuthScreens.kt#RegisterScreen`：邮箱 + 邮箱验证码（60 秒倒计时）+ 密码；点发送调 `POST /api/auth/register/email-code`
+- [x] T027 [P] [US2] 实现 `ui/auth/AuthScreens.kt#ForgotPasswordScreen`：邮箱 + 邮箱验证码 + 新密码，对应 `/api/auth/password-reset/email-code` 与 `/api/auth/password-reset`
+- [x] T028 [US2] 登录页加「注册 / 找回密码」入口并接通导航，注册/找回页均不要求图形验证码（与网页端一致）
+- [x] T029 [US2] 倒计时与冷却提示取服务端返回的 `cooldownSeconds`，冷却期间发送按钮禁用
+
+**Checkpoint**: US1 与 US2 都独立可用
+
+---
+
+## Phase 5: User Story 3 - 错题本与学习统计（Priority: P2）
+
+**Goal**: 复盘错题、看累计做题量与正确率
+
+**Independent Test**: 制造一道错题 → 错题本可见 → 统计数值与网页端一致
+
+- [x] T030 [P] [US3] 实现 `data/repo/ReviewRepository.kt`：`GET /api/wrong-book`、`GET /api/stats/me`
+- [x] T031 [US3] 实现 `ui/review/ReviewScreens.kt#WrongBookScreen`：题干、单元名、题库名、判定（与网页端同字段；接口不下发正确答案，故不做"点开看答案"）
+- [x] T032 [US3] 实现 `ui/review/ReviewScreens.kt#StatsScreen`：累计做题量、正确/部分正确/错误、正确率，以及按单元统计
+
+**Checkpoint**: 复盘链路可用，数值与网页端一致
+
+---
+
+## Phase 6: User Story 4 - 点数与套餐（只读 + 跳浏览器购买）（Priority: P3）
+
+**Goal**: 看清余额与套餐名，想充值时跳到网页端同一支付入口
+
+**Independent Test**: 点数页数值与网页端一致；点商品能用系统浏览器打开支付页
+
+- [x] T033 [P] [US4] 实现 `data/repo/BillingRepository.kt`：`GET /api/points`、`GET /api/plans`、`POST /api/orders`（取 `checkoutUrl`）
+- [x] T034 [US4] 实现 `ui/profile/ProfileScreen.kt`：可用点数、套餐名（买过点数包显示包名）、最近流水、退出登录（点数与"我的"合并在一个 tab）
+- [x] T035 [US4] 点数包列表（名称/点数/价格 → 点击下单后用 `Intent.ACTION_VIEW` 打开支付页）；MUST NOT 内嵌支付表单
+
+**Checkpoint**: 四条故事全部独立可用
+
+---
+
+## Phase 7: Polish & 跨故事收尾
+
+- [x] T036 [P] 写 JVM 单测 `app/src/test/java/site/seaunit/shuati/core/ApiClientTest.kt`：MockWebServer 验证信封解析、错误 message 透出、401 回调、写请求带 `X-Requested-With`、Cookie 跨请求保持（5 条）
+- [x] T037 [P] 写纯逻辑单测 `app/src/test/java/site/seaunit/shuati/practice/ResumeLocatorTest.kt`：续做定位与选项着色（6 条）
+- [x] T038 [P] 写 `android/README.md`：构建、安装、改 BASE_URL、常见故障（SDK 路径、明文 HTTP）
+- [x] T039 跑通 `gradlew.bat :app:testDebugUnitTest`（11 条全绿）与 `:app:assembleDebug`（app-debug.apk 12.78 MB，SC-005 ≤ 20 MB）
+- [ ] T040 按 [quickstart.md](./quickstart.md) 在真机走一遍 10 条验收清单，记录结果（含 SC-004 与网页端交叉核对）
+- [x] T041 更新根 `README.md` 与 `AGENTS.md` 的目录说明，加入 `android/`，并说明安卓端「同源」约束
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- **Phase 1 Setup**：无依赖，可立即开始
+- **Phase 2 Foundational**：依赖 Phase 1，完成后才允许开始任何用户故事
+- **Phase 3 US1**：依赖 Phase 2；US1 含登录页，是其它故事实际使用 App 的前提
+- **Phase 4 US2 / Phase 5 US3 / Phase 6 US4**：依赖 Phase 2（US2/US3/US4 之间互不依赖，可并行）
+- **Phase 7 Polish**：依赖需要交付的故事完成
+
+### User Story Dependencies
+
+- **US1 (P1)**：Phase 2 之后即可，无其它故事依赖
+- **US2 (P1)**：Phase 2 之后即可；与 US1 共用 AuthRepository（T013），不依赖 US1 的界面
+- **US3 (P2)**：Phase 2 之后即可；需要已登录（US1 的登录页），数据来自服务端
+- **US4 (P3)**：Phase 2 之后即可；同上
+
+### Parallel Opportunities
+
+- Phase 1：T002–T007 全部可并行
+- Phase 2：T011、T012 可并行；T013/T014/T015 之间文件不重叠，可并行
+- Phase 3：T016 与 T019 可并行（仓储层与题库页互不依赖）
+- Phase 4/5/6：三个故事彼此独立，可由不同人并行推进
+
+---
+
+## Implementation Strategy
+
+### MVP First
+
+1. Phase 1 + Phase 2
+2. Phase 3（US1）→ 打真机包，先在手机上把「登录 + 刷题 + 续做」走通
+3. **停下验证 US1**，与网页端交叉核对同一道题的判定与解析来源
+
+### Incremental Delivery
+
+1. US1 可用 → 交付（考生已经能在手机上刷题）
+2. US2 可用 → 新用户不必再去网页端注册
+3. US3 可用 → 复盘链路补齐
+4. US4 可用 → 充值引导到位
+5. 每个故事完成后都重新出包 + 真机点一遍，避免"最后一起验收"
+
+---
+
+## Notes
+
+- [P] = 不同文件、无依赖，可并行
+- 每个故事完成即是一次可交付增量
+- 提交信息用中文，格式 `type(scope): 描述`；安卓端改动一律带 `android` 作用域
+- 后端 MUST 保持 0 改动；任何"顺手给安卓加个接口"的想法都要先回到 spec
