@@ -1,6 +1,7 @@
 package site.seaunit.shuati.ui.review
 
 import site.seaunit.shuati.data.dto.WrongBookItem
+import site.seaunit.shuati.data.dto.Question
 
 /**
  * 错题本筛选：题库 + 判定。
@@ -28,5 +29,15 @@ object WrongBookFilter {
     ): List<WrongBookItem> = items.filter { item ->
         (bank == ALL || item.bank_name == bank) &&
             (verdict == ALL || item.verdict == verdict)
+    }
+
+    /**
+     * 错题重练取题：按错题本给的顺序（最近错的排前面）从全量题目里挑，
+     * 已下架/已删除的题直接跳过（服务端的题目列表只返回可练习的题）。
+     */
+    fun pickPracticeQuestions(orderedIds: List<Long>, all: List<Question>): List<Question> {
+        if (orderedIds.isEmpty()) return emptyList()
+        val byId = all.associateBy { it.id }
+        return orderedIds.mapNotNull { byId[it] }
     }
 }

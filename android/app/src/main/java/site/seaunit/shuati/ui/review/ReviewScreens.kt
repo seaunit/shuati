@@ -29,6 +29,7 @@ import site.seaunit.shuati.data.dto.StatsMe
 import site.seaunit.shuati.ui.components.SectionHeader
 import site.seaunit.shuati.ui.components.StateHost
 import site.seaunit.shuati.ui.components.WeButton
+import site.seaunit.shuati.ui.components.WeButton
 import site.seaunit.shuati.ui.components.WeCell
 import site.seaunit.shuati.ui.components.rememberLoader
 import site.seaunit.shuati.ui.theme.CellWhite
@@ -39,7 +40,11 @@ import site.seaunit.shuati.ui.theme.TextGray
 
 /** 错题本：字段与网页端一致（题干 / 题库 / 单元 / 判定） */
 @Composable
-fun WrongBookScreen(container: AppContainer, isLoggedIn: Boolean) {
+fun WrongBookScreen(
+    container: AppContainer,
+    isLoggedIn: Boolean,
+    onPractice: (List<Long>) -> Unit = {},
+) {
     if (!isLoggedIn) {
         NeedLogin("登录后可以查看错题本")
         return
@@ -53,14 +58,17 @@ fun WrongBookScreen(container: AppContainer, isLoggedIn: Boolean) {
             }
             return@StateHost
         }
-        WrongBookBody(items)
+        WrongBookBody(items, onPractice)
     }
 }
 
 /** 错题列表 + 筛选：题库与判定两个维度，条件与网页端一致 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WrongBookBody(items: List<site.seaunit.shuati.data.dto.WrongBookItem>) {
+private fun WrongBookBody(
+    items: List<site.seaunit.shuati.data.dto.WrongBookItem>,
+    onPractice: (List<Long>) -> Unit,
+) {
     var bank by remember { mutableStateOf(WrongBookFilter.ALL) }
     var verdict by remember { mutableStateOf(WrongBookFilter.ALL) }
     val filtered = WrongBookFilter.apply(items, bank, verdict)
@@ -109,6 +117,13 @@ private fun WrongBookBody(items: List<site.seaunit.shuati.data.dto.WrongBookItem
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 10.dp),
                 )
+                // 筛出来就是一批"复习小题库"，直接开练：做对的题会自动从错题本移除
+                WeButton(
+                    text = "练这批错题（${filtered.size} 道）",
+                    enabled = filtered.isNotEmpty(),
+                    modifier = Modifier.padding(top = 10.dp),
+                    onClick = { onPractice(filtered.map { it.question_id }) },
+                )
             }
         }
 
@@ -131,7 +146,9 @@ private fun WrongBookBody(items: List<site.seaunit.shuati.data.dto.WrongBookItem
                     .joinToString(" · "),
                 rightText = verdictLabel(item.verdict),
                 rightColor = if (item.verdict == "PARTIAL") Oat else Rose,
+                showChevron = true,
                 divider = true,
+                onClick = { onPractice(listOf(item.question_id)) },
             )
         }
         item { Spacer(Modifier.padding(bottom = 24.dp)) }

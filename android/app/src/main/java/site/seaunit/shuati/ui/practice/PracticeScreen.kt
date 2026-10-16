@@ -51,6 +51,7 @@ import site.seaunit.shuati.ui.components.NoticeBar
 import site.seaunit.shuati.ui.components.WeButton
 import site.seaunit.shuati.ui.components.WeTag
 import site.seaunit.shuati.ui.components.WeTextAction
+import site.seaunit.shuati.ui.review.WrongBookFilter
 import site.seaunit.shuati.ui.theme.CellWhite
 import site.seaunit.shuati.ui.theme.HairlineColor
 import site.seaunit.shuati.ui.theme.Ink
@@ -70,6 +71,8 @@ class PracticeState(
     private val bankId: Long?,
     private val unitId: Long?,
     private val scopeName: String,
+    // 错题重练：按这些 id（顺序即错题本顺序）出题
+    private val questionIds: List<Long>? = null,
 ) {
     var questions by mutableStateOf<List<Question>>(emptyList())
         private set
@@ -126,29 +129,47 @@ class PracticeState(
         error = ""
         try {
             val list = when {
+                questionIds != null -> WrongBookFilter.pickPracticeQuestions(
+                    questionIds,
+                    container.banks.allQuestions(),
+                )
                 unitId != null -> container.banks.unitQuestions(unitId)
                 bankId != null -> container.banks.bankQuestions(bankId)
                 else -> container.banks.allQuestions()
             }
             questions = list
-            if (list.isEmpty()) return
+            if (list.isEmpty()) {
+                if (questionIds != null) {
+                    error = "这些错题当前不在可练习范围里（可能已被下架或删除）"
+                }
+                return
+            }
 
             // 会话记录失败不影响做题（网页端同样忽略）
             sessionId = runCatching {
                 container.practice.startSession(
-                    scopeType = if (unitId != null) "UNIT" else if (bankId != null) "BANK" else "ALL",
-                    scopeId = unitId ?: bankId,
+                    // 错题重练服务端没有这个 scope 类型，按"全部题目"记会话即可
+                    scopeType = when {
+                        questionIds != null -> "ALL"
+                        unitId != null -> "UNIT"
+                        bankId != null -> "BANK"
+                        else -> "ALL"
+                    },
+                    scopeId = if (questionIds != null) null else unitId ?: bankId,
                     scopeName = scopeName,
                     totalQuestions = list.size,
                 )
             }.getOrNull()
 
-            val answeredIds = runCatching { container.banks.progress(bankId, unitId) }
-                .getOrNull()?.answeredIds.orEmpty()
-            val next = ResumeLocator.nextIndex(list, answeredIds)
-            if (next > 0) {
-                index = next
-                notice = "已为你续上上次的进度"
+            // 错题重练不做续做：这些题本来都答过，续做会把它们全跳过，所以固定从第一题开始
+            if (questionIds == null) {
+                val answeredIds = runCatching { container.banks.progress(bankId, unitId) }
+                    .getOrNull()?.answeredIds.orEmpty()
+                val next = ResumeLocator.nextIndex(list, answeredIds)
+                if (next > 0) {
+                    index = next
+                    notice = "已为你续上上次的进度"
+                }
             }
             resetForCurrent()
         } catch (e: Throwable) {
@@ -270,8 +291,11 @@ fun PracticeScreen(
     unitId: Long?,
     scopeName: String,
     onExit: () -> Unit,
+    questionIds: List<Long>? = null,
 ) {
-    val state = remember(bankId, unitId) { PracticeState(container, bankId, unitId, scopeName) }
+    val state = remember(bankId, unitId, questionIds) {
+        PracticeState(container, bankId, unitId, scopeName, questionIds)
+    }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(bankId, unitId) { state.load() }

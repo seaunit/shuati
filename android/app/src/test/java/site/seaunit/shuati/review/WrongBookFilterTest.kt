@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import site.seaunit.shuati.data.dto.WrongBookItem
+import site.seaunit.shuati.data.dto.Question
 import site.seaunit.shuati.ui.review.WrongBookFilter
 
 /** 错题本筛选：题库与判定两个维度，与网页端同一套条件 */
@@ -55,5 +56,28 @@ class WrongBookFilterTest {
     @Test
     fun `bank options are distinct and keep order`() {
         assertEquals(listOf("软考真题", "我的题库"), WrongBookFilter.banks(items))
+    }
+
+    @Test
+    fun `practice picks follow the wrong book order and skip missing questions`() {
+        val pool = listOf(
+            Question(id = 11, type = "SINGLE", content = "第一题"),
+            Question(id = 12, type = "SHORT", content = "第二题"),
+            Question(id = 13, type = "SINGLE", content = "第三题"),
+        )
+        // 错题本顺序：13 → 11；12 不在里面；99 已不可练习
+        val picked = WrongBookFilter.pickPracticeQuestions(listOf(13, 11, 99), pool)
+        assertEquals(listOf(13L, 11L), picked.map { it.id })
+    }
+
+    @Test
+    fun `practice picks handle empty input`() {
+        assertTrue(WrongBookFilter.pickPracticeQuestions(emptyList(), emptyList()).isEmpty())
+        assertTrue(
+            WrongBookFilter.pickPracticeQuestions(
+                listOf(1, 2),
+                emptyList(),
+            ).isEmpty(),
+        )
     }
 }

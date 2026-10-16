@@ -428,6 +428,78 @@ test("wrong book can be filtered by bank and by verdict", async ({ page }) => {
   await expect(page.getByText("事务的隔离级别有几个？")).toHaveCount(0);
 });
 
+const PRACTICE_POOL = [
+  {
+    id: 11,
+    unit_id: 1,
+    type: "SINGLE",
+    content: "索引的作用是什么？",
+    options: [
+      { key: "A", text: "加快查询" },
+      { key: "B", text: "加快写入" },
+    ],
+    difficulty: "MEDIUM",
+    status: "ON",
+    explanation: null,
+    tags: null,
+    images: null,
+  },
+  {
+    id: 12,
+    unit_id: 1,
+    type: "SHORT",
+    content: "请写出三条硬性要求。",
+    options: null,
+    difficulty: "MEDIUM",
+    status: "ON",
+    explanation: null,
+    tags: null,
+    images: null,
+  },
+  {
+    id: 13,
+    unit_id: 1,
+    type: "SINGLE",
+    content: "事务的隔离级别有几个？",
+    options: [
+      { key: "A", text: "2" },
+      { key: "B", text: "4" },
+    ],
+    difficulty: "EASY",
+    status: "ON",
+    explanation: null,
+    tags: null,
+    images: null,
+  },
+];
+
+test("wrong book jumps straight into practising the filtered set", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.route("**/api/wrong-book", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: WRONG_BOOK_ITEMS } }),
+  );
+  await page.route("**/api/questions*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: PRACTICE_POOL } }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 9 } } }),
+  );
+
+  await page.goto("/app/wrong-book");
+
+  // 整批练：带上当前筛出来的题目 id，顺序与错题本一致
+  await page.getByRole("button", { name: /练这批错题/ }).click();
+  await expect(page).toHaveURL(/\/app\/practice\?ids=11(%2C|,)12(%2C|,)13/);
+  await expect(page.getByText("第 1 / 3 题", { exact: false })).toBeVisible();
+  await expect(page.getByText("索引的作用是什么？")).toBeVisible();
+
+  // 单题练：点错题本里的某一条，直接进这道题
+  await page.goto("/app/wrong-book");
+  await page.getByText("事务的隔离级别有几个？").click();
+  await expect(page).toHaveURL(/\/app\/practice\?ids=13/);
+  await expect(page.getByText("第 1 / 1 题", { exact: false })).toBeVisible();
+});
+
 test("practice actions stay directly above the mobile navigation", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

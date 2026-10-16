@@ -172,7 +172,40 @@ fun AppNav(container: AppContainer) {
                 }
             }
 
-            composable(ROUTE_WRONG) { WrongBookScreen(container, loggedIn) }
+            composable(ROUTE_WRONG) {
+                WrongBookScreen(
+                    container = container,
+                    isLoggedIn = loggedIn,
+                    onPractice = { ids ->
+                        if (ids.isNotEmpty()) {
+                            container.pendingWrongIds = ids
+                            nav.navigate("practiceWrong/${Uri.encode("错题重练")}")
+                        }
+                    },
+                )
+            }
+
+            // 错题重练：题目 id 放在 container 里（错题可能上百条，塞路由不合适），路由只带范围名
+            composable(
+                route = "practiceWrong/{scopeName}",
+                arguments = listOf(navArgument("scopeName") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val scopeName = backStackEntry.arguments?.getString("scopeName")
+                    .orEmpty()
+                    .ifBlank { "错题重练" }
+                if (!loggedIn) {
+                    LaunchedEffect(scopeName) { nav.navigate("login") }
+                } else {
+                    PracticeScreen(
+                        container = container,
+                        bankId = null,
+                        unitId = null,
+                        scopeName = scopeName,
+                        questionIds = container.pendingWrongIds,
+                        onExit = { nav.popBackStack() },
+                    )
+                }
+            }
             composable(ROUTE_STATS) { StatsScreen(container, loggedIn) }
 
             composable(ROUTE_MANAGE) {

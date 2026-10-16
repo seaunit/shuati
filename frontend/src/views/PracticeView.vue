@@ -49,6 +49,9 @@ const explanationLoading = ref(false);
 const explanationError = ref("");
 // 是否是题库解析库里已有的解析（点「重新生成」后变为本次生成）
 const explanationFromLibrary = ref(false);
+// 错题重练模式：题目来自错题本带过来的一组 id
+const wrongIds = ref<number[]>([]);
+const wrongRedo = computed(() => wrongIds.value.length > 0);
 const counts = ref({ answered: 0, correct: 0, partial: 0, wrong: 0 });
 const sessionId = ref<number | null>(null);
 const startedAt = ref(Date.now());
@@ -247,7 +250,8 @@ async function finish() {
       }),
     }).catch(() => null);
   }
-  router.push("/app");
+  // 错题重练做完回错题本，方便看看还剩几道没拿下
+  router.push(wrongRedo.value ? "/app/wrong-book" : "/app");
 }
 
 // 续刷：跳过这个范围里已经作答过的题目，从第一道没做过的题接着来
@@ -274,8 +278,20 @@ async function resumeProgress(unitId: number | null, bankId: number | null) {
 onMounted(async () => {
   const bankId = route.query.bankId ? Number(route.query.bankId) : null;
   const unitId = route.query.unitId ? Number(route.query.unitId) : null;
+  // 错题重练：错题本把当前筛出来的题目 id 带过来，顺序就是错题本里的顺序（最近错的排前面）
+  wrongIds.value = (route.query.ids ? String(route.query.ids) : "")
+    .split(",")
+    .map((item) => Number(item))
+    .filter((id) => Number.isFinite(id) && id > 0);
   try {
-    if (unitId) {
+    if (wrongIds.value.length > 0) {
+      // 复用已有的全部题目接口，按错题本给的顺序取，不新增接口
+      const all = await api<Question[]>("/api/questions?mode=seq");
+      const byId = new Map(all.map((item) => [item.id, item]));
+      questions.value = wrongIds.value
+        .map((id) => byId.get(id))
+        .filter((item): item is Question => Boolean(item));
+    } else if (unitId) {
       questions.value = await api<Question[]>(`/api/units/${unitId}/questions?mode=seq`);
     } else if (bankId) {
       questions.value = await api<Question[]>(`/api/banks/${bankId}/questions?mode=seq`);
@@ -286,14 +302,24 @@ onMounted(async () => {
       const session = await api<{ id: number }>("/api/practice/sessions", {
         method: "POST",
         body: JSON.stringify({
-          scopeType: unitId ? "UNIT" : bankId ? "BANK" : "ALL",
-          scopeId: unitId ?? bankId,
-          scopeName: unitId ? "单元练习" : bankId ? "题库练习" : "全部题目",
+          // 错题重练服务端没有这个 scope 类型，按"全部题目"记会话即可（服务端会归一化）
+          scopeType: wrongIds.value.length > 0 ? "ALL" : unitId ? "UNIT" : bankId ? "BANK" : "ALL",
+          scopeId: wrongIds.value.length > 0 ? null : (unitId ?? bankId),
+          scopeName: wrongIds.value.length > 0
+            ? "错题重练"
+            : unitId
+              ? "单元练习"
+              : bankId
+                ? "题库练习"
+                : "全部题目",
           totalQuestions: questions.value.length,
         }),
       });
       sessionId.value = session.id;
-      await resumeProgress(unitId, bankId);
+      // 错题重练：这些题本来都答过，续做会把它们全跳过，所以固定从第一题开始
+      if (wrongIds.value.length === 0) {
+        await resumeProgress(unitId, bankId);
+      }
       // 首页进入时把当前题的解析库内容同步到界面上
       resetState();
     }

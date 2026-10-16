@@ -32,6 +32,12 @@ class AppContainer(context: Context) {
 
     private val _sessionExpired = MutableStateFlow(false)
 
+    /**
+     * 错题重练：从错题本带过来的一组题目 id（顺序即错题本顺序）。
+     * 放在容器里而不是导航参数里 —— 错题可能上百条，塞进路由字符串不合适。
+     */
+    var pendingWrongIds: List<Long> = emptyList()
+
     /** 任意请求收到 401 时置位，导航层据此回登录页（spec FR-010） */
     val sessionExpired: StateFlow<Boolean> = _sessionExpired
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { BookX } from "lucide-vue-next";
 import { api } from "@/api/client";
 
@@ -18,6 +19,7 @@ interface WrongItem {
 
 const items = ref<WrongItem[]>([]);
 const loading = ref(true);
+const router = useRouter();
 // 筛选：题库 + 判定。都在本地过滤，不额外打接口
 const bankFilter = ref("ALL");
 const verdictFilter = ref("ALL");
@@ -34,6 +36,12 @@ const filtered = computed(() =>
       (verdictFilter.value === "ALL" || item.verdict === verdictFilter.value),
   ),
 );
+
+/** 直接拿这批错题开练：id 按当前列表顺序带过去，做对的题会自动从错题本移除 */
+function startPractice(questionIds: number[]) {
+  if (questionIds.length === 0) return;
+  router.push({ path: "/app/practice", query: { ids: questionIds.join(",") } });
+}
 
 function verdictLabel(verdict: string) {
   if (verdict === "CORRECT") return "正确";
@@ -124,6 +132,13 @@ onMounted(async () => {
           </button>
         </div>
         <p class="text-xs text-oat">共 {{ items.length }} 道错题，当前筛选出 {{ filtered.length }} 道</p>
+        <button
+          class="mt-1 w-full rounded-xl bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"
+          :disabled="filtered.length === 0"
+          @click="startPractice(filtered.map((item) => item.question_id))"
+        >
+          练这批错题（{{ filtered.length }} 道）
+        </button>
       </div>
 
       <div
@@ -136,7 +151,8 @@ onMounted(async () => {
       <article
         v-for="item in filtered"
         :key="item.record_id"
-        class="rounded-2xl border border-mist bg-white/70 p-4"
+        class="cursor-pointer rounded-2xl border border-mist bg-white/70 p-4 transition hover:border-moss"
+        @click="startPractice([item.question_id])"
       >
         <div class="flex flex-wrap items-center gap-2 text-xs">
           <span class="rounded-full bg-mist px-2 py-0.5 text-oat">{{ item.bank_name }}</span>
