@@ -403,6 +403,7 @@ private fun PracticeBody(state: PracticeState, modifier: Modifier = Modifier) {
                         text = option.text,
                         mark = AnswerRules.mark(option.key, state.selected, state.choiceResult),
                         picked = state.selected.contains(option.key),
+                        isMulti = question.isMulti,
                         enabled = !state.submitted,
                         onClick = { state.toggle(option.key) },
                     )
@@ -607,20 +608,28 @@ private fun OptionRow(
     text: String,
     mark: OptionMark,
     picked: Boolean,
+    isMulti: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val accent = when (mark) {
-        OptionMark.CORRECT -> Moss
-        OptionMark.WRONG -> Rose
-        OptionMark.NORMAL -> if (picked) Moss else TextGray
-    }
+    // 作答后的状态要一眼能看出：字母徽章填充成实心色 + 整行浅色底 + 错选的文字也变红
+    // （网页端就是"徽章填充 + border/bg 染色"这一套）
     val background = when (mark) {
-        OptionMark.CORRECT -> Moss.copy(alpha = 0.06f)
-        OptionMark.WRONG -> Rose.copy(alpha = 0.06f)
+        OptionMark.CORRECT -> Moss.copy(alpha = 0.10f)
+        OptionMark.WRONG -> Rose.copy(alpha = 0.10f)
         // 未提交但已勾选：给一层很浅的绿底，和网页端 chosen 态一个意思
         OptionMark.NORMAL -> if (picked) Moss.copy(alpha = 0.05f) else Color.Transparent
     }
+    val badgeBackground = when (mark) {
+        OptionMark.CORRECT -> Moss
+        OptionMark.WRONG -> Rose
+        OptionMark.NORMAL -> if (picked) Moss.copy(alpha = 0.15f) else Color(0xFFF2F2F2)
+    }
+    val badgeColor = when (mark) {
+        OptionMark.CORRECT, OptionMark.WRONG -> CellWhite
+        OptionMark.NORMAL -> if (picked) Moss else TextGray
+    }
+    val textColor = if (mark == OptionMark.WRONG) Rose else Ink
 
     Row(
         modifier = Modifier
@@ -630,25 +639,32 @@ private fun OptionRow(
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = optionKey,
-            color = accent,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.width(22.dp),
-        )
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(badgeBackground),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = optionKey,
+                color = badgeColor,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
         Text(
             text = text,
             fontSize = 16.sp,
             lineHeight = 22.sp,
-            color = Ink,
+            color = textColor,
             modifier = Modifier.weight(1f).padding(start = 12.dp),
         )
-        // 未提交时给出明确的选中标记（跟着网页端的"已选/未选"语义，但用国产 App 常见的勾选圈）
+        // 未提交时给出明确的选中标记：单选圆形、多选方框（通用规范）
         when (mark) {
-            OptionMark.NORMAL -> SelectionDot(
+            OptionMark.NORMAL -> SelectionMark(
                 checked = picked,
-                checkedColor = Moss,
+                square = isMulti,
             )
             OptionMark.CORRECT -> Text(
                 text = "正确",
@@ -666,23 +682,43 @@ private fun OptionRow(
     }
 }
 
-/** 选项右侧的勾选圈：选中是实心绿圈 + 白勾，未选是灰色空心圈 */
+/**
+ * 选项右侧的选中标记：单选是圆圈、多选是方框。
+ * 选中 = 实心绿 + 白勾，未选 = 灰色空心。
+ */
 @Composable
-private fun SelectionDot(checked: Boolean, checkedColor: Color) {
+private fun SelectionMark(checked: Boolean, square: Boolean) {
+    val shape = if (square) RoundedCornerShape(3.dp) else CircleShape
     Box(
         modifier = Modifier
             .size(20.dp)
-            .clip(CircleShape)
-            .background(if (checked) checkedColor else Color.Transparent)
+            .clip(shape)
+            .background(if (checked) Moss else Color.Transparent)
             .drawBehind {
                 if (!checked) {
-                    // 空心圈：1.5dp 灰边（按密度换算，避免细得看不见）
                     val strokePx = 1.5.dp.toPx()
-                    drawCircle(
-                        color = Color(0xFFC8C8C8),
-                        radius = size.minDimension / 2f - strokePx / 2f,
-                        style = Stroke(width = strokePx),
-                    )
+                    val stroke = Stroke(width = strokePx)
+                    if (square) {
+                        val inset = strokePx / 2f
+                        drawRoundRect(
+                            color = Color(0xFFC8C8C8),
+                            topLeft = Offset(inset, inset),
+                            size = androidx.compose.ui.geometry.Size(
+                                size.width - strokePx,
+                                size.height - strokePx,
+                            ),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                                3.dp.toPx() * 0.6f,
+                            ),
+                            style = stroke,
+                        )
+                    } else {
+                        drawCircle(
+                            color = Color(0xFFC8C8C8),
+                            radius = size.minDimension / 2f - strokePx / 2f,
+                            style = stroke,
+                        )
+                    }
                 }
             },
         contentAlignment = Alignment.Center,
