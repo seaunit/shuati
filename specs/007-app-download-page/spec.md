@@ -10,7 +10,9 @@
 然后规划流程，在网页端嵌入 apk 的下载页面（可以点击下载，也可以扫描二维码下载）；
 然后每次出包时加上版本号（这点写在宪法里）」。
 
-**前置变更**：宪法 v1.2.0 → v1.3.0，「技术栈与部署约束」新增「客户端版本号与分发」。
+**前置变更**：宪法 v1.2.0 → v1.3.0，「技术栈与部署约束」新增「客户端版本号与分发」；
+后续 PATCH 到 v1.3.1：分发渠道由「发布脚本上传」改为**经 GitHub Release 分发**，
+部署脚本从 Release 拉取（2026-10-17）。
 
 ## Requirements *(mandatory)*
 
@@ -26,8 +28,15 @@
 - **FR-005**: 下载页版本号 MUST 只从 `latest.json` 读，MUST NOT 前端写死。
 - **FR-006**: 静态产物路径（`/apk/`）与下载页路由（`/download`）MUST 分开，
   避免带斜杠访问时把页面当成目录。
-- **FR-007**: 发布脚本 MUST 支持一条命令完成"出包 + 生成产物与清单"，并能把产物传到
-  服务器 `/opt/shuati/apk/`；重新部署 MUST NOT 删除已上传的安装包。
+- **FR-007**: 产物 MUST NOT 进 Git 仓库，MUST 经 **GitHub Release** 分发；发布脚本 MUST 支持
+  一条命令完成"出包 + 生成产物与清单 + 发 Release"（有 `gh` CLI 或 `GITHUB_TOKEN` 时自动发；
+  都没有时 MUST 打印手动两步，不得静默跳过）。
+- **FR-008**: 打 tag `android-v{版本号}` MUST 触发 CI 出包并发 Release；
+  tag 与 `mobile/version.properties` 不一致时 MUST 直接失败，不允许发错版本。
+- **FR-009**: 部署脚本 MUST 从 `releases/latest/download/` 同步
+  `shuati-android.apk`、`shuati-android-{版本号}.apk`、`latest.json` 到 `/opt/shuati/apk/`；
+  同步失败 MUST 保留服务器上已有安装包且 MUST NOT 中断部署（提供 `SHUATI_SKIP_APK=1`
+  与 `SHUATI_APK_BASE_URL` 逃生阀）。
 
 ## Success Criteria *(mandatory)*
 
@@ -36,3 +45,6 @@
 - **SC-003**: Playwright：下载页显示清单里的版本号、下载链接指向 `/apk/shuati-android.apk`、
   二维码可见；静态二维码文件可访问。
 - **SC-004**: 启动只有一次品牌画面（真机验收；本机无模拟器镜像）。
+- **SC-005**: 打 tag 后，Release 页面能看到三个附件，且
+  `https://github.com/seaunit/shuati/releases/latest/download/shuati-android.apk`
+  能下载到与 `latest.json` 中 SHA256 一致的包。

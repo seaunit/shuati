@@ -10,3 +10,7 @@
 - [x] T008 Playwright 下载页用例 + 前端构建回归
 - [x] T009 出包核对：versionName=1.0.0 / versionCode=1；`latest.json` 与产物 SHA256 一致
 - [ ] T010 真机验收：启动只有一个品牌画面；下载页点按钮/扫码都能装
+- [x] T011 发布改走 GitHub Release：`publish-apk.mjs` 自动建 Release 并上传三个附件（无凭据时打印手动两步）
+- [x] T012 新增 `.github/workflows/android-release.yml`：打 tag `android-v*` 出包并发 Release（tag 与版本号一致性校验）
+- [x] T013 部署脚本从 `releases/latest/download/` 同步 APK 到 `/opt/shuati/apk/`（失败保留旧包；`SHUATI_SKIP_APK=1` / `SHUATI_APK_BASE_URL` 可覆盖）
+- [ ] T014 打 tag `android-v1.0.0` 触发首次 CI 发布，核对 Release 附件与 `releases/latest/download/` 可下载

@@ -99,7 +99,8 @@
   - 每次发布 MUST 同时生成版本清单 `latest.json`（版本号、体积、发布时间、下载地址），
   网页端下载页 MUST 只读这份清单来展示版本，MUST NOT 手写版本号。
   - 网页端 MUST 提供下载页，同时给出**可点击的下载按钮**与**二维码**（两者指向同一地址）；
-    发布产物 MUST 由发布脚本放到 Nginx 的 `/apk/` 目录下（MUST NOT 进 Git 仓库）；
+    发布产物 MUST NOT 进 Git 仓库，MUST 通过 GitHub Release 分发（本地发布脚本或打 tag 时的
+    CI 自动发布），并由部署脚本从 `releases/latest/download/` 拉到 Nginx 的 `/apk/` 目录下；
     下载页路由与静态产物目录 MUST 分开（页面 `/download`、产物 `/apk/`），避免带斜杠时撞车。
 - 部署形态固定：可执行 jar + systemd + Nginx 反向代理（前后端同域，`/api`、`/captcha` 走反代），
   Cloudflare 在前，真实客户端 IP 取 `CF-Connecting-IP`。
@@ -133,4 +134,4 @@
   `docs/`（限流、验证码、支付等专题说明）。
 - 任何临时破例 MUST 在提交信息中写明原因、影响范围与清理计划。
 
-**Version**: 1.3.0 | **Ratified**: 2026-10-15 | **Last Amended**: 2026-10-17
+**Version**: 1.3.1 | **Ratified**: 2026-10-15 | **Last Amended**: 2026-10-17
