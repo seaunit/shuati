@@ -358,6 +358,76 @@ test("stats table scrolls horizontally on mobile instead of being clipped", asyn
   expect(overflowX).toBe("auto");
 });
 
+const WRONG_BOOK_ITEMS = [
+  {
+    record_id: 1,
+    question_id: 11,
+    verdict: "WRONG",
+    score: 0,
+    last_at: "2026-10-16T02:00:00Z",
+    type: "SINGLE",
+    content: "索引的作用是什么？",
+    difficulty: "MEDIUM",
+    unit_name: "第一章",
+    bank_name: "软考真题",
+  },
+  {
+    record_id: 2,
+    question_id: 12,
+    verdict: "PARTIAL",
+    score: 5,
+    last_at: "2026-10-16T01:00:00Z",
+    type: "SHORT",
+    content: "请写出三条硬性要求。",
+    difficulty: "MEDIUM",
+    unit_name: "第二章",
+    bank_name: "软考真题",
+  },
+  {
+    record_id: 3,
+    question_id: 13,
+    verdict: "WRONG",
+    score: 0,
+    last_at: "2026-10-15T22:00:00Z",
+    type: "SINGLE",
+    content: "事务的隔离级别有几个？",
+    difficulty: "EASY",
+    unit_name: "第一章",
+    bank_name: "我的题库",
+  },
+];
+
+test("wrong book can be filtered by bank and by verdict", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.route("**/api/wrong-book", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: WRONG_BOOK_ITEMS } }),
+  );
+
+  await page.goto("/app/wrong-book");
+  await expect(page.getByText("共 3 道错题，当前筛选出 3 道")).toBeVisible();
+  await expect(page.getByText("索引的作用是什么？")).toBeVisible();
+  await expect(page.getByText("请写出三条硬性要求。")).toBeVisible();
+  await expect(page.getByText("事务的隔离级别有几个？")).toBeVisible();
+
+  // 按题库筛：只剩「我的题库」那一道
+  const bankRow = page.getByTestId("wrong-filter-bank");
+  await bankRow.getByRole("button", { name: "我的题库" }).click();
+  await expect(page.getByText("共 3 道错题，当前筛选出 1 道")).toBeVisible();
+  await expect(page.getByText("事务的隔离级别有几个？")).toBeVisible();
+  await expect(page.getByText("索引的作用是什么？")).toHaveCount(0);
+
+  // 再叠加判定筛选，两个条件同时生效
+  const verdictRow = page.getByTestId("wrong-filter-verdict");
+  await verdictRow.getByRole("button", { name: "部分正确" }).click();
+  await expect(page.getByText("没有符合筛选条件的错题")).toBeVisible();
+
+  // 回到「全部题库 + 部分正确」，只剩那道简答题
+  await bankRow.getByRole("button", { name: "全部" }).click();
+  await expect(page.getByText("共 3 道错题，当前筛选出 1 道")).toBeVisible();
+  await expect(page.getByText("请写出三条硬性要求。")).toBeVisible();
+  await expect(page.getByText("事务的隔离级别有几个？")).toHaveCount(0);
+});
+
 test("practice actions stay directly above the mobile navigation", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({
