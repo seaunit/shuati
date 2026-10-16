@@ -82,13 +82,15 @@ onMounted(async () => {
     </section>
 
     <section class="mt-6 grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
-      <div class="rounded-2xl border border-mist bg-white p-4">
+      <div class="rounded-2xl border border-mist bg-white p-4 text-center">
         <img
           src="/download-qr.svg"
           alt="扫码下载拾题安卓版"
           data-testid="download-qr"
-          class="h-40 w-40"
+          class="mx-auto h-44 w-44"
         />
+        <p class="mt-3 text-sm font-semibold tracking-tight text-ink">拾题</p>
+        <p class="mt-0.5 text-xs text-oat">安静地练习，温柔地记住</p>
       </div>
       <div>
         <p class="flex items-center gap-2 text-sm font-medium text-ink">

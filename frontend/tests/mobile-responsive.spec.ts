@@ -105,6 +105,8 @@ test("download page offers the apk with a qr code and the published version", as
   await expect(qr).toBeVisible();
   const qrSrc = (await qr.getAttribute("src")) ?? "";
   expect(qrSrc.includes("svg")).toBe(true);
+  // 定制二维码：中心品牌叶子画在 SVG 里，下面是产品名与标语
+  await expect(page.getByText("安静地练习，温柔地记住")).toBeVisible();
   // 静态文件本身也必须发布出去（public 目录随构建产物一起部署）
   const qrFile = await request.get("/download-qr.svg");
   expect(qrFile.ok()).toBe(true);

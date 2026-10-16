@@ -22,3 +22,6 @@
       已在本地假 curl 测试台里跑通
 - [x] T016 应用内导航加「下载安卓 App」入口（桌面端侧边栏、手机端「更多」），
       指向公开页 `/download`；补 Playwright 覆盖两个断点
+- [x] T017 二维码品牌化：生成脚本 `npm run qr:download`（H 级纠错 + 静区 + 中心叶子徽标），
+      QR 卡下方补「拾题 + 安静地练习，温柔地记住」；用解码器实测 640px 与页面实际尺寸
+      176px 都能解出 `https://www.seaunit.site/apk/shuati-android.apk`
