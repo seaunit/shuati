@@ -9,15 +9,24 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
-    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!--
+      正式界面主题。
+
+      1. 钉死浅色（不用 DayNight）：产品是白纸黑字，Web 端也写死了 color-scheme: light；
+         跟着系统深色模式走的话，系统栏会变黑，和白色页面拼在一起就是"上下两条黑边"。
+      2. 系统栏透明 + 深色图标：页面是白的，系统栏看起来也白，内容还能铺到下面
+         （targetSdk 36 在 Android 15+ 上本来就强制 edge-to-edge）。
+      3. windowBackground 放品牌图：WebView 背景是透明的（capacitor.config.ts），
+         所以"远端首帧之前"露出来的是品牌启动页，而不是窗口默认的黑底。
+    -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:background">@null</item>
-        <!--
-          系统启动画面撤掉之后、WebView 画出第一帧之前，窗口就用这张品牌图兜着。
-          WebView 背景在 capacitor.config.ts 里设成透明，所以这段等待露出的是它。
-        -->
         <item name="android:windowBackground">@drawable/splash_brand</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
 
@@ -29,5 +38,16 @@
         <item name="android:background">@color/splash_background</item>
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/transparent_splash_icon</item>
+        <!--
+          关键：系统启动画面结束后要切到正式主题。
+          之前漏了这一条，Activity 一直停在 Theme.SplashScreen 上——上一版加的
+          windowBackground 品牌图因此从没生效；WebView 背景一透明，露出来的是
+          窗口默认的黑底，真机上就是上下两条黑边。
+        -->
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

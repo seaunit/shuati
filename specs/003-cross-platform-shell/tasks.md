@@ -76,3 +76,14 @@
       并补 Playwright 断言（首屏 HTML 自带启动页、应用渲染后必须撤掉）
 - [x] T016 出包核对：APK versionName=1.0.1 / versionCode=2，包内含
       `splash_brand_mark.png`、`splash_brand.xml` 与新版 `assets/public/index.html`
+
+## 追加任务（2026-10-17：修「装完 App 上下两条黑边」）
+
+- [x] T017 查出真因：启动主题漏了 `postSplashScreenTheme`，Activity 一直停在
+      `Theme.SplashScreen` 上——上一版加的白色窗口背景从没生效，WebView 背景一透明，
+      露出来的是窗口默认黑底；同时主题是 DayNight，系统深色模式下系统栏也发黑。
+      改为：正式主题钉死 Light、系统栏透明 + 深色图标、补上 `postSplashScreenTheme`
+- [x] T018 出包核对：1.0.2 / versionCode 3，aapt2 确认
+      `AppTheme.NoActionBar` 父级为 `Theme.AppCompat.Light.NoActionBar`、
+      含 `windowBackground=splash_brand` 与 `windowLightStatusBar/windowLightNavigationBar=true`，
+      `NoActionBarLaunch` 含 `postSplashScreenTheme=@style/AppTheme.NoActionBar`
