@@ -37,3 +37,6 @@
 - [x] T021 App 里隐藏「下载安卓 App」入口：`frontend/src/appShell.ts` 用壳的本地 origin
       （Referer）与新版本壳的 UA 标记识别，识出后写 sessionStorage；`capacitor.config.ts`
       追加 `appendUserAgent: "ShuatiApp"`；Playwright 用 `https://localhost` 当壳真跑一遍
+- [x] T022 下载走带版本号的不可变文件（清单 `versionedUrl`，读不到时退回稳定别名），
+      让 CDN 边缘缓存得住；deploy/README 写明 Cloudflare Cache Rule 的配置步骤
+      （实测 `.apk` 默认 `cf-cache-status: MISS`，每次回源香港）

@@ -86,6 +86,7 @@ const RELEASE_MANIFEST = {
   sha256: "ABCDEF123456",
   publishedAt: "2026-10-17T09:30:00Z",
   url: "https://www.seaunit.site/apk/shuati-android.apk",
+  versionedUrl: "https://www.seaunit.site/apk/shuati-android-1.2.3.apk",
 };
 
 test("download page offers the apk with a qr code and the published version", async ({ page, request }) => {
@@ -100,8 +101,11 @@ test("download page offers the apk with a qr code and the published version", as
   await expect(page.getByText("当前版本 v1.2.3")).toBeVisible();
   await expect(page.getByText("4.19 MB", { exact: false })).toBeVisible();
 
-  // 点击下载指向静态产物（/apk/ 与页面路由 /download 分开，避免带斜杠撞车）
-  await expect(page.getByTestId("download-apk")).toHaveAttribute("href", "/apk/shuati-android.apk");
+  // 优先给带版本号的那份：文件名固定、内容不变，CDN 边缘才缓存得住
+  await expect(page.getByTestId("download-apk")).toHaveAttribute(
+    "href",
+    "https://www.seaunit.site/apk/shuati-android-1.2.3.apk",
+  );
 
   // 二维码用位图展示：手机长按图片才能存进相册（SVG 存不下来）
   const qr = page.getByTestId("download-qr");
@@ -119,6 +123,16 @@ test("download page offers the apk with a qr code and the published version", as
   // PNG 的 IHDR 里宽高在第 16/20 字节：竖版卡片才说明文字真的画进去了
   expect(png.readUInt32BE(16)).toBe(1024);
   expect(png.readUInt32BE(20)).toBeGreaterThan(1024);
+});
+
+test("download button falls back to the stable alias when the manifest is missing", async ({
+  page,
+}) => {
+  await page.route("**/apk/latest.json", (route) => route.fulfill({ status: 404, body: "" }));
+  await page.goto("/download");
+  await expect(page.getByText("版本清单暂时读取不到", { exact: false })).toBeVisible();
+  // 清单读不到也得能下载：退回稳定别名
+  await expect(page.getByTestId("download-apk")).toHaveAttribute("href", "/apk/shuati-android.apk");
 });
 
 test("app shell ships the boot splash and drops it once the first route is ready", async ({

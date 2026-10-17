@@ -334,6 +334,26 @@ cd mobile && npm run publish:apk
 `application/vnd.android.package-archive`。对不上就说明 `/apk/` 又被 SPA 回退成首页了——
 那会让用户下载到一个 2KB 的 HTML 改名成 `.apk`，安装时报"解析软件包时出现问题"。
 
+### 下载速度（Cloudflare 边缘缓存）
+
+下载页的按钮优先指向**带版本号**的文件（清单里的 `versionedUrl`）：文件名固定、内容不变，
+响应头是 `public, max-age=31536000, immutable`，是最适合边缘缓存的东西。
+
+但 **Cloudflare 默认只缓存常见静态后缀，`.apk` 不在其中**——线上实测过
+`cf-cache-status: MISS`，也就是说每次下载都在跨境回源香港服务器（实测约 1.2MB/s，
+4MB 的包要 3 秒多；手机上更慢）。
+
+到 CF 后台加一条规则就够（每个节点第一次下载后就不再回源）：
+
+1. Caching → Cache Rules → Create rule
+2. 名称：`缓存安卓包`
+3. 匹配：`URI Path` starts with `/apk/`
+4. Cache eligibility：**Eligible for cache**
+5. Edge TTL：**Use cache-control header if present**
+
+效果：带版本号的包按 immutable 缓存到边缘；`latest.json` 是 `no-store`，不受影响；
+稳定别名是 `no-cache`，会回源确认（只有清单读不到时才会用到它）。
+
 ### Nginx 配置
 
 每次部署都会**重建** `/etc/nginx/conf.d/shuati.conf`：有证书就用

@@ -18,12 +18,23 @@ interface ReleaseManifest {
   sha256: string;
   publishedAt: string;
   url: string;
+  versionedUrl?: string;
 }
 
 // 静态产物放 /apk/（页面路由是 /download，两者不能撞车）
 const APK_URL = "/apk/shuati-android.apk";
 const manifest = ref<ReleaseManifest | null>(null);
 const manifestMissing = ref(false);
+
+/**
+ * 下载按钮优先用**带版本号**的那份。
+ *
+ * 稳定别名 `shuati-android.apk` 每版内容都变，只能让它每次回源确认（no-cache），
+ * 于是每次下载都要跨境回香港取 4MB；带版本号的文件名固定、内容不变，响应头是
+ * immutable 长缓存，Cloudflare 边缘一旦缓存住，后续用户直接从就近节点拿。
+ * 清单还没读到（刚发版/网络抖动）时退回别名，保证按钮永远能点。
+ */
+const downloadUrl = computed(() => manifest.value?.versionedUrl || APK_URL);
 
 const publishedDate = computed(() => {
   if (!manifest.value?.publishedAt) return "";
@@ -69,7 +80,7 @@ onMounted(async () => {
           </p>
         </div>
         <a
-          :href="APK_URL"
+          :href="downloadUrl"
           download
           data-testid="download-apk"
           class="flex shrink-0 items-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition hover:bg-ink/90"
