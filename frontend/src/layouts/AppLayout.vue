@@ -49,7 +49,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen lg:flex">
+  <!--
+    safe-area 顶部内边距：Android 15+ 把内容铺到状态栏下面（edge-to-edge 强制）时，
+    靠它把标题让开系统栏；普通浏览器与非 edge-to-edge 机器上 env() 为 0，不影响布局。
+  -->
+  <div class="min-h-screen lg:flex" style="padding-top: env(safe-area-inset-top)">
     <header
       class="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-mist/80 bg-paper/90 px-4 backdrop-blur-xl lg:hidden"
     >

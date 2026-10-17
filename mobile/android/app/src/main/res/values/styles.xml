@@ -23,8 +23,14 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowBackground">@drawable/splash_brand</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!--
+          系统栏直接铺不透明白：非 edge-to-edge 的机器上，系统栏区域在窗口之外，
+          透明就等于露系统黑底（就是"上下黑边"）。白色 + 深色图标 = 参考截图那样。
+          Android 15+ 强制 edge-to-edge 时这两个颜色会被忽略，那时页面自己铺到
+          系统栏下面（AppLayout 已按 safe-area 留了顶部内边距），同样是白的。
+        -->
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
@@ -45,8 +51,8 @@
           窗口默认的黑底，真机上就是上下两条黑边。
         -->
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
