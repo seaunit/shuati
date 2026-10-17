@@ -1,6 +1,7 @@
 package site.seaunit.shuati;
 
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.view.Window;
 
@@ -12,19 +13,30 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // 参考效果是"系统栏占位、页面内容在它下面"：关掉 edge-to-edge，
-        // 避免 WebView 铺到状态栏/导航栏底下，不同机型与系统版本表现一致。
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        // Capacitor 是在 super.onCreate() 之后才 setTheme(正式主题) 的，那时窗口已经按
+        // 清单里声明的启动主题（Theme.SplashScreen）建好了，窗口级属性（窗口底色、
+        // 系统栏颜色）不会跟着换。启动主题的窗口底色是黑的——这就是：
+        //   · 上下两条黑边（透明系统栏下面露出黑窗口）
+        //   · 切后台回来整屏发黑（WebView 表面丢了，露出同一个黑窗口）
+        // 所以窗口级的东西在这里显式设一遍，不再依赖主题属性。
+        Window window = getWindow();
+        window.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+        // 参考效果是"系统栏占位、页面内容在它下面"，关掉 edge-to-edge
+        WindowCompat.setDecorFitsSystemWindows(window, true);
+        applyLightSystemBars(window);
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        // 真机上切后台再回来，系统栏会被重新刷成深色，直接把状态栏盖成黑条。
-        // 光靠主题属性不可靠，这里每次回到前台都重新钉一遍：白底 + 深色图标。
-        Window window = getWindow();
+        // 有些机型回到前台会把系统栏刷回深色，这里每次重新钉一遍
+        applyLightSystemBars(getWindow());
+    }
+
+    /** 系统栏铺白 + 深色图标（状态栏/导航栏都要，缺一个就有一条黑边） */
+    private void applyLightSystemBars(Window window) {
         window.setStatusBarColor(Color.WHITE);
         window.setNavigationBarColor(Color.WHITE);
         WindowInsetsControllerCompat controller =

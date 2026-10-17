@@ -23,6 +23,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:windowBackground">@drawable/splash_brand</item>
+        <!-- 禁止系统/厂商"强制深色"把白色页面反色 -->
+        <item name="android:forceDarkAllowed">false</item>
         <!--
           系统栏直接铺不透明白：非 edge-to-edge 的机器上，系统栏区域在窗口之外，
           透明就等于露系统黑底（就是"上下黑边"）。白色 + 深色图标 = 参考截图那样。
@@ -44,6 +46,7 @@
         <item name="android:background">@color/splash_background</item>
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/transparent_splash_icon</item>
+        <item name="android:forceDarkAllowed">false</item>
         <!--
           关键：系统启动画面结束后要切到正式主题。
           之前漏了这一条，Activity 一直停在 Theme.SplashScreen 上——上一版加的
