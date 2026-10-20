@@ -235,7 +235,7 @@ test("App 里不显示「下载安卓 App」入口", async ({ page }) => {
   await expect(page.getByRole("link", { name: "下载安卓 App" })).toHaveCount(0);
 });
 
-test("captcha is only required for login, not register or forgot password", async ({ page }) => {
+test("captcha is required for login and register, not forgot password", async ({ page }) => {
   await page.route("**/captcha/image", (route) =>
     route.fulfill({
       json: {
@@ -250,8 +250,9 @@ test("captcha is only required for login, not register or forgot password", asyn
   const captchaInput = page.getByPlaceholder("请输入图中字符");
   await expect(captchaInput).toBeVisible();
 
+  // 注册也要图形验证码：邮箱验证码挡不住脚本（临时邮箱收件箱是公开可读的）
   await page.getByRole("button", { name: "注册", exact: true }).click();
-  await expect(captchaInput).toBeHidden();
+  await expect(captchaInput).toBeVisible();
 
   await page.getByRole("button", { name: "找回密码", exact: true }).click();
   await expect(captchaInput).toBeHidden();

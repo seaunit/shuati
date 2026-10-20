@@ -48,6 +48,7 @@ export const useAuthStore = defineStore("auth", {
       email: string,
       password: string,
       emailCode: string,
+      captcha: { ticket: string; code: string },
     ) {
       this.user = await api<User>("/api/auth/register", {
         method: "POST",
@@ -55,6 +56,8 @@ export const useAuthStore = defineStore("auth", {
           email,
           password,
           emailCode,
+          captchaTicket: captcha.ticket,
+          captchaCode: captcha.code,
         }),
       });
       this.loaded = true;

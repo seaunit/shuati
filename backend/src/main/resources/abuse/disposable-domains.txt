@@ -1,0 +1,73 @@
+# 一次性 / 临时邮箱域名名单
+#
+# 每行一个域名，`#` 开头是注释。匹配是**后缀**匹配：x.mailinator.com 会命中 mailinator.com，
+# 但 notmailinator.com 不会（按标签切分，不做裸 endsWith）。
+#
+# 为什么要拦：这类邮箱的收件箱是公开可读的（任何人输入地址就能看信），
+# 邮箱验证码对它形同虚设，注册赠点与月度补点会被批量薅走。
+# 名单只是第一道闸——真正的防线是注册 IP 限流、图形验证码和新号 AI 额度。
+
+# 公开收件箱
+mailinator.com
+mailinator.net
+maildrop.cc
+inboxkitten.com
+harakirimail.com
+mailcatch.com
+spam4.me
+grr.la
+discard.email
+throwawaymail.com
+mailsac.com
+tempinbox.com
+emailondeck.com
+fakemailgenerator.com
+generator.email
+mailtemp.info
+moakt.com
+temporary-mail.net
+
+# Guerrilla Mail 系
+guerrillamail.com
+guerrillamail.net
+guerrillamail.org
+guerrillamail.de
+guerrillamailblock.com
+sharklasers.com
+spam.la
+pokemail.net
+
+# 10 分钟邮箱系
+10minutemail.com
+10minutemail.net
+10minutemail.org
+10minutemail.de
+temp-mail.org
+temp-mail.io
+tempmail.dev
+tempmail.net
+tempmailo.com
+tempail.com
+temp-mailer.com
+moakt.cc
+mohmal.com
+mohmal.im
+
+# 别名转发 / 一次性收件
+yopmail.com
+yopmail.fr
+yopmail.net
+trashmail.com
+trashmail.net
+mailnesia.com
+spamgourmet.com
+mytemp.email
+inboxbear.com
+burnermail.io
+
+# 国内临时邮箱
+linshiyouxiang.net
+24mail.chacuo.net
+mailto.plus
+snapmail.cc
+mail7.io

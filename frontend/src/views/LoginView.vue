@@ -51,7 +51,8 @@ async function submit() {
     error.value = "两次输入的密码不一致";
     return;
   }
-  if (mode.value === "login" && !captchaCode.value.trim()) {
+  // 登录与注册都要图形验证码（注册的邮箱验证码挡不住脚本，临时邮箱收件箱是公开的）
+  if ((mode.value === "login" || mode.value === "register") && !captchaCode.value.trim()) {
     error.value = "请输入验证码";
     return;
   }
@@ -78,7 +79,12 @@ async function submit() {
       notice.value = "密码已重置，请使用新密码登录";
       return;
     } else {
-      await auth.register(email.value.trim(), password.value, emailCode.value.trim());
+      await auth.register(
+        email.value.trim(),
+        password.value,
+        emailCode.value.trim(),
+        captcha,
+      );
     }
     const next = typeof route.query.next === "string" ? route.query.next : "/app";
     await router.push(next);
@@ -239,7 +245,7 @@ watch(email, resetEmailCode);
           />
         </label>
 
-        <label v-if="mode === 'login'" class="mb-5 block">
+        <label v-if="mode === 'login' || mode === 'register'" class="mb-5 block">
           <span class="mb-1.5 block text-sm text-ink">验证码</span>
           <div class="flex items-center gap-3">
             <input

@@ -1,5 +1,6 @@
 package com.shuati.importer;
 
+import com.shuati.abuse.NewAccountAiLimit;
 import com.shuati.ai.AiClient;
 import com.shuati.ai.PromptTemplates;
 import com.shuati.billing.PointAccountService;
@@ -46,6 +47,7 @@ public class ImportService {
   private final JdbcTemplate jdbc;
   private final Json json;
   private final AiClient ai;
+  private final NewAccountAiLimit newAccountAiLimit;
   private final PointAccountService points;
 
   /** 提交检查与落库共用一把锁，避免两个请求同时通过「有没有任务在跑」的检查 */
@@ -392,6 +394,7 @@ public class ImportService {
   }
 
   private List<Map<String, Object>> extractChunk(String chunk, String userId) throws Exception {
+    newAccountAiLimit.check(userId);
     AiClient.AiResult result = ai.chat("EXTRACT", PromptTemplates.EXTRACT_SYSTEM, chunk, true);
     ai.logUsage(userId, "EXTRACT", result.model(), null, result, null, 0);
     JsonNode root = ai.objectMapper().readTree(result.content());

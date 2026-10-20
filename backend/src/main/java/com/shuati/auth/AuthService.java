@@ -2,6 +2,7 @@ package com.shuati.auth;
 
 import com.shuati.auth.dto.LoginRequest;
 import com.shuati.auth.dto.RegisterRequest;
+import com.shuati.abuse.EmailDomainGuard;
 import com.shuati.billing.PointAccountService;
 import com.shuati.captcha.CaptchaService;
 import com.shuati.common.ApiException;
@@ -27,10 +28,14 @@ public class AuthService {
   private final PointAccountService pointAccounts;
   private final CaptchaService captchaService;
   private final EmailVerificationService emailVerificationService;
+  private final EmailDomainGuard emailDomainGuard;
 
   @Transactional
-  public LoginResult register(RegisterRequest request) {
+  public LoginResult register(RegisterRequest request, String ip, String userAgent) {
+    // 先证明是人在操作，再看邮箱能不能用，最后才校验邮箱验证码
+    verifyCaptcha(request.captchaTicket(), request.captchaCode());
     String email = normalizeEmail(request.email());
+    emailDomainGuard.assertAllowed(email, ip, userAgent);
     if (profiles.findByEmail(email).isPresent()) {
       throw new ApiException(400, "该邮箱已注册，请直接登录");
     }

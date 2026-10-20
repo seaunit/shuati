@@ -1,5 +1,6 @@
 package com.shuati.email;
 
+import com.shuati.abuse.EmailDomainGuard;
 import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
 import com.shuati.common.ClientInfo;
@@ -21,6 +22,7 @@ public class EmailVerificationController {
 
   private final ProfileRepository profiles;
   private final EmailVerificationService emails;
+  private final EmailDomainGuard emailDomainGuard;
 
   @PostMapping("/email-code")
   @RateLimit(name = "auth:email-code:ip", limit = 30,
@@ -30,6 +32,9 @@ public class EmailVerificationController {
       HttpServletRequest http) {
     // 注册仅依赖邮箱验证码，不再要求图形验证码；发送频率由邮箱冷却与 IP/设备限流兜底。
     String email = request.email().trim().toLowerCase(Locale.ROOT);
+    // 发码前就挡住临时邮箱，避免白烧邮件配额（拦截日志里带 IP 与 UA）
+    emailDomainGuard.assertAllowed(
+        email, ClientInfo.ip(http), http.getHeader("User-Agent"));
     if (profiles.findByEmail(email).isPresent()) {
       throw new ApiException(400, "该邮箱已注册，请直接登录");
     }

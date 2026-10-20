@@ -116,3 +116,12 @@ shuati:
     google-site-verification: ${SHUATI_GOOGLE_SITE_VERIFICATION:}
     # GA4 衡量 ID（G-XXXXXXX）：公开标识，内置为默认值；留空则不注入统计脚本
     google-analytics-id: ${SHUATI_GA_MEASUREMENT_ID:G-S2H8MP4FYT}
+  abuse:
+    # 一次性邮箱域名：内置名单在 classpath:abuse/disposable-domains.txt，
+    # 这里填的（逗号分隔）会追加到内置名单上
+    blocked-email-domains: ${SHUATI_BLOCKED_EMAIL_DOMAINS:}
+    # 同一 IP 的注册频率（0 = 关闭）
+    register-ip-hourly-limit: ${SHUATI_REGISTER_IP_HOURLY_LIMIT:3}
+    register-ip-daily-limit: ${SHUATI_REGISTER_IP_DAILY_LIMIT:10}
+    # 新账号 24 小时内的 AI 调用上限（0 = 关闭）
+    new-account-ai-daily-limit: ${SHUATI_NEW_ACCOUNT_AI_DAILY_LIMIT:30}

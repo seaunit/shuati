@@ -39,6 +39,12 @@ shuati:
     secret: test-captcha-secret
     ip-limit-per-minute: 5
     device-limit-per-minute: 5
+  abuse:
+    # 测试里关掉频率与额度闸，避免用例互相影响（逻辑由 AbuseThrottleTest 单独验证）；
+    # 域名黑名单保持开启，AuthFlowTest 里专门测了 mailinator 被拒
+    register-ip-hourly-limit: 0
+    register-ip-daily-limit: 0
+    new-account-ai-daily-limit: 0
   email:
     enabled: true
     from: no-reply@example.com

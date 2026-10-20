@@ -112,6 +112,21 @@ class AuthFlowTest {
   }
 
   @Test
+  void registerRejectsDisposableEmailDomain() throws Exception {
+    // mailinator 这类收件箱是公开的，验证码谁都能看到，必须在注册前就挡住
+    String email = "x-" + UUID.randomUUID() + "@mailinator.com";
+
+    mvc.perform(post("/api/auth/register").header("X-Requested-With", "ShuatiApp")
+            .contentType(MediaType.APPLICATION_JSON).content(registerBody(email, "secret123")))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("请使用常用邮箱，临时邮箱暂不支持"));
+
+    Integer count = jdbc.queryForObject(
+        "select count(*) from profiles where email = ?", Integer.class, email);
+    assertThat(count).isZero();
+  }
+
+  @Test
   void wrongPasswordReturns401() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
     mvc.perform(post("/api/auth/register").header("X-Requested-With", "ShuatiApp")
@@ -173,25 +188,32 @@ class AuthFlowTest {
 
   private String credentials(String email, String password) throws Exception {
     // 每次请求都带一张新的有效验证码（随机 IP/设备，避免触发限流）
-    String ip = "10." + random(255) + "." + random(255) + "." + random(255);
-    CaptchaImageResponse captcha = captchaService.generate(ip, "device-" + UUID.randomUUID());
-    String code = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
-        .path("code").asText();
-
     Map<String, String> body = new java.util.LinkedHashMap<>();
     body.put("email", email);
     body.put("password", password);
-    body.put("captchaTicket", captcha.ticket());
-    body.put("captchaCode", code);
+    addCaptcha(body);
     return objectMapper.writeValueAsString(body);
   }
 
   private String registerBody(String email, String password) throws Exception {
     String code = "123456";
     seedEmailCode(email, code);
-    return """
-        {"email":"%s","password":"%s","emailCode":"%s"}
-        """.formatted(email, password, code);
+    Map<String, String> body = new java.util.LinkedHashMap<>();
+    body.put("email", email);
+    body.put("password", password);
+    body.put("emailCode", code);
+    // 注册现在也要图形验证码，与登录一致
+    addCaptcha(body);
+    return objectMapper.writeValueAsString(body);
+  }
+
+  private void addCaptcha(Map<String, String> body) throws Exception {
+    String ip = "10." + random(255) + "." + random(255) + "." + random(255);
+    CaptchaImageResponse captcha = captchaService.generate(ip, "device-" + UUID.randomUUID());
+    String code = objectMapper.readTree(captchaStore.rawEntry(captcha.ticket()))
+        .path("code").asText();
+    body.put("captchaTicket", captcha.ticket());
+    body.put("captchaCode", code);
   }
 
   private void seedEmailCode(String email, String code) {

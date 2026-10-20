@@ -1,5 +1,6 @@
 package com.shuati.practice;
 
+import com.shuati.abuse.NewAccountAiLimit;
 import com.shuati.ai.AiClient;
 import com.shuati.ai.PromptTemplates;
 import com.shuati.billing.PointAccountService;
@@ -30,10 +31,13 @@ public class AiGradingService {
   private final PointAccountService points;
   private final Json json;
   private final ExplanationSaveQueue explanationQueue;
+  private final NewAccountAiLimit newAccountAiLimit;
 
   @Transactional
   public Map<String, Object> submitEssay(
       String userId, long questionId, String answer, Integer durationMs) {
+    // 新号首日额度：在扣点之前拦，避免"扣了点又被额度拒掉"
+    newAccountAiLimit.check(userId);
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select type, content, answer, key_points, status from question where id = ?", questionId);
     if (rows.isEmpty() || !"SHORT".equals(rows.get(0).get("type"))
@@ -137,6 +141,7 @@ public class AiGradingService {
    * 几个人同时点解析就可能把连接池占满。所以扣点各自成短事务，落库交给 MQ。
    */
   public Map<String, Object> explanation(String userId, long questionId) {
+    newAccountAiLimit.check(userId);
     List<Map<String, Object>> rows = jdbc.queryForList(
         "select content, options, answer from question where id = ?", questionId);
     if (rows.isEmpty()) {
