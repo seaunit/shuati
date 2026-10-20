@@ -164,10 +164,15 @@ class AuthFlowTest {
   @Test
   void registerWithoutEmailCodeIsRejected() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
+    Map<String, String> body = new java.util.LinkedHashMap<>();
+    body.put("email", email);
+    body.put("password", "secret123");
+    body.put("emailCode", "");
+    addCaptcha(body);
     mvc.perform(post("/api/auth/register")
             .header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"email\":\"" + email + "\",\"password\":\"secret123\",\"emailCode\":\"\"}"))
+            .content(objectMapper.writeValueAsString(body)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("emailCode 请填写邮箱验证码"));
   }
@@ -176,12 +181,15 @@ class AuthFlowTest {
   void registerWithWrongEmailCodeIsRejected() throws Exception {
     String email = "t-" + UUID.randomUUID() + "@example.com";
     seedEmailCode(email, "123456");
+    Map<String, String> body = new java.util.LinkedHashMap<>();
+    body.put("email", email);
+    body.put("password", "secret123");
+    body.put("emailCode", "654321");
+    addCaptcha(body);
     mvc.perform(post("/api/auth/register")
             .header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"email":"%s","password":"secret123","emailCode":"654321"}
-                """.formatted(email)))
+            .content(objectMapper.writeValueAsString(body)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("验证码错误或已过期"));
   }

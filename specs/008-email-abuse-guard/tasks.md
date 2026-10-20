@@ -25,7 +25,11 @@
 ## Phase 4 · 前端与验收
 
 - [x] T011 注册页加图形验证码控件与错误提示（复用登录那套控件）
-- [ ] T012 验收：SC-001 ~ SC-006 逐条跑一遍并记录结果；部署后观察 24 小时拦截日志
+- [x] T012 验收：SC-001/002/003/005 由单测与集成用例覆盖（`EmailDomainGuardTest`、
+      `AuthFlowTest#registerRejectsDisposableEmailDomain`、`RegisterThrottleTest`、
+      `NewAccountAiLimitTest`）；SC-004 按设计不存在未验证账号（验证通过才建号）；
+      SC-006 拦截日志实测输出 `email=x***@mailinator.com`，未出现明文邮箱与密码
+- [ ] T013 部署后观察 24 小时拦截日志，确认误伤率与拦截量
 
 ## 依赖与顺序
 
