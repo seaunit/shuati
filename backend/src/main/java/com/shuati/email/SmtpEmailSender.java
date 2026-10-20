@@ -25,17 +25,10 @@ public class SmtpEmailSender implements EmailSender {
       helper.setFrom(new InternetAddress(
           properties.from(), properties.fromName(), StandardCharsets.UTF_8.name()));
       helper.setTo(email);
-      String action = switch (purpose) {
-        case RESET -> "重置密码";
-        case DELETE_BANK -> "删除题库";
-        case REGISTER -> "注册";
-      };
-      helper.setSubject("【拾题】" + action + "邮箱验证码");
-      helper.setText(
-          "您的" + action + "验证码是：" + code
-              + "\n\n验证码 5 分钟内有效。若非本人操作，请忽略本邮件。",
-          "<p>您的" + action + "验证码是：<strong>" + code + "</strong></p>"
-              + "<p>验证码 5 分钟内有效。若非本人操作，请忽略本邮件。</p>");
+      VerificationEmailTemplate.Rendered rendered = VerificationEmailTemplate.render(
+          purpose, code, properties.codeTtlSeconds());
+      helper.setSubject(rendered.subject());
+      helper.setText(rendered.text(), rendered.html());
       mailSender.send(message);
     } catch (Exception e) {
       throw new ApiException(503, "验证码邮件发送失败，请稍后重试");
