@@ -434,7 +434,7 @@ public class ImportService {
 
       List<Map<String, Object>> items = parseQuestionItems(result.content());
       if (items.isEmpty()) {
-        throw new ApiException(400, "截图里没识别到题目，换一张清晰、完整的截图试试");
+        throw new ApiException(400, "这张图里没有可用的文字内容，换一张清晰、完整的截图试试");
       }
       jdbc.update("""
           update import_task
