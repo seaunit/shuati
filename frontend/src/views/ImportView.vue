@@ -373,12 +373,17 @@ onUnmounted(() => {
           class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none focus:border-moss"
           placeholder="粘贴题目正文，每 5000 字切块解析…"
         />
-        <input
-          v-else-if="kind === 'url'"
-          v-model="url"
-          class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
-          placeholder="https://example.com/questions"
-        />
+        <div v-else-if="kind === 'url'">
+          <input
+            v-model="url"
+            class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 text-sm outline-none focus:border-moss"
+            placeholder="https://example.com/questions"
+          />
+          <p class="mt-2 rounded-xl bg-mist/60 px-3 py-2 text-xs leading-relaxed text-oat">
+            只抓取 robots.txt 允许爬取的网页。如果该网页不允许爬取，会提示你改用「截图识别」：
+            在浏览器里打开该页面、截图后粘贴即可。
+          </p>
+        </div>
         <label
           v-else-if="kind === 'doc'"
           class="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-mist bg-paper px-4 py-8 text-sm text-oat"

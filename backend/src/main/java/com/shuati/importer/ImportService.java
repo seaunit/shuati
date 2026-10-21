@@ -9,7 +9,6 @@ import com.shuati.common.Json;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -49,6 +48,7 @@ public class ImportService {
   private final AiClient ai;
   private final NewAccountAiLimit newAccountAiLimit;
   private final PointAccountService points;
+  private final RobotsPolicy robotsPolicy;
 
   /** 提交检查与落库共用一把锁，避免两个请求同时通过「有没有任务在跑」的检查 */
   private final Object importLock = new Object();
@@ -500,16 +500,8 @@ public class ImportService {
       return source;
     }
     if ("url".equals(kind)) {
-      var response = java.net.http.HttpClient.newBuilder()
-          .connectTimeout(Duration.ofSeconds(20)).build()
-          .send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(source))
-                  .header("User-Agent", "Mozilla/5.0")
-                  .timeout(Duration.ofSeconds(20)).GET().build(),
-              java.net.http.HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-      if (response.statusCode() >= 400) {
-        throw new ApiException(400, "抓取网页失败（HTTP " + response.statusCode() + "）");
-      }
-      return htmlToText(response.body());
+      // 合规：只抓 robots.txt 允许的页面；不允许的直接提示改用截图识别（见 RobotsPolicy）
+      return htmlToText(robotsPolicy.fetchPage(source));
     }
     byte[] bytes = Base64.getDecoder().decode(source);
     String name = String.valueOf(task.getOrDefault("source_name", "")).toLowerCase(Locale.ROOT);

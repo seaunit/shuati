@@ -27,6 +27,12 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
+    <!-- robots.txt 解析：只抓允许爬取的页面（见 RobotsPolicy） -->
+    <dependency>
+      <groupId>com.github.crawler-commons</groupId>
+      <artifactId>crawler-commons</artifactId>
+      <version>1.4</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
