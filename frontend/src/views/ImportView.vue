@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { Loader2, Upload } from "lucide-vue-next";
+import { ImagePlus, Loader2, Upload } from "lucide-vue-next";
 import { api } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 
@@ -37,13 +37,16 @@ const auth = useAuthStore();
 const route = useRoute();
 // 从题库管理页进来时带着 ?bankId=，这时直接锁定到那个题库，不用再选
 const lockedBankId = Number(route.query.bankId) || null;
-const kind = ref<"text" | "url" | "doc">("text");
+const kind = ref<"text" | "url" | "doc" | "screenshot">("text");
 const bankName = ref("");
 const bankDescription = ref("");
 const text = ref("");
 const url = ref("");
 const fileName = ref("");
 const base64 = ref("");
+// 截图模式保留完整的 data URL（多模态接口要带 mime），不拆前缀
+const screenshotDataUrl = ref("");
+const screenshotName = ref("screenshot.png");
 const busy = ref(false);
 const notice = ref("");
 const noticeError = ref("");
@@ -134,9 +137,56 @@ function onFile(event: Event) {
   reader.readAsDataURL(file);
 }
 
+function applyScreenshot(value: string, name: string) {
+  screenshotDataUrl.value = value;
+  screenshotName.value = name;
+  noticeError.value = "";
+}
+
+function onScreenshotFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    noticeError.value = "请选择图片文件（PNG / JPG / WebP）";
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    noticeError.value = "截图太大了，请压到 5MB 以内";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => applyScreenshot(String(reader.result ?? ""), file.name);
+  reader.readAsDataURL(file);
+}
+
+/** 只在这个模式下接管粘贴；正文模式里 Ctrl+V 仍然正常粘字 */
+function onPaste(event: ClipboardEvent) {
+  if (kind.value !== "screenshot") return;
+  const items = event.clipboardData?.items ?? [];
+  for (const item of items) {
+    if (!item.type.startsWith("image/")) continue;
+    const file = item.getAsFile();
+    if (!file) break;
+    event.preventDefault();
+    if (file.size > 5 * 1024 * 1024) {
+      noticeError.value = "截图太大了，请压到 5MB 以内";
+      break;
+    }
+    const reader = new FileReader();
+    reader.onload = () => applyScreenshot(String(reader.result ?? ""), "screenshot.png");
+    reader.readAsDataURL(file);
+    break;
+  }
+}
+
 async function submit() {
   if (hasRunningTask.value) {
     noticeError.value = "已有解析任务正在进行中，请等它完成或失败后再提交新任务";
+    return;
+  }
+  if (kind.value === "screenshot" && !screenshotDataUrl.value) {
+    noticeError.value = "请先 Ctrl+V 粘贴截图，或点击选择一张图片";
     return;
   }
   busy.value = true;
@@ -153,6 +203,10 @@ async function submit() {
     if (kind.value === "doc") {
       body.base64 = base64.value;
       body.fileName = fileName.value;
+    }
+    if (kind.value === "screenshot") {
+      body.base64 = screenshotDataUrl.value;
+      body.fileName = screenshotName.value;
     }
     const response = await api<{ taskId: string }>("/api/import", {
       method: "POST",
@@ -241,6 +295,10 @@ async function confirmImport() {
 onMounted(() => {
   loadTasks();
   loadBanks();
+  window.addEventListener("paste", onPaste);
+});
+onUnmounted(() => {
+  window.removeEventListener("paste", onPaste);
 });
 </script>
 
@@ -262,11 +320,12 @@ onMounted(() => {
               { key: 'text', label: '粘贴正文' },
               { key: 'url', label: '网页链接' },
               { key: 'doc', label: '上传文档' },
+              { key: 'screenshot', label: '截图识别' },
             ]"
             :key="item.key"
             class="flex-1 rounded-lg py-2 text-sm transition"
             :class="kind === item.key ? 'bg-white text-ink shadow-sm' : 'text-oat'"
-            @click="kind = item.key as 'text' | 'url' | 'doc'"
+            @click="kind = item.key as 'text' | 'url' | 'doc' | 'screenshot'"
           >
             {{ item.label }}
           </button>
@@ -321,13 +380,43 @@ onMounted(() => {
           placeholder="https://example.com/questions"
         />
         <label
-          v-else
+          v-else-if="kind === 'doc'"
           class="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-mist bg-paper px-4 py-8 text-sm text-oat"
         >
           <Upload class="h-6 w-6" />
           <span>{{ fileName || "选择 docx / doc / pptx / pdf 文件" }}</span>
           <input class="hidden" type="file" accept=".docx,.doc,.pptx,.pdf" @change="onFile" />
         </label>
+        <div v-else class="space-y-3">
+          <label
+            class="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-mist bg-paper px-4 py-6 text-sm text-oat transition hover:border-moss"
+          >
+            <ImagePlus class="h-6 w-6" />
+            <span>Ctrl+V 粘贴截图，或点击选择图片</span>
+            <span class="text-xs">PNG / JPG / WebP，单张 ≤ 5MB；识别后交给 AI 拆成题目</span>
+            <input
+              class="hidden"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              @change="onScreenshotFile"
+            />
+          </label>
+          <div v-if="screenshotDataUrl" class="relative">
+            <img
+              :src="screenshotDataUrl"
+              alt="待识别截图"
+              data-testid="screenshot-preview"
+              class="max-h-64 w-full rounded-xl border border-mist bg-white object-contain"
+            />
+            <button
+              type="button"
+              class="absolute right-2 top-2 rounded-lg bg-ink/80 px-2 py-1 text-xs text-white"
+              @click="screenshotDataUrl = ''"
+            >
+              移除
+            </button>
+          </div>
+        </div>
 
         <button
           class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm text-white transition hover:bg-ink/90 disabled:opacity-60"

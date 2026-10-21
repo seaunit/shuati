@@ -81,7 +81,7 @@ public class ImportService {
 
   public Map<String, Object> createTask(String userId, Map<String, Object> body) {
     String kind = String.valueOf(body.getOrDefault("kind", ""));
-    if (!List.of("text", "url", "doc").contains(kind)) {
+    if (!List.of("text", "url", "doc", "screenshot").contains(kind)) {
       throw new ApiException(400, "导入类型不正确");
     }
     String bankName = String.valueOf(body.getOrDefault("bankName", "")).trim();
@@ -102,9 +102,13 @@ public class ImportService {
       }
     } else {
       sourceText = String.valueOf(body.getOrDefault("base64", ""));
-      sourceName = String.valueOf(body.getOrDefault("fileName", "doc"));
+      sourceName = String.valueOf(body.getOrDefault(
+          "fileName", "screenshot".equals(kind) ? "screenshot.png" : "doc"));
       if (sourceText.isEmpty()) {
-        throw new ApiException(400, "请上传文档");
+        throw new ApiException(400, "screenshot".equals(kind) ? "请先粘贴或选择截图" : "请上传文档");
+      }
+      if ("screenshot".equals(kind)) {
+        validateScreenshot(sourceText);
       }
     }
 
@@ -228,6 +232,11 @@ public class ImportService {
     String userId = String.valueOf(task.get("user_id"));
     jdbc.update("update import_task set status = 'RUNNING', progress = 0, error = null where id = ?",
         taskId);
+
+    if ("screenshot".equals(String.valueOf(task.get("kind")))) {
+      runParseScreenshot(task, taskId, userId);
+      return;
+    }
 
     String text;
     try {
@@ -397,7 +406,68 @@ public class ImportService {
     newAccountAiLimit.check(userId);
     AiClient.AiResult result = ai.chat("EXTRACT", PromptTemplates.EXTRACT_SYSTEM, chunk, true);
     ai.logUsage(userId, "EXTRACT", result.model(), null, result, null, 0);
-    JsonNode root = ai.objectMapper().readTree(result.content());
+    return parseQuestionItems(result.content());
+  }
+
+  /** 截图任务：多模态一次出题，计费按 1 万字等价（10 点），失败全额退。 */
+  private void runParseScreenshot(Map<String, Object> task, String taskId, String userId) {
+    String dataUrl = String.valueOf(task.get("source_text"));
+    jdbc.update(
+        "update import_task set total_chunks = 1, done_chunks = 0 where id = ?", taskId);
+
+    newAccountAiLimit.check(userId);
+    Map<String, Object> charged = points.consumePoints(
+        userId, "EXTRACT", 10_000, "import_task", taskId);
+    if (!Boolean.TRUE.equals(charged.get("ok"))) {
+      throw new ApiException(402, "AI 点数不足：本次需要 " + charged.get("cost")
+          + " 点，当前可用 " + charged.get("available") + " 点。");
+    }
+    int chargedCost = intValue(charged.get("cost"));
+
+    long start = System.currentTimeMillis();
+    try {
+      AiClient.AiResult result = ai.chatWithImage(
+          "EXTRACT", PromptTemplates.EXTRACT_SYSTEM, PromptTemplates.EXTRACT_IMAGE_USER,
+          dataUrl, true);
+      ai.logUsage(userId, "EXTRACT", result.model(), null, result, null,
+          System.currentTimeMillis() - start);
+
+      List<Map<String, Object>> items = parseQuestionItems(result.content());
+      if (items.isEmpty()) {
+        throw new ApiException(400, "截图里没识别到题目，换一张清晰、完整的截图试试");
+      }
+      jdbc.update("""
+          update import_task
+             set items = cast(? as json), progress = 100, done_chunks = 1,
+                 phase = 'READY', status = 'COMPLETED', error = null
+           where id = ?
+          """, writeJson(items), taskId);
+    } catch (Exception e) {
+      if (chargedCost > 0) {
+        points.refundPoints(userId, chargedCost, "AI_SCREENSHOT_FAILED", "import_task", taskId);
+      }
+      if (e instanceof ApiException api) {
+        throw api;
+      }
+      throw new ApiException(400, "截图解析失败：" + e.getMessage());
+    }
+  }
+
+  /** 截图只接受 data:image/...;base64, 且解码后不超过 5MB */
+  static void validateScreenshot(String dataUrl) {
+    int comma = dataUrl.indexOf(',');
+    if (!dataUrl.startsWith("data:image/") || comma < 0
+        || !dataUrl.substring(0, comma).contains(";base64")) {
+      throw new ApiException(400, "图片格式不正确，请粘贴 PNG / JPG 截图");
+    }
+    long approxBytes = (long) (dataUrl.length() - comma - 1) * 3 / 4;
+    if (approxBytes > 5L * 1024 * 1024) {
+      throw new ApiException(400, "截图太大了，请压到 5MB 以内");
+    }
+  }
+
+  private List<Map<String, Object>> parseQuestionItems(String content) throws Exception {
+    JsonNode root = ai.objectMapper().readTree(content);
     JsonNode questions = root.path("questions");
     List<Map<String, Object>> items = new ArrayList<>();
     if (questions.isArray()) {

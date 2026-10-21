@@ -41,6 +41,20 @@ public class AiClient {
         : chatOpenAi(endpoint, system, user, jsonMode);
   }
 
+  /**
+   * 多模态：把一张图片和文字一起发（截图导入题库用）。
+   *
+   * <p>imageDataUrl 是前端 `FileReader.readAsDataURL` 的产物（`data:image/png;base64,...`）：
+   * OpenAI 协议直接把它塞进 image_url；Anthropic 协议拆出 mime 与 base64 放进 image block。
+   */
+  public AiResult chatWithImage(
+      String purpose, String system, String user, String imageDataUrl, boolean jsonMode) {
+    AiEndpoint endpoint = resolve(purpose);
+    return isAnthropic(endpoint.protocol())
+        ? chatAnthropicImage(endpoint, system, user, imageDataUrl, jsonMode)
+        : chatOpenAiImage(endpoint, system, user, imageDataUrl, jsonMode);
+  }
+
   /** OpenAI 兼容：POST {base}/chat/completions */
   private AiResult chatOpenAi(AiEndpoint endpoint, String system, String user, boolean jsonMode) {
     Map<String, Object> body = new LinkedHashMap<>();
@@ -69,6 +83,42 @@ public class AiClient {
       throw new ApiException(502, "AI 返回内容为空");
     }
 
+    return parseOpenAiResponse(response, endpoint, jsonMode);
+  }
+
+  /** 图片版 OpenAI 请求：messages[user].content 变成 text + image_url 数组 */
+  private AiResult chatOpenAiImage(
+      AiEndpoint endpoint, String system, String user, String imageDataUrl, boolean jsonMode) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("model", endpoint.model());
+    body.put("messages", List.of(
+        Map.of("role", "system", "content", system),
+        Map.of("role", "user", "content", List.of(
+            Map.of("type", "text", "text", user),
+            Map.of("type", "image_url", "image_url", Map.of("url", imageDataUrl))))));
+    body.put("temperature", 0.2);
+    if (jsonMode) {
+      body.put("response_format", Map.of("type", "json_object"));
+    }
+    Map<?, ?> response;
+    try {
+      response = restClient().post()
+          .uri(endpoint.baseUrl() + "/chat/completions")
+          .header("Authorization", "Bearer " + endpoint.apiKey())
+          .contentType(MediaType.APPLICATION_JSON)
+          .body(body)
+          .retrieve()
+          .body(Map.class);
+    } catch (Exception e) {
+      throw new ApiException(502, "AI 请求失败：" + e.getMessage());
+    }
+    if (response == null) {
+      throw new ApiException(502, "AI 返回内容为空");
+    }
+    return parseOpenAiResponse(response, endpoint, jsonMode);
+  }
+
+  private AiResult parseOpenAiResponse(Map<?, ?> response, AiEndpoint endpoint, boolean jsonMode) {
     String content = "";
     Object choicesValue = response.get("choices");
     if (choicesValue instanceof List<?> choices && !choices.isEmpty()
@@ -124,6 +174,60 @@ public class AiClient {
       throw new ApiException(502, "AI 返回内容为空");
     }
 
+    return parseAnthropicResponse(response, endpoint, jsonMode);
+  }
+
+  /** 图片版 Anthropic 请求：content 数组里放 text + image(base64) */
+  private AiResult chatAnthropicImage(
+      AiEndpoint endpoint, String system, String user, String imageDataUrl, boolean jsonMode) {
+    String mime;
+    String data;
+    int comma = imageDataUrl.indexOf(',');
+    if (!imageDataUrl.startsWith("data:image/") || comma < 0
+        || !imageDataUrl.substring(0, comma).contains(";base64")) {
+      throw new ApiException(400, "图片格式不正确");
+    }
+    mime = imageDataUrl.substring(5, comma).split(";")[0];
+    data = imageDataUrl.substring(comma + 1);
+
+    List<Map<String, Object>> content = new ArrayList<>();
+    content.add(Map.of("type", "text", "text", user));
+    content.add(Map.of("type", "image",
+        "source", Map.of("type", "base64", "media_type", mime, "data", data)));
+
+    List<Map<String, Object>> messages = new ArrayList<>();
+    messages.add(Map.of("role", "user", "content", content));
+    if (jsonMode) {
+      messages.add(Map.of("role", "assistant", "content", "{"));
+    }
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("model", endpoint.model());
+    body.put("max_tokens", 4096);
+    body.put("system", system);
+    body.put("messages", messages);
+
+    Map<?, ?> response;
+    try {
+      response = restClient().post()
+          .uri(endpoint.baseUrl() + "/v1/messages")
+          .header("x-api-key", endpoint.apiKey())
+          .header("anthropic-version", "2023-06-01")
+          .contentType(MediaType.APPLICATION_JSON)
+          .body(body)
+          .retrieve()
+          .body(Map.class);
+    } catch (Exception e) {
+      throw new ApiException(502, "AI 请求失败：" + e.getMessage());
+    }
+    if (response == null) {
+      throw new ApiException(502, "AI 返回内容为空");
+    }
+    return parseAnthropicResponse(response, endpoint, jsonMode);
+  }
+
+  private AiResult parseAnthropicResponse(
+      Map<?, ?> response, AiEndpoint endpoint, boolean jsonMode) {
     StringBuilder content = new StringBuilder();
     Object blocksValue = response.get("content");
     if (blocksValue instanceof List<?> blocks) {

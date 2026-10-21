@@ -235,6 +235,44 @@ test("App 里不显示「下载安卓 App」入口", async ({ page }) => {
   await expect(page.getByRole("link", { name: "下载安卓 App" })).toHaveCount(0);
 });
 
+test("import page accepts a pasted screenshot and previews it", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.goto("/app/import");
+  await expect(page.getByRole("heading", { name: "导入题目" })).toBeVisible();
+
+  await page.getByRole("button", { name: "截图识别" }).click();
+  await expect(page.getByText("Ctrl+V 粘贴截图，或点击选择图片")).toBeVisible();
+
+  // 没选图直接提交要被拦住，并给中文提示
+  await page.getByRole("button", { name: "开始解析" }).click();
+  await expect(page.getByText("请先 Ctrl+V 粘贴截图")).toBeVisible();
+
+  // 模拟从剪贴板粘贴一张图片
+  await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillStyle = "#17181a";
+    ctx.font = "16px sans-serif";
+    ctx.fillText("Q1", 6, 36);
+    const blob = await new Promise<Blob>((resolve) =>
+      canvas.toBlob((value) => resolve(value!), "image/png"),
+    );
+    const file = new File([blob], "shot.png", { type: "image/png" });
+    const data = new DataTransfer();
+    data.items.add(file);
+    window.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+    );
+  });
+
+  await expect(page.getByTestId("screenshot-preview")).toBeVisible();
+  await expect(page.getByRole("button", { name: "移除" })).toBeVisible();
+});
+
 test("captcha is required for login and register, not forgot password", async ({ page }) => {
   await page.route("**/captcha/image", (route) =>
     route.fulfill({

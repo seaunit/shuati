@@ -74,4 +74,14 @@ public final class PromptTemplates {
       2. MULTI（多选）：4~6 个选项，answer 为至少 2 个字母；
       3. SHORT（简答）：必须有 key_points；
       4. 只输出 JSON，不要解释。""";
+
+  /** 截图导入：图片跟着这段文字一起发给多模态模型 */
+  public static final String EXTRACT_IMAGE_USER = """
+      这是一张题目截图，请把图里所有题目按上面的 JSON 格式输出。
+
+      额外要求：
+      1. 代码、公式、表格保持原有结构，代码用 Markdown 代码块包起来；
+      2. 一道题一条，题号保留在题干里；
+      3. 看不清的字用 ⬚ 占位，不要编造；
+      4. 只输出 JSON。""";
 }
