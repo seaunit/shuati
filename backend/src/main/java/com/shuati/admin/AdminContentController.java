@@ -3,6 +3,7 @@ package com.shuati.admin;
 import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
 import com.shuati.common.Json;
+import com.shuati.common.QuestionContent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -186,9 +187,12 @@ public class AdminContentController {
     validateQuestion(type, body.get("options"), answer);
     jdbc.update("""
         insert into question
-          (unit_id, type, content, options, answer, key_points, difficulty, explanation, tags, status)
-        values (?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, cast(? as json), 'ON')
-        """, unitId, type, content, writeJson(body.get("options")), answer,
+          (unit_id, type, content, content_hash, options, answer, key_points,
+           difficulty, explanation, tags, status)
+        values (?, ?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?,
+                cast(? as json), 'ON')
+        """, unitId, type, content, QuestionContent.hash(content),
+        writeJson(body.get("options")), answer,
         writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")));
@@ -206,11 +210,11 @@ public class AdminContentController {
     validateQuestion(type, body.get("options"), answer);
     jdbc.update("""
         update question
-           set type = ?, content = ?, options = cast(? as json), answer = ?,
-               key_points = cast(? as json), difficulty = ?, explanation = ?,
-               tags = cast(? as json)
+           set type = ?, content = ?, content_hash = ?, options = cast(? as json),
+               answer = ?, key_points = cast(? as json), difficulty = ?,
+               explanation = ?, tags = cast(? as json)
          where id = ?
-        """, type, content, writeJson(body.get("options")), answer,
+        """, type, content, QuestionContent.hash(content), writeJson(body.get("options")), answer,
         writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")), id);

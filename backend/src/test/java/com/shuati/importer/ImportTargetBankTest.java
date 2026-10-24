@@ -34,7 +34,7 @@ class ImportTargetBankTest {
 
     importService.requestImport(userId, taskId, List.of(0), bankId);
 
-    assertThat(targetBankOf(taskId)).isEqualTo(bankId);
+    assertThat(targetBankOf(latestJobOf(taskId))).isEqualTo(bankId);
   }
 
   @Test
@@ -48,7 +48,7 @@ class ImportTargetBankTest {
 
     assertThat(error.getStatus()).isEqualTo(403);
     assertThat(error.getMessage()).contains("公共题库只能由管理员维护");
-    assertThat(targetBankOf(taskId)).isNull();
+    assertThat(jobCount(taskId)).isZero();
   }
 
   @Test
@@ -61,7 +61,7 @@ class ImportTargetBankTest {
         importService.requestImport(userId, taskId, List.of(0), othersBankId));
 
     assertThat(error.getStatus()).isEqualTo(403);
-    assertThat(targetBankOf(taskId)).isNull();
+    assertThat(jobCount(taskId)).isZero();
   }
 
   @Test
@@ -72,7 +72,7 @@ class ImportTargetBankTest {
 
     importService.requestImport(adminId, taskId, List.of(0), publicBankId);
 
-    assertThat(targetBankOf(taskId)).isEqualTo(publicBankId);
+    assertThat(targetBankOf(latestJobOf(taskId))).isEqualTo(publicBankId);
   }
 
   @Test
@@ -115,5 +115,19 @@ class ImportTargetBankTest {
   private Long targetBankOf(String taskId) {
     return jdbc.queryForObject(
         "select target_bank_id from import_task where id = ?", Long.class, taskId);
+  }
+
+  private String latestJobOf(String sourceId) {
+    return jdbc.queryForObject("""
+        select id from import_task
+         where source_task_id = ?
+         order by created_at desc, id desc
+         limit 1
+        """, String.class, sourceId);
+  }
+
+  private int jobCount(String sourceId) {
+    return jdbc.queryForObject(
+        "select count(*) from import_task where source_task_id = ?", Integer.class, sourceId);
   }
 }

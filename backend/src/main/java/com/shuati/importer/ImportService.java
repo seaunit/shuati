@@ -6,15 +6,18 @@ import com.shuati.ai.PromptTemplates;
 import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
 import com.shuati.common.Json;
+import com.shuati.common.QuestionContent;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +37,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -42,6 +47,7 @@ public class ImportService {
 
   private static final int CHUNK_SIZE = 5000;
   private static final int MAX_TEXT_LENGTH = 100_000;
+  private static final int SUCCESSFUL_IMPORT_HISTORY_LIMIT = 10;
 
   private final JdbcTemplate jdbc;
   private final Json json;
@@ -49,6 +55,7 @@ public class ImportService {
   private final NewAccountAiLimit newAccountAiLimit;
   private final PointAccountService points;
   private final RobotsPolicy robotsPolicy;
+  private final PlatformTransactionManager transactionManager;
 
   /** 提交检查与落库共用一把锁，避免两个请求同时通过「有没有任务在跑」的检查 */
   private final Object importLock = new Object();
@@ -127,23 +134,45 @@ public class ImportService {
 
   public List<Map<String, Object>> listTasks(String userId) {
     return json.normalize(jdbc.queryForList("""
-        select id, kind, phase, status, progress, total_chunks, done_chunks,
-               bank_name, error, created_at, updated_at
-          from import_task
-         where user_id = ?
-         order by created_at desc
+        select s.id, s.kind, s.phase, s.status, s.progress,
+               s.total_chunks, s.done_chunks, s.bank_name, s.error,
+               s.created_at, s.updated_at,
+               j.id as latest_import_id,
+               j.status as latest_import_status,
+               j.progress as latest_import_progress,
+               j.created_count as latest_created_count,
+               j.skipped_count as latest_skipped_count,
+               j.target_bank_id as latest_target_bank_id,
+               j.bank_id as latest_bank_id,
+               j.error as latest_import_error
+          from import_task s
+          left join import_task j on j.id = (
+            select j2.id
+              from import_task j2
+             where j2.source_task_id = s.id
+             order by j2.updated_at desc, j2.created_at desc, j2.id desc
+             limit 1
+          )
+         where s.user_id = ? and s.source_task_id is null
+         order by s.created_at desc
          limit 50
         """, userId), java.util.Set.of());
   }
 
   public Map<String, Object> getTask(String userId, String taskId) {
     List<Map<String, Object>> rows = jdbc.queryForList("""
-        select * from import_task where id = ? and user_id = ?
+        select id, kind, phase, status, progress, total_chunks, done_chunks,
+               bank_name, error, items, selected_indexes, created_at, updated_at
+          from import_task
+         where id = ? and user_id = ? and source_task_id is null
         """, taskId, userId);
     if (rows.isEmpty()) {
       throw new ApiException(404, "任务不存在");
     }
-    return json.normalize(rows.get(0), java.util.Set.of("items", "selected_indexes"));
+    Map<String, Object> task =
+        json.normalize(rows.get(0), java.util.Set.of("items", "selected_indexes"));
+    latestImportSummary(userId, taskId).forEach(task::put);
+    return task;
   }
 
   /**
@@ -151,13 +180,18 @@ public class ImportService {
    *
    * @param targetBankId 目标题库；为 null 表示按任务里的名称新建（或复用自己同名的）题库
    */
-  public void requestImport(
+  public Map<String, Object> requestImport(
       String userId, String taskId, List<Integer> selectedIndexes, Long targetBankId) {
     List<Map<String, Object>> rows = jdbc.queryForList("""
-        select id, bank_name from import_task where id = ? and user_id = ?
+        select id, kind, bank_name, bank_description, items
+          from import_task
+         where id = ? and user_id = ? and source_task_id is null
         """, taskId, userId);
     if (rows.isEmpty()) {
       throw new ApiException(404, "任务不存在");
+    }
+    if (toItems(rows.get(0).get("items")).isEmpty()) {
+      throw new ApiException(400, "该记录还没有可导入的解析结果");
     }
     if (targetBankId == null) {
       // 新建题库必须有名字，否则等异步执行时才失败，不如现在就报出来
@@ -168,13 +202,52 @@ public class ImportService {
     } else {
       requireImportAccess(userId, targetBankId);
     }
-    jdbc.update("""
-        update import_task
-           set phase = 'IMPORT', status = 'PENDING', progress = 0,
-               selected_indexes = cast(? as json), target_bank_id = ?, error = null
-         where id = ?
-        """, writeJson(selectedIndexes == null ? List.of() : selectedIndexes),
-        targetBankId, taskId);
+
+    String jobId = UUID.randomUUID().toString();
+    Map<String, Object> source = rows.get(0);
+    synchronized (importLock) {
+      requireNoRunningTask();
+      jdbc.update("""
+          insert into import_task
+            (id, user_id, source_task_id, kind, phase, status, progress,
+             total_chunks, done_chunks, bank_name, bank_description,
+             selected_indexes, target_bank_id)
+          values (?, ?, ?, ?, 'IMPORT', 'PENDING', 0, 0, 0, ?, ?, cast(? as json), ?)
+          """, jobId, userId, taskId, String.valueOf(source.get("kind")),
+          String.valueOf(source.get("bank_name")), source.get("bank_description"),
+          writeJson(selectedIndexes == null ? List.of() : selectedIndexes), targetBankId);
+    }
+    return Map.of("jobId", jobId);
+  }
+
+  private Map<String, Object> latestImportSummary(String userId, String sourceTaskId) {
+    List<Map<String, Object>> rows = jdbc.queryForList("""
+        select id as latest_import_id,
+               status as latest_import_status,
+               progress as latest_import_progress,
+               created_count as latest_created_count,
+               skipped_count as latest_skipped_count,
+               target_bank_id as latest_target_bank_id,
+               bank_id as latest_bank_id,
+               error as latest_import_error
+          from import_task
+         where user_id = ? and source_task_id = ?
+         order by updated_at desc, created_at desc, id desc
+         limit 1
+        """, userId, sourceTaskId);
+    Map<String, Object> summary = new LinkedHashMap<>();
+    summary.put("latest_import_id", null);
+    summary.put("latest_import_status", null);
+    summary.put("latest_import_progress", null);
+    summary.put("latest_created_count", null);
+    summary.put("latest_skipped_count", null);
+    summary.put("latest_target_bank_id", null);
+    summary.put("latest_bank_id", null);
+    summary.put("latest_import_error", null);
+    if (!rows.isEmpty()) {
+      summary.putAll(rows.get(0));
+    }
+    return summary;
   }
 
   /**
@@ -302,7 +375,8 @@ public class ImportService {
     jdbc.update("update import_task set status = 'RUNNING', progress = 0, error = null where id = ?",
         taskId);
 
-    List<Map<String, Object>> items = toItems(task.get("items"));
+    Map<String, Object> source = importSourceOf(task, userId);
+    List<Map<String, Object>> items = toItems(source.get("items"));
     List<Integer> selected = toSelected(task.get("selected_indexes"));
     List<Map<String, Object>> chosen = selected.isEmpty() ? items
         : selected.stream().filter(i -> i >= 0 && i < items.size()).map(items::get).toList();
@@ -312,6 +386,41 @@ public class ImportService {
 
     Long targetBankId = task.get("target_bank_id") == null ? null
         : ((Number) task.get("target_bank_id")).longValue();
+    String bankName = String.valueOf(source.get("bank_name")).trim();
+    String description = source.get("bank_description") == null ? null
+        : String.valueOf(source.get("bank_description"));
+    new TransactionTemplate(transactionManager).executeWithoutResult(ignored ->
+        runImportInTransaction(
+            taskId, userId, chosen, targetBankId, bankName, description));
+  }
+
+  /**
+   * 解析来源与执行记录分开以后，导入线程要读取来源的 items；
+   * 兼容旧数据时仍允许执行记录自己携带 items。
+   */
+  private Map<String, Object> importSourceOf(Map<String, Object> task, String userId) {
+    Object sourceTaskId = task.get("source_task_id");
+    if (sourceTaskId == null) {
+      return task;
+    }
+    List<Map<String, Object>> sources = jdbc.queryForList("""
+        select id, user_id, bank_name, bank_description, items
+          from import_task
+         where id = ? and user_id = ? and source_task_id is null
+        """, String.valueOf(sourceTaskId), userId);
+    if (sources.isEmpty()) {
+      throw new ApiException(404, "解析来源不存在");
+    }
+    return sources.get(0);
+  }
+
+  private void runImportInTransaction(
+      String taskId,
+      String userId,
+      List<Map<String, Object>> chosen,
+      Long targetBankId,
+      String bankName,
+      String description) {
     if (targetBankId == null) {
       // 只有「新建题库」才受题库数量上限约束；往已有题库里加题不占
       points.assertBankQuota(userId);
@@ -322,9 +431,6 @@ public class ImportService {
       requireImportAccess(userId, targetBankId);
       bankId = targetBankId;
     } else {
-      String bankName = String.valueOf(task.get("bank_name")).trim();
-      String description = task.get("bank_description") == null ? null
-          : String.valueOf(task.get("bank_description"));
       Long existing = jdbc.queryForList(
           "select id from bank where owner_id = ? and name = ?", Long.class, userId, bankName)
           .stream().findFirst().orElse(null);
@@ -346,8 +452,26 @@ public class ImportService {
       }
     }
 
-    Map<String, Long> unitMap = new LinkedHashMap<>();
+    Set<String> existingHashes = new HashSet<>(jdbc.queryForList("""
+        select q.content_hash
+          from question q
+          join unit u on u.id = q.unit_id
+         where u.bank_id = ? and q.content_hash is not null
+        """, String.class, bankId));
+    List<Map<String, Object>> toInsert = new ArrayList<>();
+    int skippedCount = 0;
     for (Map<String, Object> item : chosen) {
+      String content = String.valueOf(item.getOrDefault("content", "")).trim();
+      String contentHash = QuestionContent.hash(content);
+      if (content.isBlank() || !existingHashes.add(contentHash)) {
+        skippedCount++;
+        continue;
+      }
+      toInsert.add(item);
+    }
+
+    Map<String, Long> unitMap = new LinkedHashMap<>();
+    for (Map<String, Object> item : toInsert) {
       String unitName = String.valueOf(item.getOrDefault("unit", "未分类")).trim();
       if (unitName.isEmpty()) {
         unitName = "未分类";
@@ -376,34 +500,79 @@ public class ImportService {
       }
     }
 
-    for (Map<String, Object> item : chosen) {
+    int createdCount = 0;
+    for (Map<String, Object> item : toInsert) {
       String unitName = String.valueOf(item.getOrDefault("unit", "未分类")).trim();
       Long unitId = unitMap.get(unitName.isEmpty() ? "未分类" : unitName);
       if (unitId == null) {
         continue;
       }
+      String content = String.valueOf(item.getOrDefault("content", "")).trim();
       jdbc.update("""
           insert into question
-            (unit_id, type, content, options, answer, key_points, difficulty,
-             explanation, source_url, status)
-          values (?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, ?, 'ON')
+            (unit_id, type, content, content_hash, options, answer, key_points,
+             difficulty, explanation, source_url, status)
+          values (?, ?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, ?, 'ON')
           """,
           unitId,
           String.valueOf(item.getOrDefault("type", "SINGLE")),
-          String.valueOf(item.getOrDefault("content", "")),
+          content,
+          QuestionContent.hash(content),
           item.get("options") == null ? null : writeJson(item.get("options")),
           String.valueOf(item.getOrDefault("answer", "")),
           item.get("key_points") == null ? null : writeJson(item.get("key_points")),
           normalizeDifficulty(item.get("difficulty")),
           item.get("explanation") == null ? null : String.valueOf(item.get("explanation")),
           item.get("source_url") == null ? null : String.valueOf(item.get("source_url")));
+      createdCount++;
     }
 
     jdbc.update("""
         update import_task
-           set bank_id = ?, progress = 100, phase = 'DONE', status = 'COMPLETED'
+           set bank_id = ?, progress = 100, phase = 'DONE', status = 'COMPLETED',
+               created_count = ?, skipped_count = ?, error = null
          where id = ?
-        """, bankId, taskId);
+        """, bankId, createdCount, skippedCount, taskId);
+    pruneSuccessfulImportHistory(userId);
+  }
+
+  /**
+   * 每个用户只保留最近 10 条成功执行记录。执行记录删除后，
+   * 若来源已无任何执行记录引用，再删除来源快照和其中的大字段。
+   */
+  private void pruneSuccessfulImportHistory(String userId) {
+    List<Map<String, Object>> completed = jdbc.queryForList("""
+        select id, source_task_id
+          from import_task
+         where user_id = ?
+           and source_task_id is not null
+           and phase = 'DONE'
+           and status = 'COMPLETED'
+         order by updated_at desc, created_at desc, id desc
+        """, userId);
+    if (completed.size() <= SUCCESSFUL_IMPORT_HISTORY_LIMIT) {
+      return;
+    }
+
+    Set<String> affectedSources = new HashSet<>();
+    for (Map<String, Object> job : completed.subList(SUCCESSFUL_IMPORT_HISTORY_LIMIT,
+        completed.size())) {
+      String jobId = String.valueOf(job.get("id"));
+      Object sourceId = job.get("source_task_id");
+      jdbc.update("delete from import_task where id = ? and user_id = ?", jobId, userId);
+      if (sourceId != null) {
+        affectedSources.add(String.valueOf(sourceId));
+      }
+    }
+    for (String sourceId : affectedSources) {
+      jdbc.update("""
+          delete s
+            from import_task s
+            left join import_task child on child.source_task_id = s.id
+           where s.id = ? and s.user_id = ? and s.source_task_id is null
+             and child.id is null
+          """, sourceId, userId);
+    }
   }
 
   private List<Map<String, Object>> extractChunk(String chunk, String userId) throws Exception {

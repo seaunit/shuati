@@ -10,10 +10,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 复现线上「截图导入一提交就 500」：createTask 是同步执行的，异常会直接冒出来 */
 @ActiveProfiles("test")
 @SpringBootTest
+@Transactional
 class ImportScreenshotCreateTest {
 
   // 1x1 透明 PNG

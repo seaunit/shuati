@@ -1529,6 +1529,137 @@ test("admin can also import into a public bank", async ({ page }) => {
   expect(payload).toMatchObject({ targetBankId: 12 });
 });
 
+test("completed import can be reused and shows dedup result", async ({ page }) => {
+  let payload: Record<string, unknown> | null = null;
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", is_public: false, owner_id: "u" }],
+      },
+    }),
+  );
+  const source = {
+    id: "source-1",
+    kind: "doc",
+    phase: "READY",
+    status: "COMPLETED",
+    progress: 100,
+    total_chunks: 3,
+    done_chunks: 3,
+    bank_name: "JAVA八股",
+    error: null,
+    latest_import_id: "job-1",
+    latest_import_status: "COMPLETED",
+    latest_import_progress: 100,
+    latest_created_count: 98,
+    latest_skipped_count: 2,
+    latest_target_bank_id: 11,
+  };
+  await page.route("**/api/import/list", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [source] } }),
+  );
+  await page.route("**/api/import/task/source-1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          ...source,
+          items: [
+            { unit: "Java 基础", type: "SINGLE", content: "第一题", answer: "A" },
+            { unit: "Java 基础", type: "SINGLE", content: "第二题", answer: "B" },
+          ],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/import/task/source-1/import", async (route) => {
+    payload = route.request().postDataJSON();
+    await route.fulfill({
+      json: { code: 200, message: "ok", data: { jobId: "job-2" } },
+    });
+  });
+
+  await page.goto("/app/import");
+  await page.getByRole("button", { name: /JAVA八股/ }).click();
+
+  await expect(page.getByText("最近一次导入：新增 98 道，跳过 2 道重复题")).toBeVisible();
+  const reimport = page.getByRole("button", { name: /再次导入选中的 2 道题/ });
+  await expect(reimport).toBeEnabled();
+  await reimport.click();
+
+  expect(payload).toMatchObject({ targetBankId: 11, selectedIndexes: [0, 1] });
+  await expect(page.getByText("已提交再次导入，正在写入题库…")).toBeVisible();
+});
+
+test("reimport button is disabled while an import is running", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "u", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/banks", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  const running = {
+    id: "source-running",
+    kind: "doc",
+    phase: "READY",
+    status: "COMPLETED",
+    progress: 100,
+    total_chunks: 1,
+    done_chunks: 1,
+    bank_name: "运行中来源",
+    error: null,
+    latest_import_id: "job-running",
+    latest_import_status: "RUNNING",
+    latest_import_progress: 30,
+    latest_created_count: 0,
+    latest_skipped_count: 0,
+  };
+  await page.route("**/api/import/list", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [running] } }),
+  );
+  await page.route("**/api/import/task/source-running", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          ...running,
+          items: [{ unit: "Java", type: "SINGLE", content: "运行中的题", answer: "A" }],
+        },
+      },
+    }),
+  );
+
+  await page.goto("/app/import");
+  await page.getByRole("button", { name: /运行中来源/ }).click();
+
+  await expect(page.getByRole("button", { name: /正在再次导入/ })).toBeDisabled();
+});
+
 async function mockBankList(page: import("@playwright/test").Page, role: "USER" | "ADMIN") {
   await page.route("**/api/me", (route) =>
     route.fulfill({

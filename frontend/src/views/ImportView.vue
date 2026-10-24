@@ -24,6 +24,14 @@ interface ImportTask {
   bank_name: string;
   error: string | null;
   items?: ImportItem[] | null;
+  latest_import_id?: string | null;
+  latest_import_status?: string | null;
+  latest_import_progress?: number | null;
+  latest_created_count?: number | null;
+  latest_skipped_count?: number | null;
+  latest_target_bank_id?: number | null;
+  latest_bank_id?: number | null;
+  latest_import_error?: string | null;
 }
 
 interface Bank {
@@ -98,8 +106,28 @@ function applyLockedBank() {
 
 // 解析任务全局串行：自己已有任务在跑时就先别让我提交
 const hasRunningTask = computed(() =>
-  tasks.value.some((task) => task.status === "PENDING" || task.status === "RUNNING"),
+  tasks.value.some(
+    (task) =>
+      task.status === "PENDING" ||
+      task.status === "RUNNING" ||
+      task.latest_import_status === "PENDING" ||
+      task.latest_import_status === "RUNNING",
+  ),
 );
+const latestImportRunning = computed(
+  () =>
+    currentTask.value?.latest_import_status === "PENDING" ||
+    currentTask.value?.latest_import_status === "RUNNING",
+);
+const hasCompletedImport = computed(
+  () => currentTask.value?.latest_import_status === "COMPLETED",
+);
+const latestImportSummary = computed(() => {
+  if (!hasCompletedImport.value) return "";
+  return `最近一次导入：新增 ${currentTask.value?.latest_created_count ?? 0} 道，跳过 ${
+    currentTask.value?.latest_skipped_count ?? 0
+  } 道重复题`;
+});
 
 const allIndexes = computed(() => (currentTask.value?.items ?? []).map((_, index) => index));
 
@@ -227,6 +255,14 @@ async function openTask(taskId: string) {
   selected.value = (currentTask.value.items ?? []).map((_, index) => index);
   if (lockedBank.value) {
     applyLockedBank();
+  } else if (
+    currentTask.value.latest_target_bank_id &&
+    importableBanks.value.some(
+      (bank) => bank.id === currentTask.value?.latest_target_bank_id,
+    )
+  ) {
+    importMode.value = "existing";
+    targetBankId.value = currentTask.value.latest_target_bank_id;
   } else {
     // 任务没写题库名、又确实有可导入的题库时，默认按「导入到已有题库」预选，省一次点击
     importMode.value =
@@ -242,7 +278,10 @@ function startPolling(taskId: string) {
     try {
       const task = await api<ImportTask>(`/api/import/task/${taskId}`);
       currentTask.value = task;
-      if (task.phase === "READY" || task.phase === "DONE" || task.status === "FAILED") {
+      const parsing = task.status === "PENDING" || task.status === "RUNNING";
+      const importing =
+        task.latest_import_status === "PENDING" || task.latest_import_status === "RUNNING";
+      if (!parsing && !importing) {
         stopPolling();
         await loadTasks();
       }
@@ -275,15 +314,21 @@ async function confirmImport() {
   }
   busy.value = true;
   noticeError.value = "";
+  const reimport = hasCompletedImport.value;
   try {
-    await api(`/api/import/task/${currentTask.value.id}/import`, {
+    const response = await api<{ jobId: string }>(`/api/import/task/${currentTask.value.id}/import`, {
       method: "POST",
       body: JSON.stringify({
         selectedIndexes: selected.value,
         targetBankId: importMode.value === "existing" ? targetBankId.value : null,
       }),
     });
-    notice.value = "已提交导入，正在写入题库…";
+    currentTask.value.latest_import_id = response?.jobId ?? currentTask.value.latest_import_id;
+    currentTask.value.latest_import_status = "PENDING";
+    currentTask.value.latest_import_progress = 0;
+    currentTask.value.latest_created_count = 0;
+    currentTask.value.latest_skipped_count = 0;
+    notice.value = reimport ? "已提交再次导入，正在写入题库…" : "已提交导入，正在写入题库…";
     startPolling(currentTask.value.id);
   } catch (e) {
     noticeError.value = e instanceof Error ? e.message : "导入失败";
@@ -449,6 +494,24 @@ onUnmounted(() => {
             </span>
           </p>
           <p v-if="currentTask.error" class="mt-2 whitespace-pre-wrap text-xs text-rose">{{ currentTask.error }}</p>
+          <p
+            v-if="latestImportSummary"
+            class="mt-3 rounded-xl bg-moss/10 px-4 py-2.5 text-sm text-ink"
+          >
+            {{ latestImportSummary }}
+          </p>
+          <p
+            v-else-if="latestImportRunning"
+            class="mt-3 rounded-xl bg-mist px-4 py-2.5 text-sm text-oat"
+          >
+            最近一次导入进行中，{{ currentTask.latest_import_progress ?? 0 }}%
+          </p>
+          <p
+            v-else-if="currentTask.latest_import_status === 'FAILED' && currentTask.latest_import_error"
+            class="mt-2 whitespace-pre-wrap text-xs text-rose"
+          >
+            {{ currentTask.latest_import_error }}
+          </p>
           <div v-if="currentTask.items?.length" class="mt-4">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <p class="text-xs text-oat">
@@ -494,7 +557,7 @@ onUnmounted(() => {
             </div>
           </div>
           <div
-            v-if="currentTask.phase === 'READY'"
+            v-if="currentTask.items?.length"
             class="mt-4 rounded-xl border border-mist bg-paper p-3"
           >
             <p class="text-xs text-oat">导入到</p>
@@ -551,12 +614,18 @@ onUnmounted(() => {
           </div>
 
           <button
-            v-if="currentTask.phase === 'READY'"
+            v-if="currentTask.items?.length"
             class="mt-4 w-full rounded-xl bg-moss py-2.5 text-sm text-white transition hover:bg-moss/90 disabled:opacity-60"
-            :disabled="busy || selected.length === 0"
+            :disabled="busy || selected.length === 0 || latestImportRunning"
             @click="confirmImport"
           >
-            导入选中的 {{ selected.length }} 道题
+            {{
+              latestImportRunning
+                ? "正在再次导入…"
+                : hasCompletedImport
+                  ? `再次导入选中的 ${selected.length} 道题`
+                  : `导入选中的 ${selected.length} 道题`
+            }}
           </button>
         </template>
 
@@ -571,7 +640,10 @@ onUnmounted(() => {
             <span class="min-w-0 truncate text-ink">
               {{ task.bank_name?.trim() || "未命名任务" }}
             </span>
-            <span class="shrink-0 text-xs text-oat">{{ task.status }} · {{ task.progress }}%</span>
+            <span class="shrink-0 text-xs text-oat">
+              {{ task.latest_import_status || task.status }} ·
+              {{ task.latest_import_progress ?? task.progress }}%
+            </span>
           </button>
         </div>
       </section>

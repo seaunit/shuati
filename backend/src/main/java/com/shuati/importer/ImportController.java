@@ -40,15 +40,16 @@ public class ImportController {
   }
 
   @PostMapping("/api/import/task/{id}/import")
-  public ApiResponse<Void> requestImport(
+  public ApiResponse<Map<String, Object>> requestImport(
       @PathVariable String id, @RequestBody Map<String, Object> body) {
     @SuppressWarnings("unchecked")
     List<Integer> selected = body.get("selectedIndexes") instanceof List<?> list
         ? list.stream().map(v -> ((Number) v).intValue()).toList()
         : List.of();
-    importService.requestImport(CurrentUser.id(), id, selected, targetBankId(body));
-    importWorker.run(id);
-    return ApiResponse.ok(null);
+    Map<String, Object> result =
+        importService.requestImport(CurrentUser.id(), id, selected, targetBankId(body));
+    importWorker.run(String.valueOf(result.get("jobId")));
+    return ApiResponse.ok(result);
   }
 
   /** targetBankId 为空表示新建题库；有值表示导入到那个已有题库。 */

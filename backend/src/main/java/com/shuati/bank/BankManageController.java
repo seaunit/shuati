@@ -6,6 +6,7 @@ import com.shuati.common.ApiResponse;
 import com.shuati.common.ClientInfo;
 import com.shuati.common.CurrentUser;
 import com.shuati.common.Json;
+import com.shuati.common.QuestionContent;
 import com.shuati.email.EmailDispatchService;
 import com.shuati.email.EmailPurpose;
 import com.shuati.email.EmailVerificationService;
@@ -322,18 +323,21 @@ public class BankManageController {
     jdbc.update(connection -> {
       var ps = connection.prepareStatement("""
           insert into question
-            (unit_id, type, content, options, answer, key_points, difficulty, explanation, tags, status)
-          values (?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, cast(? as json), 'ON')
+            (unit_id, type, content, content_hash, options, answer, key_points,
+             difficulty, explanation, tags, status)
+          values (?, ?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?,
+                  cast(? as json), 'ON')
           """, new String[]{"id"});
       ps.setLong(1, targetUnitId);
       ps.setString(2, type);
       ps.setString(3, content);
-      ps.setString(4, writeJson(body.get("options")));
-      ps.setString(5, answer);
-      ps.setString(6, writeJson(body.get("keyPoints")));
-      ps.setString(7, normalizeDifficulty(body.get("difficulty")));
-      ps.setString(8, body.get("explanation") == null ? null : string(body.get("explanation")));
-      ps.setString(9, writeJson(body.get("tags") == null ? List.of() : body.get("tags")));
+      ps.setString(4, QuestionContent.hash(content));
+      ps.setString(5, writeJson(body.get("options")));
+      ps.setString(6, answer);
+      ps.setString(7, writeJson(body.get("keyPoints")));
+      ps.setString(8, normalizeDifficulty(body.get("difficulty")));
+      ps.setString(9, body.get("explanation") == null ? null : string(body.get("explanation")));
+      ps.setString(10, writeJson(body.get("tags") == null ? List.of() : body.get("tags")));
       return ps;
     }, keyHolder);
     long id = keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
@@ -355,11 +359,12 @@ public class BankManageController {
     long unitId = resolveUnitId(body, scope);
     jdbc.update("""
         update question
-           set unit_id = ?, type = ?, content = ?, options = cast(? as json), answer = ?,
-               key_points = cast(? as json), difficulty = ?, explanation = ?,
-               tags = cast(? as json)
+           set unit_id = ?, type = ?, content = ?, content_hash = ?,
+               options = cast(? as json), answer = ?, key_points = cast(? as json),
+               difficulty = ?, explanation = ?, tags = cast(? as json)
          where id = ?
-        """, unitId, type, content, writeJson(body.get("options")), answer,
+        """, unitId, type, content, QuestionContent.hash(content),
+        writeJson(body.get("options")), answer,
         writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")), id);
