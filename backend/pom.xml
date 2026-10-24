@@ -33,6 +33,14 @@
       <artifactId>crawler-commons</artifactId>
       <version>1.4</version>
     </dependency>
+    <!-- POI 5.3 调用了 BoundedInputStream.builder()（commons-io 2.16+ 才有）。
+         传递依赖把 commons-io 固定在 2.13，解析 docx 时会 NoSuchMethodError，
+         这里显式抬到新版（就近原则覆盖）。 -->
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.18.0</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>

@@ -221,9 +221,16 @@ public class ImportService {
       } else if ("IMPORT".equals(task.get("phase"))) {
         runImport(task);
       }
-    } catch (Exception e) {
-      jdbc.update("update import_task set status = 'FAILED', error = ? where id = ?",
-          e.getMessage(), taskId);
+    } catch (Throwable e) {
+      // NoSuchMethodError / OOM 这类 Error 也要落库：只 catch Exception 会让任务永远停在 RUNNING
+      String message = e.getMessage() == null ? e.toString() : e.getMessage();
+      log.error("导入任务执行失败：taskId={}", taskId, e);
+      try {
+        jdbc.update("update import_task set status = 'FAILED', error = ? where id = ?",
+            message, taskId);
+      } catch (Exception updateError) {
+        log.error("标记导入任务失败时出错：taskId={}", taskId, updateError);
+      }
     }
   }
 
