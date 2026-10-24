@@ -1660,6 +1660,104 @@ test("reimport button is disabled while an import is running", async ({ page }) 
   await expect(page.getByRole("button", { name: /正在再次导入/ })).toBeDisabled();
 });
 
+test("admin point grant looks up account and shows updated balance", async ({ page }) => {
+  let grantPayload: Record<string, unknown> | null = null;
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          id: "admin-1",
+          email: "admin@example.com",
+          nickname: "admin",
+          role: "ADMIN",
+          status: "ENABLED",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/admin/stats/overview", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { verdicts: {} } } }),
+  );
+  await page.route("**/api/admin/stats/by-unit", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  await page.route("**/api/admin/stats/ai-usage", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { summary: {} } } }),
+  );
+  await page.route("**/api/admin/users/by-email?*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          userId: "user-1",
+          emailMasked: "us***@example.com",
+          nickname: "测试用户",
+          status: "ENABLED",
+          entitlements: {
+            planName: "轻量加量包",
+            bonusBalance: 120,
+            available: 120,
+          },
+          recentLedger: [],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/admin/users/user-1/point-grants", async (route) => {
+    grantPayload = route.request().postDataJSON();
+    await route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          grantId: "grant-1",
+          targetUserId: "user-1",
+          points: 30,
+          balanceAfter: 150,
+          reused: false,
+        },
+      },
+    });
+  });
+  await page.route("**/api/admin/users/user-1/points", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { bonusBalance: 150, available: 150 },
+      },
+    }),
+  );
+
+  await page.goto("/app/admin");
+  await page.getByRole("button", { name: "赠送点数" }).click();
+  await page.getByLabel("目标账号邮箱").fill("user@example.com");
+  await page.getByRole("button", { name: "查询账号" }).click();
+
+  await expect(page.getByText("us***@example.com")).toBeVisible();
+  await expect(page.getByText("当前可用 120 点")).toBeVisible();
+
+  await page.getByLabel("赠送点数").fill("30");
+  await page.getByLabel("赠送原因").fill("活动奖励");
+  await expect(page.getByText("赠送后预计 150 点")).toBeVisible();
+  await page.getByRole("button", { name: "确认赠送" }).click();
+
+  expect(grantPayload).toMatchObject({
+    points: 30,
+    reason: "活动奖励",
+  });
+  expect(String(grantPayload?.idempotencyKey)).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+  await expect(page.getByText("赠送成功，当前可用 150 点")).toBeVisible();
+
+  await page.getByLabel("目标账号邮箱").fill("another@example.com");
+  await expect(page.getByText("us***@example.com")).toHaveCount(0);
+});
+
 async function mockBankList(page: import("@playwright/test").Page, role: "USER" | "ADMIN") {
   await page.route("**/api/me", (route) =>
     route.fulfill({

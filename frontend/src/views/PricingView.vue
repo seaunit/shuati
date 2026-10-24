@@ -81,6 +81,7 @@ const REASON_LABEL: Record<string, string> = {
   PLAN_CHANGE: "套餐变更",
   PACK_PURCHASE: "加量包到账",
   ADMIN_ADJUST: "管理员调整",
+  ADMIN_GRANT: "管理员赠送",
   AI_JUDGE: "AI 判分",
   AI_EXPLAIN: "AI 解析",
   AI_EXTRACT: "AI 生成题库",

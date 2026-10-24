@@ -3,7 +3,9 @@ package com.shuati.admin;
 import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
+import com.shuati.common.CurrentUser;
 import com.shuati.common.Json;
+import com.shuati.rate.RateLimit;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -30,6 +32,7 @@ public class AdminUserController {
   private final Json json;
   private final PasswordEncoder passwordEncoder;
   private final PointAccountService points;
+  private final AdminPointGrantService pointGrants;
 
   @GetMapping("/api/admin/users")
   public ApiResponse<List<Map<String, Object>>> users() {
@@ -37,6 +40,27 @@ public class AdminUserController {
         select id, email, nickname, role, status, created_at, last_login_at
           from profiles order by created_at asc
         """), Set.of()));
+  }
+
+  @GetMapping("/api/admin/users/by-email")
+  @RateLimit(name = "admin:points:lookup", limit = 30, windowSeconds = 60,
+      scope = RateLimit.Scope.USER)
+  public ApiResponse<Map<String, Object>> userByEmail(
+      @RequestParam(required = false) String email) {
+    return ApiResponse.ok(pointGrants.lookupByEmail(CurrentUser.id(), email));
+  }
+
+  @PostMapping("/api/admin/users/{id}/point-grants")
+  @RateLimit(name = "admin:points:grant", limit = 30, windowSeconds = 60,
+      scope = RateLimit.Scope.USER)
+  public ApiResponse<Map<String, Object>> grantPoints(
+      @PathVariable String id, @RequestBody Map<String, Object> body) {
+    return ApiResponse.ok(pointGrants.grant(
+        CurrentUser.id(),
+        id,
+        body.get("points"),
+        body.get("reason") == null ? null : String.valueOf(body.get("reason")),
+        body.get("idempotencyKey") == null ? null : String.valueOf(body.get("idempotencyKey"))));
   }
 
   @PatchMapping("/api/admin/users/{id}")
@@ -83,21 +107,7 @@ public class AdminUserController {
   public ApiResponse<Void> adjustPoints(@PathVariable String id, @RequestBody Map<String, Object> body) {
     String action = String.valueOf(body.getOrDefault("action", "")).toUpperCase();
     if ("GRANT".equals(action)) {
-      int delta = (int) Math.round(Double.parseDouble(String.valueOf(body.getOrDefault("points", 0))));
-      if (delta == 0) {
-        throw new ApiException(400, "请输入非零点数");
-      }
-      if (delta > 0) {
-        points.addBonusPoints(id, delta, "ADMIN_ADJUST", "admin", null);
-      } else {
-        points.consumePoints(id, "TEST", null, "admin", null);
-        jdbc.update("""
-            update point_account
-               set bonus_balance = greatest(bonus_balance - ?, 0)
-             where user_id = ?
-            """, Math.abs(delta), id);
-      }
-      return ApiResponse.ok(null);
+      throw new ApiException(400, "请使用管理员赠点页面及安全赠点接口");
     }
     if ("SET_PLAN".equals(action)) {
       String planCode = String.valueOf(body.getOrDefault("planCode", "")).trim();

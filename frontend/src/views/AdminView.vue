@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { api } from "@/api/client";
 
 interface Bank {
@@ -61,12 +61,36 @@ interface AiConfig {
   api_key_masked: string;
 }
 
+interface PointLedgerItem {
+  id: number;
+  delta: number;
+  bucket: string;
+  balance_after: number;
+  reason: string;
+  note: string | null;
+  created_at: string;
+}
+
+interface GrantTarget {
+  userId: string;
+  emailMasked: string;
+  nickname: string | null;
+  status: string;
+  entitlements: {
+    planName: string;
+    bonusBalance: number;
+    available: number;
+  };
+  recentLedger: PointLedgerItem[];
+}
+
 const TABS = [
   { id: "dashboard", label: "数据统计" },
   { id: "banks", label: "题库" },
   { id: "units", label: "单元" },
   { id: "questions", label: "题目" },
   { id: "users", label: "用户" },
+  { id: "grants", label: "赠送点数" },
   { id: "appeals", label: "申诉" },
   { id: "ai", label: "AI 配置" },
   { id: "billing", label: "计费" },
@@ -91,6 +115,14 @@ const users = ref<User[]>([]);
 const appeals = ref<Appeal[]>([]);
 const aiConfig = ref<AiConfig | null>(null);
 const billing = ref<Record<string, any> | null>(null);
+const grantEmail = ref("");
+const grantTarget = ref<GrantTarget | null>(null);
+const grantLookupBusy = ref(false);
+const granting = ref(false);
+const grantError = ref("");
+const grantSuccess = ref("");
+const grantForm = ref({ points: 100, reason: "" });
+const grantIdempotencyKey = ref(newIdempotencyKey());
 
 const selectedBank = ref<number | null>(null);
 const selectedUnit = ref<number | null>(null);
@@ -114,6 +146,13 @@ const aiForm = ref({
   apiKey: "",
   model: "deepseek-flash",
   remark: "",
+});
+
+const grantExpectedBalance = computed(() => {
+  if (!grantTarget.value) return null;
+  const points = Number(grantForm.value.points);
+  if (!Number.isSafeInteger(points) || points < 1) return null;
+  return grantTarget.value.entitlements.available + points;
 });
 
 async function loadDashboard() {
@@ -146,6 +185,94 @@ async function loadQuestions() {
 
 async function loadUsers() {
   users.value = await api<User[]>("/api/admin/users");
+}
+
+function newIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex
+    .slice(6, 8)
+    .join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+}
+
+function resetGrantTarget() {
+  grantTarget.value = null;
+  grantError.value = "";
+  grantSuccess.value = "";
+  grantIdempotencyKey.value = newIdempotencyKey();
+}
+
+async function lookupGrantTarget() {
+  grantError.value = "";
+  grantSuccess.value = "";
+  grantTarget.value = null;
+  const email = grantEmail.value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    grantError.value = "请输入正确的账号邮箱";
+    return;
+  }
+  grantLookupBusy.value = true;
+  try {
+    grantTarget.value = await api<GrantTarget>(
+      `/api/admin/users/by-email?email=${encodeURIComponent(email)}`,
+    );
+    grantIdempotencyKey.value = newIdempotencyKey();
+  } catch (e) {
+    grantError.value = e instanceof Error ? e.message : "账号查询失败";
+  } finally {
+    grantLookupBusy.value = false;
+  }
+}
+
+async function grantPoints() {
+  if (!grantTarget.value || granting.value) return;
+  grantError.value = "";
+  grantSuccess.value = "";
+  const points = Number(grantForm.value.points);
+  if (!Number.isInteger(points) || points < 1 || points > 1_000_000) {
+    grantError.value = "赠送点数必须是 1 至 1000000 的整数";
+    return;
+  }
+  const reason = grantForm.value.reason.trim();
+  const reasonLength = Array.from(reason).length;
+  if (reasonLength < 2 || reasonLength > 100) {
+    grantError.value = "赠送原因需要 2 至 100 个字符";
+    return;
+  }
+
+  granting.value = true;
+  try {
+    const result = await api<{ balanceAfter: number }>(
+      `/api/admin/users/${grantTarget.value.userId}/point-grants`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          points,
+          reason,
+          idempotencyKey: grantIdempotencyKey.value,
+        }),
+      },
+    );
+    grantTarget.value.entitlements.bonusBalance += points;
+    grantTarget.value.entitlements.available = result.balanceAfter;
+    grantSuccess.value = `赠送成功，当前可用 ${result.balanceAfter} 点`;
+    grantForm.value.reason = "";
+    grantIdempotencyKey.value = newIdempotencyKey();
+    if (grantEmail.value.trim()) {
+      const refreshed = await api<GrantTarget>(
+        `/api/admin/users/by-email?email=${encodeURIComponent(grantEmail.value.trim())}`,
+      );
+      grantTarget.value = refreshed;
+      grantSuccess.value = `赠送成功，当前可用 ${result.balanceAfter} 点`;
+    }
+  } catch (e) {
+    grantError.value = e instanceof Error ? e.message : "赠送失败";
+  } finally {
+    granting.value = false;
+  }
 }
 
 async function loadAppeals() {
@@ -279,16 +406,6 @@ async function toggleRole(user: User) {
   await loadUsers();
 }
 
-async function grant(user: User) {
-  const value = prompt("发放点数（负数表示扣减）", "100");
-  if (!value) return;
-  await api(`/api/admin/users/${user.id}/points`, {
-    method: "POST",
-    body: JSON.stringify({ action: "GRANT", points: Number(value) }),
-  });
-  notice.value = "点数已调整";
-}
-
 async function resolveAppeal(appeal: Appeal, status: "RESOLVED" | "REJECTED") {
   await api(`/api/admin/appeals/${appeal.id}/resolve`, {
     method: "POST",
@@ -359,6 +476,10 @@ watch(selectedBank, async () => {
 
 watch(selectedUnit, async () => {
   if (tab.value === "questions") await loadQuestions();
+});
+
+watch(grantEmail, () => {
+  if (grantTarget.value) resetGrantTarget();
 });
 
 onMounted(refresh);
@@ -562,11 +683,130 @@ watch(tab, refresh);
             <td class="px-5 py-2.5 text-right">
               <button class="mr-2 text-xs text-moss" @click="toggleRole(user)">切换角色</button>
               <button class="mr-2 text-xs text-moss" @click="toggleUser(user)">启停</button>
-              <button class="text-xs text-moss" @click="grant(user)">点数</button>
             </td>
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <section v-else-if="tab === 'grants'" class="space-y-4">
+      <div class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
+        <h2 class="font-medium text-ink">查找目标账号</h2>
+        <p class="mt-1 text-sm text-oat">按完整邮箱查询，结果只显示脱敏邮箱。</p>
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <label class="min-w-0 flex-1 text-sm text-ink">
+            <span class="mb-1.5 block">目标账号邮箱</span>
+            <input
+              v-model="grantEmail"
+              type="email"
+              autocomplete="off"
+              class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+              placeholder="user@example.com"
+              @keyup.enter="lookupGrantTarget"
+            />
+          </label>
+          <button
+            type="button"
+            class="self-end rounded-xl bg-ink px-4 py-2 text-sm text-white disabled:opacity-60"
+            :disabled="grantLookupBusy"
+            @click="lookupGrantTarget"
+          >
+            {{ grantLookupBusy ? "查询中…" : "查询账号" }}
+          </button>
+        </div>
+        <p v-if="grantError" class="mt-3 rounded-xl bg-rose/10 px-4 py-2.5 text-sm text-rose">
+          {{ grantError }}
+        </p>
+        <p v-if="grantSuccess" class="mt-3 rounded-xl bg-moss/10 px-4 py-2.5 text-sm text-ink">
+          {{ grantSuccess }}
+        </p>
+      </div>
+
+      <div v-if="grantTarget" class="grid gap-4 lg:grid-cols-2">
+        <div class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
+          <p class="text-xs text-oat">账号确认</p>
+          <p class="mt-2 text-lg font-semibold text-ink">{{ grantTarget.nickname || "未设置昵称" }}</p>
+          <p class="mt-1 text-sm text-ink/75">{{ grantTarget.emailMasked }}</p>
+          <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div class="rounded-xl bg-paper px-3 py-2.5">
+              <p class="text-xs text-oat">账号状态</p>
+              <p class="mt-1 font-medium text-ink">{{ grantTarget.status }}</p>
+            </div>
+            <div class="rounded-xl bg-paper px-3 py-2.5">
+              <p class="text-xs text-oat">当前套餐</p>
+              <p class="mt-1 font-medium text-ink">{{ grantTarget.entitlements.planName }}</p>
+            </div>
+          </div>
+          <p class="mt-4 font-medium text-ink">
+            当前可用 {{ grantTarget.entitlements.available }} 点
+          </p>
+        </div>
+
+        <div class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
+          <h2 class="font-medium text-ink">赠送点数</h2>
+          <div class="mt-4 space-y-3">
+            <label class="block text-sm text-ink">
+              <span class="mb-1.5 block">赠送点数</span>
+              <input
+                v-model.number="grantForm.points"
+                type="number"
+                min="1"
+                max="1000000"
+                step="1"
+                class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+              />
+            </label>
+            <label class="block text-sm text-ink">
+              <span class="mb-1.5 block">赠送原因</span>
+              <textarea
+                v-model="grantForm.reason"
+                rows="3"
+                maxlength="100"
+                class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm outline-none focus:border-moss"
+                placeholder="例如：客服补偿、活动奖励"
+              />
+            </label>
+          </div>
+          <p v-if="grantExpectedBalance !== null" class="mt-3 text-sm text-oat">
+            赠送后预计 {{ grantExpectedBalance }} 点
+          </p>
+          <button
+            type="button"
+            class="mt-4 w-full rounded-xl bg-moss py-2.5 text-sm text-white disabled:opacity-60"
+            :disabled="granting || grantExpectedBalance === null || grantForm.reason.trim().length < 2"
+            @click="grantPoints"
+          >
+            {{ granting ? "赠送中…" : "确认赠送" }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="grantTarget" class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-5">
+        <h2 class="font-medium text-ink">最近点数流水</h2>
+        <p v-if="grantTarget.recentLedger.length === 0" class="mt-3 text-sm text-oat">
+          暂无点数流水
+        </p>
+        <div v-else class="mt-3 divide-y divide-mist">
+          <div
+            v-for="item in grantTarget.recentLedger"
+            :key="item.id"
+            class="flex items-start justify-between gap-4 py-2.5 text-sm"
+          >
+            <div class="min-w-0">
+              <p class="text-ink">
+                {{ item.reason === "ADMIN_GRANT" ? "管理员赠送" : item.reason }}
+              </p>
+              <p v-if="item.note" class="mt-0.5 break-words text-xs text-oat">{{ item.note }}</p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p :class="item.delta > 0 ? 'text-moss' : 'text-rose'">
+                {{ item.delta > 0 ? "+" : "" }}{{ item.delta }} 点
+              </p>
+              <p class="mt-0.5 text-xs text-oat">余额 {{ item.balance_after }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section v-else-if="tab === 'appeals'" class="space-y-4">
