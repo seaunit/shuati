@@ -47,6 +47,7 @@ public class ImportService {
 
   private static final int CHUNK_SIZE = 5000;
   private static final int MAX_TEXT_LENGTH = 100_000;
+  private static final int SOURCE_HISTORY_LIMIT = 10;
   private static final int SUCCESSFUL_IMPORT_HISTORY_LIMIT = 10;
 
   private final JdbcTemplate jdbc;
@@ -74,6 +75,7 @@ public class ImportService {
     if (affected > 0) {
       log.warn("启动清理：{} 个解析任务因服务重启被标记为失败", affected);
     }
+    pruneAllSourceHistoriesSafely();
   }
 
   /** 全局同时只允许一个解析任务在跑，省服务器资源 */
@@ -127,6 +129,7 @@ public class ImportService {
             (id, user_id, kind, phase, status, bank_name, bank_description, source_text, source_name)
           values (?, ?, ?, 'PARSE', 'PENDING', ?, ?, ?, ?)
           """, taskId, userId, kind, bankName, description, sourceText, sourceName);
+      pruneSourceHistorySafely(userId);
     }
 
     return Map.of("taskId", taskId);
@@ -155,8 +158,8 @@ public class ImportService {
           )
          where s.user_id = ? and s.source_task_id is null
          order by s.created_at desc
-         limit 50
-        """, userId), java.util.Set.of());
+         limit ?
+        """, userId, SOURCE_HISTORY_LIMIT), java.util.Set.of());
   }
 
   public Map<String, Object> getTask(String userId, String taskId) {
@@ -572,6 +575,58 @@ public class ImportService {
            where s.id = ? and s.user_id = ? and s.source_task_id is null
              and child.id is null
           """, sourceId, userId);
+    }
+  }
+
+  private void pruneAllSourceHistoriesSafely() {
+    try {
+      int deleted = jdbc.update("""
+          delete from import_task
+           where source_task_id is null
+             and id in (
+               select id from (
+                 select id,
+                        row_number() over (
+                          partition by user_id
+                          order by created_at desc, id desc
+                        ) as history_rank
+                   from import_task
+                  where source_task_id is null and user_id is not null
+               ) ranked
+               where history_rank > ?
+             )
+          """, SOURCE_HISTORY_LIMIT);
+      if (deleted > 0) {
+        log.info("导入历史启动清理：删除 {} 条超限来源", deleted);
+      }
+    } catch (Exception e) {
+      log.error("导入历史启动清理失败", e);
+    }
+  }
+
+  private void pruneSourceHistorySafely(String userId) {
+    try {
+      int deleted = jdbc.update("""
+          delete from import_task
+           where user_id = ?
+             and source_task_id is null
+             and id in (
+               select id from (
+                 select id,
+                        row_number() over (
+                          order by created_at desc, id desc
+                        ) as history_rank
+                   from import_task
+                  where user_id = ? and source_task_id is null
+               ) ranked
+               where history_rank > ?
+             )
+          """, userId, userId, SOURCE_HISTORY_LIMIT);
+      if (deleted > 0) {
+        log.info("导入历史清理：userId={} 删除 {} 条超限来源", userId, deleted);
+      }
+    } catch (Exception e) {
+      log.error("导入历史清理失败：userId={}", userId, e);
     }
   }
 

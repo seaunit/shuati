@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.shuati.common.ApiException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -134,6 +135,110 @@ class ImportReuseRetentionTest {
         .isZero();
   }
 
+  @Test
+  void creatingNewSourceKeepsLatestTenHistoriesForEachUser() {
+    String userId = createUser("USER");
+    String otherUserId = createUser("USER");
+    List<String> sourceIds = new ArrayList<>();
+    for (int i = 1; i <= 11; i++) {
+      sourceIds.add(createHistoricalSource(
+          userId,
+          "历史来源 " + i,
+          i % 3 == 0 ? "FAILED" : "COMPLETED",
+          "2026-10-01 00:00:" + String.format("%02d", i)));
+    }
+    for (int i = 1; i <= 6; i++) {
+      createHistoricalSource(
+          otherUserId,
+          "他人来源 " + i,
+          "COMPLETED",
+          "2026-10-01 00:00:" + String.format("%02d", i));
+    }
+
+    importService.createTask(userId, Map.of(
+        "kind", "text",
+        "bankName", "新来源",
+        "text", "新的待解析内容"));
+
+    assertThat(jdbc.queryForObject("""
+        select count(*) from import_task
+         where user_id = ? and source_task_id is null
+        """, Integer.class, userId)).isEqualTo(10);
+    assertThat(jdbc.queryForObject("""
+        select count(*) from import_task
+         where user_id = ? and source_task_id is null
+        """, Integer.class, otherUserId)).isEqualTo(6);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from import_task where id = ?", Integer.class, sourceIds.get(0))).isZero();
+    assertThat(jdbc.queryForObject(
+        "select count(*) from import_task where id = ?", Integer.class, sourceIds.get(1))).isZero();
+    for (String keptId : sourceIds.subList(2, sourceIds.size())) {
+      assertThat(jdbc.queryForObject(
+          "select count(*) from import_task where id = ?", Integer.class, keptId)).isEqualTo(1);
+    }
+    assertThat(importService.listTasks(userId)).hasSize(10);
+  }
+
+  @Test
+  void pruningOldSourceCascadesExecutionButKeepsImportedQuestions() {
+    String userId = createUser("USER");
+    long bankId = createBank(userId);
+    String oldestSource = createHistoricalSource(
+        userId, "最旧来源", "COMPLETED", "2026-10-01 00:00:01");
+    seedCompletedJob(userId, oldestSource, bankId, "2026-10-01 00:00:02");
+    for (int i = 2; i <= 11; i++) {
+      createHistoricalSource(
+          userId,
+          "后续来源 " + i,
+          "FAILED",
+          "2026-10-01 00:00:" + String.format("%02d", i));
+    }
+    jdbc.update("insert into unit (bank_id, name, sort) values (?, '已导入单元', 0)", bankId);
+    long unitId = jdbc.queryForObject(
+        "select id from unit where bank_id = ? and name = '已导入单元'", Long.class, bankId);
+    jdbc.update("""
+        insert into question (unit_id, type, content, options, answer)
+        values (?, 'SINGLE', '必须保留的题目', cast('[{"key":"A","text":"正确"}]' as json), 'A')
+        """, unitId);
+
+    importService.createTask(userId, Map.of(
+        "kind", "text",
+        "bankName", "新来源",
+        "text", "新的待解析内容"));
+
+    assertThat(jdbc.queryForObject(
+        "select count(*) from import_task where id = ?", Integer.class, oldestSource)).isZero();
+    assertThat(jdbc.queryForObject(
+        "select count(*) from import_task where source_task_id = ?",
+        Integer.class, oldestSource)).isZero();
+    assertThat(jdbc.queryForObject(
+        "select count(*) from question where unit_id = ?", Integer.class, unitId)).isEqualTo(1);
+  }
+
+  @Test
+  void startupCleanupImmediatelyEnforcesTenSourceLimit() {
+    String userId = createUser("USER");
+    List<String> sourceIds = new ArrayList<>();
+    for (int i = 1; i <= 12; i++) {
+      sourceIds.add(createHistoricalSource(
+          userId,
+          "启动清理来源 " + i,
+          i % 2 == 0 ? "FAILED" : "COMPLETED",
+          "2026-10-01 00:00:" + String.format("%02d", i)));
+    }
+
+    importService.failOrphanedTasksOnStartup();
+
+    assertThat(jdbc.queryForObject("""
+        select count(*) from import_task
+         where user_id = ? and source_task_id is null
+        """, Integer.class, userId)).isEqualTo(10);
+    assertThat(jdbc.queryForObject(
+        "select count(*) from import_task where id = ?", Integer.class, sourceIds.get(0))).isZero();
+    assertThat(jdbc.queryForObject(
+        "select count(*) from import_task where id = ?", Integer.class, sourceIds.get(1))).isZero();
+  }
+
   private String startImport(
       String userId, String sourceId, List<Integer> indexes, long targetBankId) {
     importService.requestImport(userId, sourceId, indexes, targetBankId);
@@ -185,6 +290,16 @@ class ImportReuseRetentionTest {
         values (?, ?, 'text', 'READY', 'COMPLETED', 100, 1, 1,
                 ?, '来源文本', cast(? as json))
         """, id, userId, bankName, itemsJson);
+    return id;
+  }
+
+  private String createHistoricalSource(
+      String userId, String bankName, String status, String createdAt) {
+    String id = createSource(userId, bankName, items(
+        question("历史", bankName)));
+    jdbc.update("""
+        update import_task set status = ?, created_at = ?, updated_at = ? where id = ?
+        """, status, createdAt, createdAt, id);
     return id;
   }
 
