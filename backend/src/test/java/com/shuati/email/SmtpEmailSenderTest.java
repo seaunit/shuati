@@ -17,7 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @ActiveProfiles("test")
-@SpringBootTest
+@SpringBootTest(properties = "shuati.email.simulate=false")
 class SmtpEmailSenderTest {
 
   @Autowired

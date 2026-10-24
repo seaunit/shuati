@@ -5,12 +5,18 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+    prefix = "shuati.email",
+    name = "simulate",
+    havingValue = "false",
+    matchIfMissing = true)
 public class SmtpEmailSender implements EmailSender {
 
   private final JavaMailSender mailSender;
