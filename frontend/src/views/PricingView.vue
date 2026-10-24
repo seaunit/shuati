@@ -225,13 +225,6 @@ onMounted(() => {
               <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-moss" />
               <span>{{ feature }}</span>
             </li>
-            <li class="flex gap-2 text-xs text-oat">
-              <Check class="mt-0.5 h-3.5 w-3.5 shrink-0 text-oat" />
-              <span>
-                题库上限 {{ plan.max_banks === null ? "不限" : plan.max_banks + " 个" }} /
-                题量上限 {{ plan.max_questions === null ? "不限" : plan.max_questions + " 题" }}
-              </span>
-            </li>
           </ul>
           <button
             class="mt-5 w-full rounded-xl bg-ink py-2 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50"

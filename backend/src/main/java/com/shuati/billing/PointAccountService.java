@@ -300,7 +300,6 @@ public class PointAccountService {
     result.put("periodStart", toIso(account.get("period_start")));
     result.put("periodEnd", toIso(account.get("period_end")));
     result.put("maxBanks", plan.get("max_banks"));
-    result.put("maxQuestions", plan.get("max_questions"));
     result.put("retentionDays", plan.get("retention_days"));
     result.put("allowProModel", intValue(plan.get("allow_pro_model")) == 1);
     return result;
@@ -329,24 +328,6 @@ public class PointAccountService {
     if (current >= maxBanks) {
       throw new ApiException(402, "自建题库最多 " + maxBanks + " 个，你已经建了 " + current
           + " 个。可以先删掉不再需要的题库，或往已有题库里导入题目。");
-    }
-  }
-
-  public void assertQuestionQuota(String userId, Map<String, Object> entitlements, int incoming) {
-    Object maxQuestions = entitlements.get("maxQuestions");
-    if (maxQuestions == null) {
-      return;
-    }
-    Integer used = jdbc.queryForObject("""
-        select count(*) from question q
-          join unit u on u.id = q.unit_id
-          join bank b on b.id = u.bank_id
-         where b.owner_id = ?
-        """, Integer.class, userId);
-    int current = used == null ? 0 : used;
-    if (current + incoming > intValue(maxQuestions)) {
-      throw new ApiException(402, "当前套餐自建题量上限 " + intValue(maxQuestions)
-          + " 题，已用 " + current + " 题，本次将新增 " + incoming + " 题。升级套餐可提升上限。");
     }
   }
 

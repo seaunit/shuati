@@ -310,15 +310,12 @@ public class ImportService {
       throw new ApiException(400, "没有可导入的题目");
     }
 
-    Map<String, Object> entitlements = points.entitlements(userId);
     Long targetBankId = task.get("target_bank_id") == null ? null
         : ((Number) task.get("target_bank_id")).longValue();
     if (targetBankId == null) {
       // 只有「新建题库」才受题库数量上限约束；往已有题库里加题不占
       points.assertBankQuota(userId);
     }
-    points.assertQuestionQuota(userId, entitlements, chosen.size());
-
     long bankId;
     if (targetBankId != null) {
       // 异步线程里再校验一次，避免任务参数被改过
