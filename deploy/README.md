@@ -157,6 +157,10 @@ INTERNAL_SECRET=与后端一致
 WAFFO_DRY_RUN=false
 ```
 
+重跑部署脚本时，未显式传入 `WAFFO_ENV` 会保留 `/etc/shuati/payments.env`
+里已有的环境；只有首次部署才默认使用 `test`。已切生产后要临时切回测试，
+可显式执行 `sudo WAFFO_ENV=test bash deploy/scripts/provision-ubuntu.sh`。
+
 支付启用后可在服务器自检（真实创建一次测试收银台，不写库、不改商品）：
 
 ```bash
