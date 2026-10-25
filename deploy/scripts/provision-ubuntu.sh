@@ -430,7 +430,14 @@ fi
 
 umask 077
 # 内置的是「测试环境」的商品映射；切生产时必须换成 publish 之后的生产 Product ID
-WAFFO_ENV_NAME="${WAFFO_ENV:-test}"
+EXISTING_WAFFO_ENV=""
+if [ -s "$PAYMENTS_ENV_FILE" ]; then
+  EXISTING_WAFFO_ENV="$(
+    sed -n "s/^WAFFO_ENV='\\(.*\\)'$/\\1/p" "$PAYMENTS_ENV_FILE" | head -1
+  )"
+fi
+# 未显式传入时不覆盖已有环境；首次部署才默认 test。
+WAFFO_ENV_NAME="${WAFFO_ENV:-${EXISTING_WAFFO_ENV:-test}}"
 # 商品 ID 在 publish 到生产后保持不变（publish 是就地提升版本），
 # 所以测试与生产共用同一组 Product ID，这里不需要按环境切换。
 WAFFO_PRODUCT_MAP_VALUE="${WAFFO_PRODUCT_MAP:-PACK:pack_9=PROD_4LHpKOgDrQpNhyvA9WbYb1,PACK:pack_29=PROD_0UeAGdjEDeZlXpwk4jrdPc,PACK:pack_99=PROD_6wWViUIARdoV9cIRdq4xbU}"
@@ -654,7 +661,7 @@ echo
 echo "当前是 HTTP + IP 临时模式，SHUATI_COOKIE_SECURE=${COOKIE_SECURE}"
 echo "域名与证书配好后，把 /etc/shuati/env 改成 SHUATI_COOKIE_SECURE=true 并重启 shuati。"
 if [ -n "$WAFFO_KEY" ]; then
-  echo "在线支付：已启用（Waffo ${WAFFO_ENV:-test} 环境，Waffo 密钥在 /etc/shuati/payments.env）"
+  echo "在线支付：已启用（Waffo ${WAFFO_ENV_NAME} 环境，Waffo 密钥在 /etc/shuati/payments.env）"
   echo "自检：cd /opt/shuati/payments && sudo -u shuati npm run smoke"
 else
   echo "在线支付：未启用（未提供 Waffo 私钥）"
