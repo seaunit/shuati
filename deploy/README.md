@@ -361,6 +361,11 @@ cd mobile && npm run publish:apk
 没证书就用 `deploy/nginx/shuati.conf`；改完先 `nginx -t`，不过就自动回滚到备份
 （`/etc/nginx/conf.d/shuati.conf.bak.<时间戳>`）。
 
+两份模板都在 HTTPS/HTTP server 内包含
+`/etc/nginx/snippets/seaunit-integrations/*.conf`。拾题只负责提供这个稳定 include，
+识海等独立应用各自安装并维护自己的 location snippet，因此重新部署拾题不会再删除 `/kb`。
+根路径 `/` 和 `/seaunit-portal/` 固定指向 `https://seaunit.site/` 双应用门户。
+
 > 以前这里是"线上已有 `ssl_certificate` 就整份跳过"，怕覆盖 certbot 改过的证书行。
 > 代价是之后所有 Nginx 改动都进不到线上——`/apk/` 规则就是这样漏掉的。
 > **改 server 级规则时，两份模板都要改**（HTTP 与 HTTPS 各一份），部署自检会盯着。
