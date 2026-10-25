@@ -32,6 +32,12 @@ public class PracticeController {
     return ApiResponse.ok(practiceService.listSessions());
   }
 
+  /** 裸“刷题”入口用它恢复最近一次题库/单元范围，题号继续由练习光标负责。 */
+  @GetMapping("/api/practice/last-scope")
+  public ApiResponse<Map<String, Object>> lastScope() {
+    return ApiResponse.ok(practiceService.latestScopedSession());
+  }
+
   @PostMapping("/api/practice/sessions")
   public ApiResponse<Map<String, Object>> createSession(@RequestBody Map<String, Object> body) {
     return ApiResponse.ok(practiceService.createSession(body));

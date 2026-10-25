@@ -115,6 +115,46 @@ public class PracticeService {
         """, CurrentUser.id()), Set.of());
   }
 
+  /**
+   * 侧栏“刷题”没有明确范围时，恢复最近一次仍可用的题库或单元练习。
+   *
+   * <p>ALL 和错题重练都属于临时题集，不能让它们覆盖用户长期练习的题库；
+   * 范围还必须仍存在且对当前账号可见，避免历史记录把用户带到已删除或别人的题库。
+   */
+  public Map<String, Object> latestScopedSession() {
+    String userId = CurrentUser.id();
+    int admin = CurrentUser.isAdmin() ? 1 : 0;
+    List<Map<String, Object>> rows = jdbc.queryForList("""
+        select ps.scope_type, ps.scope_id, ps.scope_name
+          from practice_session ps
+         where ps.user_id = ?
+           and (
+             (
+               ps.scope_type = 'BANK'
+               and exists (
+                 select 1 from bank b
+                  where b.id = ps.scope_id
+                    and (? = 1 or b.owner_id is null or b.owner_id = ?)
+               )
+             )
+             or
+             (
+               ps.scope_type = 'UNIT'
+               and exists (
+                 select 1
+                   from unit u
+                   join bank b on b.id = u.bank_id
+                  where u.id = ps.scope_id
+                    and (? = 1 or b.owner_id is null or b.owner_id = ?)
+               )
+             )
+           )
+         order by ps.started_at desc, ps.id desc
+         limit 1
+        """, userId, admin, userId, admin, userId);
+    return rows.isEmpty() ? Map.of() : json.normalize(rows.get(0), Set.of());
+  }
+
   @Transactional
   public void patchSession(long id, Map<String, Object> body) {
     String status = String.valueOf(body.getOrDefault("status", "IN_PROGRESS")).toUpperCase(Locale.ROOT);

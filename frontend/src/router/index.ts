@@ -1,6 +1,17 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+  type RouteLocationRaw,
+} from "vue-router";
+import { api } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { applyRouteMeta } from "@/seo";
+
+interface LastPracticeScope {
+  scope_type?: string;
+  scope_id?: number | null;
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -69,6 +80,42 @@ const router = createRouter({
   ],
 });
 
+async function restoreLastPracticeScope(
+  to: RouteLocationNormalized,
+): Promise<RouteLocationRaw | null> {
+  if (to.path !== "/app/practice") {
+    return null;
+  }
+  // 明确链接优先：题库、单元、错题重练不能被“最近范围”悄悄改写。
+  if (["bankId", "unitId", "ids"].some((key) => to.query[key] !== undefined)) {
+    return null;
+  }
+  try {
+    const scope = await api<LastPracticeScope>("/api/practice/last-scope");
+    const scopeId = Number(scope.scope_id);
+    if (!Number.isInteger(scopeId) || scopeId <= 0) {
+      return null;
+    }
+    const queryKey = scope.scope_type === "BANK"
+      ? "bankId"
+      : scope.scope_type === "UNIT"
+        ? "unitId"
+        : null;
+    if (!queryKey) {
+      return null;
+    }
+    return {
+      path: to.path,
+      query: { ...to.query, [queryKey]: String(scopeId) },
+      hash: to.hash,
+      replace: true,
+    };
+  } catch {
+    // 恢复范围是增强项；接口失败时保持原行为，进入全部题目。
+    return null;
+  }
+}
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
   if (!auth.loaded) {
@@ -82,6 +129,10 @@ router.beforeEach(async (to) => {
   }
   if (to.path === "/login" && auth.user) {
     return { path: "/app" };
+  }
+  const restoredPractice = await restoreLastPracticeScope(to);
+  if (restoredPractice) {
+    return restoredPractice;
   }
   return true;
 });
