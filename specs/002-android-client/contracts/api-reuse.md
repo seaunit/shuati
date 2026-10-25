@@ -55,6 +55,7 @@
 | --- | --- | --- |
 | 建会话 | `POST /api/practice/sessions` `{scopeType,scopeId,scopeName,totalQuestions}` | `{id}` |
 | 结束会话 | `PATCH /api/practice/sessions/{id}` `{status,answered,correct,partial,wrong,score}` | 失败可忽略 |
+| 最近练习范围 | `GET /api/practice/last-scope` → `{scope_type:"BANK"\|"UNIT",scope_id}`；无有效范围为 `{}` | 裸练习入口恢复上次题库/单元 |
 | 选择题提交 | `POST /api/practice/submit-choice` `{questionId,selected:[..],durationMs}` | `{recordId,verdict,score,correctAnswer}` |
 | 简答提交 | `POST /api/practice/submit-essay` `{questionId,answer,durationMs}` | `{recordId,verdict,score,feedback,referenceAnswer,degraded}`；点数不足 → 402 + 原文提示 |
 | AI 解析 | `GET /api/practice/questions/{id}/explanation` | `{explanation}`；按题缓存，重复查看不重复扣点 |

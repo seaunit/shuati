@@ -874,6 +874,138 @@ test("practice resumes from the first unanswered question", async ({ page }) => 
   await expect(page.getByText("已从上次进度继续")).toBeVisible();
 });
 
+test("practice nav restores the last scoped bank instead of the all-question pool", async ({
+  page,
+}) => {
+  const question = (id: number, unitId: number, content: string) => ({
+    id,
+    unit_id: unitId,
+    type: "SINGLE",
+    content,
+    options: [{ key: "A", text: "选项 A" }],
+    difficulty: "MEDIUM",
+    images: null,
+    tags: null,
+    status: "ON",
+    explanation: null,
+  });
+
+  let lastScopeRequests = 0;
+  let allQuestionRequests = 0;
+  let lastScopeData: Record<string, unknown> = {
+    scope_type: "BANK",
+    scope_id: 42,
+    scope_name: "JAVA八股",
+  };
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/practice/last-scope", (route) => {
+    lastScopeRequests += 1;
+    return route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: lastScopeData,
+      },
+    });
+  });
+  await page.route("**/api/banks/42/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          question(801, 42, "JAVA八股第 1 题"),
+          question(802, 42, "JAVA八股第 2 题"),
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/questions?mode=seq", (route) => {
+    allQuestionRequests += 1;
+    return route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [question(901, 99, "软考全量题")],
+      },
+    });
+  });
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [question(101, 1, "明确指定的单元题")],
+      },
+    }),
+  );
+  await page.route("**/api/progress/bank/42", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 2, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 1, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
+  await page.route("**/api/progress/all", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 1, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { questionId: null } },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+
+  await page.goto("/app/practice");
+
+  await expect(page).toHaveURL(/\/app\/practice\?bankId=42/);
+  await expect(page.getByText("JAVA八股第 1 题")).toBeVisible();
+  expect(lastScopeRequests).toBe(1);
+  expect(allQuestionRequests).toBe(0);
+
+  // 明确带范围的链接不能被“最近范围”覆盖
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByText("明确指定的单元题")).toBeVisible();
+  expect(lastScopeRequests).toBe(1);
+
+  // 没有可恢复范围时保留旧行为：进入全部题目
+  lastScopeData = {};
+  await page.goto("/app/practice");
+  await expect(page.getByText("软考全量题")).toBeVisible();
+  expect(lastScopeRequests).toBe(2);
+  expect(allQuestionRequests).toBe(1);
+});
+
 test("practice can restart from the first question whatever the progress is", async ({ page }) => {
   const question = (id: number) => ({
     id,
