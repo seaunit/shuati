@@ -49,7 +49,7 @@
 - [x] T012 运行 `npm --prefix frontend run build`
 - [x] T013 运行后端相关全量测试并记录证据
 - [x] T014 运行 `$speckit-analyze`，确认 spec/plan/tasks/code 一致
-- [ ] T015 提交推送并部署后验证裸入口恢复最近题库
+- [x] T015 提交推送并部署后验证裸入口恢复最近题库
 
 ---
 
