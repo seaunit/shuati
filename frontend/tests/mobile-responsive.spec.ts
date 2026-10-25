@@ -1163,6 +1163,18 @@ test("stored explanation shows after answering and can be regenerated", async ({
             status: "ON",
             explanation: "解析库里的解析内容",
           },
+          {
+            id: 2,
+            unit_id: 1,
+            type: "SINGLE",
+            content: "第二道解析测试题干",
+            options: [{ key: "A", text: "选项 A" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: null,
+          },
         ],
       },
     }),
@@ -1172,7 +1184,7 @@ test("stored explanation shows after answering and can be regenerated", async ({
   );
   await page.route("**/api/progress/unit/1", (route) =>
     route.fulfill({
-      json: { code: 200, message: "ok", data: { total: 1, answered: 0, correct: 0, answeredIds: [] } },
+      json: { code: 200, message: "ok", data: { total: 2, answered: 0, correct: 0, answeredIds: [] } },
     }),
   );
   await page.route("**/api/practice/submit-choice", (route) =>
@@ -1206,6 +1218,15 @@ test("stored explanation shows after answering and can be regenerated", async ({
   await page.getByRole("button", { name: "重新生成解析" }).click();
   await expect(page.getByText("本次 AI 解析")).toBeVisible();
   await expect(page.getByText("重新生成的解析内容")).toBeVisible();
+
+  // 切到下一题再返回时，本次生成结果要更新当前题目对象，重新带出完整解析
+  await page.getByRole("button", { name: /下一题/ }).click();
+  await page.getByRole("button", { name: /上一题/ }).click();
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await expect(page.getByText("来自解析库")).toBeVisible();
+  await expect(page.getByText("重新生成的解析内容")).toBeVisible();
+  await expect(page.getByText("解析库里的解析内容")).toHaveCount(0);
 });
 
 test("wrongly picked option is marked red while correct ones stay green", async ({ page }) => {

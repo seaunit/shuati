@@ -226,6 +226,8 @@ async function loadExplanation() {
     const response = await api<{ explanation: string }>(
       `/api/practice/questions/${current.value.id}/explanation`,
     );
+    // 同步更新当前题目对象，切题再返回时 resetState 才能带出刚生成的解析。
+    current.value.explanation = response.explanation;
     explanation.value = response.explanation;
     explanationFromLibrary.value = false;
     await billing.load();
