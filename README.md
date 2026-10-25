@@ -81,6 +81,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | `APP_AES_SECRET` | AI Key 的 AES-256-GCM 密钥（Base64，32 字节），与旧系统一致 |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | AI 接入兜底配置 |
 | `SHUATI_BOOTSTRAP_ADMIN_EMAIL` / `SHUATI_BOOTSTRAP_ADMIN_PASSWORD` | 首次启动引导管理员 |
+| `SHUATI_MAIL_SIMULATE` | 本地测试是否用日志模拟验证码邮件（生产必须为 `false`） |
 | `SHUATI_REDIS_HOST` / `SHUATI_REDIS_PORT` / `SHUATI_REDIS_PASSWORD` / `SHUATI_REDIS_DB` | Redis 连接（验证码存储与限流） |
 | `SHUATI_CAPTCHA_SECRET` | 验证码加盐哈希密钥 |
 | `SHUATI_PAYMENTS_ENABLED` / `SHUATI_PAYMENTS_URL` / `SHUATI_PAYMENTS_SECRET` / `SHUATI_PAYMENTS_CURRENCY` | Waffo Pancake 在线支付 |
@@ -95,4 +96,6 @@ sudo nginx -t && sudo systemctl reload nginx
 - 验证码：服务端生成、Redis 存储（`captcha:{ticket}`，TTL 自动过期）、一次性校验、错误统一提示、IP/设备限流；默认加盐哈希存储，答案永不返回前端。详见 `docs/验证码安全说明.md`。
 - 限流：基于 Redis 的接口限流（`@RateLimit` 注解，支持 IP / 用户维度）+ 全局 IP 兜底；登录、注册、AI 判分、AI 解析、导入都有独立阈值。详见 `docs/接口限流说明.md`。
 - 支付：`payments/` 是 Node 侧车（`@waffo/pancake-ts`），持有私钥并创建 Waffo 收银台、验签回调；Java 通过共享密钥调用它，回调幂等结算订单。详见 `docs/支付集成说明.md`。
+- 本地测试：`scripts/Start-Shuati-Test.ps1` 一键启动邮件模拟、测试支付侧车、后端和前端；验证码输出到日志窗口。
+  详细说明见 [`docs/测试环境使用说明.md`](docs/测试环境使用说明.md)。
 - 数据差异：MySQL 无法实现 PostgreSQL 的部分唯一索引，公共题库名唯一与默认题库唯一由服务层保证。

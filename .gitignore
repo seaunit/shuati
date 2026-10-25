@@ -13,6 +13,7 @@ frontend/test-results/
 .env.local
 .env.*.local
 *.log
+.local-run/
 
 # 从 Supabase 导出的原始备份与含真实用户数据的数据文件
 db/_supabase_raw/

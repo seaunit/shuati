@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "shuati.email")
 public record EmailVerificationProperties(
     boolean enabled,
+    boolean simulate,
     String from,
     String fromName,
     String secret,

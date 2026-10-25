@@ -92,6 +92,8 @@ shuati:
     device-limit-per-minute: 20
   email:
     enabled: ${SHUATI_MAIL_ENABLED:false}
+    # 仅本地测试环境使用：验证码打印到控制台，不连接 SMTP
+    simulate: ${SHUATI_MAIL_SIMULATE:false}
     from: ${SHUATI_MAIL_FROM:}
     from-name: ${SHUATI_MAIL_FROM_NAME:拾题}
     secret: ${SHUATI_EMAIL_SECRET:}

@@ -144,7 +144,7 @@ class PasswordResetFlowTest {
         emailStore,
         emailService,
         new EmailVerificationProperties(
-            true, "no-reply@example.com", "拾题", "test-email-secret",
+            true, false, "no-reply@example.com", "拾题", "test-email-secret",
             300, 60, 5, 10, 20, 30, 2000),
         email,
         code,

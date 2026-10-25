@@ -769,6 +769,61 @@ test("practice actions stay directly above the mobile navigation", async ({ page
   expect(position).toBe("fixed");
 });
 
+test("practice shows a clear single or multiple choice badge", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 1,
+            unit_id: 1,
+            type: "SINGLE",
+            content: "单选题题干",
+            options: [{ key: "A", text: "选项 A" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+          },
+          {
+            id: 2,
+            unit_id: 1,
+            type: "MULTI",
+            content: "多选题题干",
+            options: [{ key: "A", text: "选项 A" }, { key: "B", text: "选项 B" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByTestId("practice-type")).toHaveText("单选题");
+  await page.getByRole("button", { name: /下一题/ }).click();
+  await expect(page.getByTestId("practice-type")).toHaveText("多选题");
+});
+
 test("practice resumes from the first unanswered question", async ({ page }) => {
   const question = (id: number) => ({
     id,
