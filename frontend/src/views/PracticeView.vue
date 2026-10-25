@@ -467,6 +467,15 @@ onMounted(async () => {
       </header>
 
       <article class="rounded-2xl border border-mist bg-white/70 p-4 sm:p-6">
+        <div class="mb-3 flex items-center gap-2">
+          <span
+            data-testid="practice-type"
+            class="rounded-full bg-moss/12 px-2.5 py-1 text-xs font-medium text-moss"
+          >
+            {{ typeLabel(current.type) }}
+          </span>
+          <span v-if="current.type === 'MULTI'" class="text-xs text-oat">可多选</span>
+        </div>
         <MarkdownText :text="current.content" />
         <div v-if="current.images?.length" class="mt-4 space-y-3">
           <img
