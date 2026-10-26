@@ -34,7 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/seaunit/shuati/main/deploy/scripts/
 
 脚本默认按 **HTTP + 公网 IP** 启动，因此会写入 `SHUATI_COOKIE_SECURE=false`。
 域名和 HTTPS 配好后，再改为 `true`。生产数据库从空库开始，Flyway 首次启动自动建表。
-首次部署会创建管理员 `shuati.admin@gmail.com`：初始口令**由脚本随机生成并在部署结束时打印**
+首次部署会创建管理员 `a115846`：初始口令**由脚本随机生成并在部署结束时打印**
 （也可用 `SHUATI_BOOTSTRAP_ADMIN_PASSWORD` 指定）。仓库里不再保留任何默认口令。
 支付侧车首次先用占位密钥并保持 `SHUATI_PAYMENTS_ENABLED=false`，真实 Waffo 密钥写入
 `/etc/shuati/payments.env` 后再启用。

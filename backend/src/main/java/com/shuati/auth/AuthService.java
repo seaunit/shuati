@@ -63,14 +63,14 @@ public class AuthService {
     verifyCaptcha(request.captchaTicket(), request.captchaCode());
     String email = normalizeEmail(request.email());
     Profile profile = profiles.findByEmail(email)
-        .orElseThrow(() -> new ApiException(401, "邮箱或密码错误"));
+        .orElseThrow(() -> new ApiException(401, "账号或密码错误"));
 
     if ("DISABLED".equals(profile.getStatus())) {
       throw new ApiException(403, "账号已被禁用");
     }
     if (profile.getPasswordHash() == null
         || !passwordEncoder.matches(request.password(), profile.getPasswordHash())) {
-      throw new ApiException(401, "邮箱或密码错误");
+      throw new ApiException(401, "账号或密码错误");
     }
 
     profiles.updateLastLoginAt(profile.getId(), LocalDateTime.now(ZoneOffset.UTC));

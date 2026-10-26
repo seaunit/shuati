@@ -43,7 +43,7 @@ async function submit() {
   error.value = "";
   notice.value = "";
   if (!email.value.trim() || !password.value) {
-    error.value = "请填写邮箱和密码";
+    error.value = mode.value === "login" ? "请填写邮箱或账号和密码" : "请填写邮箱和密码";
     return;
   }
   if ((mode.value === "register" || mode.value === "forgot")
@@ -212,12 +212,14 @@ watch(email, resetEmailCode);
         </div>
 
         <label class="mb-5 block">
-          <span class="mb-1.5 block text-sm text-ink">邮箱</span>
+          <span class="mb-1.5 block text-sm text-ink">
+            {{ mode === "login" ? "邮箱或账号" : "邮箱" }}
+          </span>
           <input
             v-model="email"
-            type="email"
+            :type="mode === 'login' ? 'text' : 'email'"
             class="w-full rounded-xl border border-mist bg-paper px-4 py-2.5 outline-none transition focus:border-moss"
-            placeholder="you@example.com"
+            :placeholder="mode === 'login' ? '邮箱或账号' : 'you@example.com'"
           />
         </label>
 
