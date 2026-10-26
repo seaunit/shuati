@@ -52,9 +52,13 @@ public class ExplanationSaveQueue {
     body.put("questionId", String.valueOf(event.questionId()));
     body.put("userId", event.userId());
     body.put("content", event.explanation());
+    body.put("provider", event.provider());
+    body.put("workflowKey", event.workflowKey() == null ? "" : event.workflowKey().key());
+    body.put("externalRunId", event.externalRunId() == null ? "" : event.externalRunId());
     body.put("model", event.model());
     body.put("promptTokens", String.valueOf(event.promptTokens()));
     body.put("completionTokens", String.valueOf(event.completionTokens()));
+    body.put("totalTokens", String.valueOf(event.totalTokens()));
     body.put("durationMs", String.valueOf(event.durationMs()));
     try {
       redis.opsForStream().add(MapRecord.create(STREAM, body));

@@ -1,0 +1,194 @@
+app:
+  description: 拾题截图出题工作流
+  icon: "🖼️"
+  icon_background: "#F2EAFE"
+  icon_type: emoji
+  mode: workflow
+  name: shuati-extract-image
+  use_icon_as_answer_icon: false
+dependencies:
+  - current_identifier: null
+    type: marketplace
+    value:
+      marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.26@bdf47cb41e9062bba00d26625d2a795c1874011d8ce64bff738c44b5a31787ea
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+        - .JPG
+        - .JPEG
+        - .PNG
+        - .WEBP
+      allowed_file_types:
+        - image
+      allowed_file_upload_methods:
+        - local_file
+      enabled: true
+      image:
+        enabled: true
+        number_limits: 1
+        transfer_methods:
+          - local_file
+      number_limits: 1
+    opening_statement: ""
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: start
+          targetType: llm
+        id: start-to-image
+        source: start_node
+        sourceHandle: source
+        target: image_llm
+        targetHandle: target
+        type: custom
+        zIndex: 0
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: llm
+          targetType: end
+        id: image-to-end
+        source: image_llm
+        sourceHandle: source
+        target: end_node
+        targetHandle: target
+        type: custom
+        zIndex: 0
+    nodes:
+      - data:
+          desc: ""
+          selected: false
+          title: 开始
+          type: start
+          variables:
+            - label: 识别要求
+              max_length: 2000
+              options: []
+              required: false
+              type: text-input
+              variable: instruction
+        height: 90
+        id: start_node
+        position:
+          x: 30
+          y: 227
+        positionAbsolute:
+          x: 30
+          y: 227
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          desc: 从截图中抽取或生成题目
+          title: DeepSeek 截图出题
+          type: llm
+          model:
+            provider: langgenius/deepseek/deepseek
+            name: deepseek-flash
+            mode: chat
+            completion_params:
+              temperature: 0.2
+          prompt_template:
+            - role: system
+              text: |
+                你是题库构建助手。用户会提供一张手机截图、纸质试卷或学习资料图片。
+                先判断资料形态。试卷模式只做原题抽取，不得新增、改写或派生题目。
+                输出只允许一个 JSON 对象，格式：
+                {"questions":[{"unit":"单元名","type":"SINGLE|MULTI|SHORT","content":"题干 Markdown","options":[{"key":"A","text":"选项内容"}],"answer":"正确答案","key_points":["判分要点"],"difficulty":"EASY|MEDIUM|HARD","explanation":"解析"}]}
+                规则：
+                1. 保留章节、题号、小问、表格、输入输出和任务要求；
+                2. 一个原始题号只能输出一道题，题内多个要求不得拆题；
+                3. 没有显式选项的题不得虚构选项，统一使用 SHORT；
+                4. “以下题目 2 选 1”的每个候选项各输出一道 SHORT；
+                5. 看不清的字用 ⬚ 占位，不要猜测或改变题意；
+                6. 生成伪代码时默认 Java 风格并标注 java；
+                7. 只输出 JSON。
+            - role: user
+              text: |
+                {{#start_node.instruction#}}
+          vision:
+            enabled: true
+            configs:
+              variable_selector:
+                - sys
+                - files
+          memory:
+            enabled: false
+            window:
+              enabled: false
+              size: 50
+          context:
+            enabled: false
+            variable_selector: []
+          structured_output:
+            enabled: false
+          retry_config:
+            enabled: false
+            max_retries: 1
+            retry_interval: 1000
+            exponential_backoff:
+              enabled: false
+              multiplier: 2
+              max_interval: 10000
+        height: 90
+        id: image_llm
+        position:
+          x: 334
+          y: 227
+        positionAbsolute:
+          x: 334
+          y: 227
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          desc: ""
+          outputs:
+            - value_selector:
+                - image_llm
+                - text
+              value_type: string
+              variable: result
+          selected: false
+          title: 结束
+          type: end
+        height: 90
+        id: end_node
+        position:
+          x: 638
+          y: 227
+        positionAbsolute:
+          x: 638
+          y: 227
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.7
+  rag_pipeline_variables: []

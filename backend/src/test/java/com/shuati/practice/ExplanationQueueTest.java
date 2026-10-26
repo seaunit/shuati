@@ -2,6 +2,7 @@ package com.shuati.practice;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.shuati.ai.AiWorkflowKey;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,8 @@ class ExplanationQueueTest {
     String userId = createUser();
 
     assertThat(queue.publish(new ExplanationSaveEvent(
-        questionId, userId, "异步写入的解析", "test-model", 11, 22, 33))).isTrue();
+        questionId, userId, "异步写入的解析", "DIFY", AiWorkflowKey.EXPLAIN,
+        "run-queue", "dify:explain", 0, 0, 30, 33))).isTrue();
 
     // 投递之后、消费之前：库里还没有写入，说明确实没在请求路径里落库
     assertThat(explanationOf(questionId)).isNull();
@@ -59,6 +61,9 @@ class ExplanationQueueTest {
     assertThat(jdbc.queryForObject("""
         select count(*) from ai_call_log where question_id = ? and purpose = 'EXPLAIN'
         """, Integer.class, questionId)).isEqualTo(1);
+    assertThat(jdbc.queryForObject("""
+        select provider from ai_call_log where question_id = ? and purpose = 'EXPLAIN'
+        """, String.class, questionId)).isEqualTo("DIFY");
   }
 
   private String explanationOf(long questionId) {

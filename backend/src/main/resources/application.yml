@@ -53,6 +53,18 @@ management:
       enabled: false
 
 shuati:
+  ai:
+    # local 默认由 application-local.yml 切到 dify；生产保持 direct
+    engine: ${SHUATI_AI_ENGINE:direct}
+  dify:
+    base-url: ${DIFY_BASE_URL:http://localhost:8501/v1}
+    connect-timeout: ${DIFY_CONNECT_TIMEOUT:10s}
+    read-timeout: ${DIFY_READ_TIMEOUT:175s}
+    workflows:
+      judge: ${DIFY_WORKFLOW_JUDGE_TOKEN:}
+      explain: ${DIFY_WORKFLOW_EXPLAIN_TOKEN:}
+      extract-text: ${DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN:}
+      extract-image: ${DIFY_WORKFLOW_EXTRACT_IMAGE_TOKEN:}
   explain-queue:
     # 解析结果落库改走 Redis Streams 异步消费：结果先返回给用户，写库在后台做。
     # 投递失败会自动退化成本次同步写库，不会丢解析结果。

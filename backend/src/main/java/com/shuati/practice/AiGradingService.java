@@ -1,12 +1,16 @@
 package com.shuati.practice;
 
 import com.shuati.abuse.NewAccountAiLimit;
-import com.shuati.ai.AiClient;
-import com.shuati.ai.PromptTemplates;
+import com.shuati.ai.AiCallLogger;
+import com.shuati.ai.AiWorkflowInputs;
+import com.shuati.ai.AiWorkflowKey;
+import com.shuati.ai.AiWorkflowPort;
+import com.shuati.ai.AiWorkflowResult;
 import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
 import com.shuati.common.Json;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +22,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,13 +30,14 @@ public class AiGradingService {
   private static final Logger log = LoggerFactory.getLogger(AiGradingService.class);
 
   private final JdbcTemplate jdbc;
-  private final AiClient ai;
+  private final AiWorkflowPort ai;
+  private final AiCallLogger aiCallLogger;
+  private final ObjectMapper objectMapper;
   private final PointAccountService points;
   private final Json json;
   private final ExplanationSaveQueue explanationQueue;
   private final NewAccountAiLimit newAccountAiLimit;
 
-  @Transactional
   public Map<String, Object> submitEssay(
       String userId, long questionId, String answer, Integer durationMs) {
     // 新号首日额度：在扣点之前拦，避免"扣了点又被额度拒掉"
@@ -59,21 +63,15 @@ public class AiGradingService {
     Map<String, Object> feedback;
     boolean degraded = false;
     long start = System.currentTimeMillis();
+    AiWorkflowResult result = null;
     try {
-      AiClient.AiResult result = ai.chat("JUDGE", PromptTemplates.ESSAY_SYSTEM,
-          PromptTemplates.essayUser(
-              String.valueOf(question.get("content")),
-              // 为空时传 null，由提示词决定「自己提炼评分要点」，别把 "null" 字符串塞给模型
-              question.get("key_points") == null
-                  ? null
-                  : String.valueOf(question.get("key_points")),
-              String.valueOf(question.get("answer")),
-              answer),
-          true);
-      ai.logUsage(userId, "JUDGE", result.model(), questionId, result, null,
-          System.currentTimeMillis() - start);
+      result = ai.judge(userId, new AiWorkflowInputs.JudgeInput(
+          String.valueOf(question.get("content")),
+          question.get("key_points") == null ? null : String.valueOf(question.get("key_points")),
+          String.valueOf(question.get("answer")),
+          answer));
 
-      JsonNode parsed = ai.objectMapper().readTree(result.content());
+      JsonNode parsed = objectMapper.readTree(result.content());
       String rawVerdict = parsed.path("verdict").asText("").toUpperCase();
       verdict = "CORRECT".equals(rawVerdict) ? "CORRECT"
           : "PARTIAL".equals(rawVerdict) ? "PARTIAL" : "WRONG";
@@ -83,12 +81,20 @@ public class AiGradingService {
       feedback.put("hit_points", toList(parsed.path("hit_points")));
       feedback.put("missed_points", toList(parsed.path("missed_points")));
       feedback.put("feedback", parsed.path("feedback").asText(""));
+      aiCallLogger.success(userId, "JUDGE", questionId, result);
     } catch (Exception e) {
       // 判分失败不阻断提交，降级为自评；但必须留下原因，否则线上无从排查
       log.warn("AI 判分失败，已降级为自评 questionId={}", questionId, e);
       points.refundPoints(userId, intValue(charged.get("cost")), "AI_JUDGE_FAILED",
           "question", String.valueOf(questionId));
-      ai.logUsage(userId, "JUDGE", "unknown", questionId, null, e.getMessage(),
+      aiCallLogger.failure(
+          userId,
+          "JUDGE",
+          questionId,
+          result == null ? ai.provider() : result.provider(),
+          AiWorkflowKey.JUDGE,
+          result == null ? null : result.externalRunId(),
+          e.getMessage(),
           System.currentTimeMillis() - start);
       degraded = true;
       feedback = Map.of("feedback", "AI 判分暂不可用，请对照参考答案自行评估。");
@@ -159,21 +165,20 @@ public class AiGradingService {
     // 解析库（question.explanation）只用于刷题时直接带出，不在这里复用：
     // 用户再次点击「AI 解析」就是要重新生成，所以每次都调用模型并覆盖旧解析。
     long start = System.currentTimeMillis();
+    AiWorkflowResult result = null;
     try {
-      AiClient.AiResult result = ai.chat("EXPLAIN", PromptTemplates.EXPLAIN_SYSTEM,
-          PromptTemplates.explainUser(
-              String.valueOf(question.get("content")),
-              String.valueOf(question.get("options")),
-              String.valueOf(question.get("answer"))),
-          false);
-      long duration = System.currentTimeMillis() - start;
+      result = ai.explain(userId, new AiWorkflowInputs.ExplainInput(
+          String.valueOf(question.get("content")),
+          String.valueOf(question.get("options")),
+          String.valueOf(question.get("answer"))));
 
       // 解析结果先返回给用户，落库交给 MQ 异步做；投递失败就同步写，保证结果不丢
       boolean queued = explanationQueue.publish(new ExplanationSaveEvent(
-          questionId, userId, result.content(), result.model(),
-          result.promptTokens(), result.completionTokens(), duration));
+          questionId, userId, result.content(), result.provider(), result.workflowKey(),
+          result.externalRunId(), result.model(), result.promptTokens(), result.completionTokens(),
+          result.totalTokens(), result.durationMs()));
       if (!queued) {
-        ai.logUsage(userId, "EXPLAIN", result.model(), questionId, result, null, duration);
+        aiCallLogger.success(userId, "EXPLAIN", questionId, result);
         jdbc.update("update question set explanation = ? where id = ?",
             result.content(), questionId);
       }
@@ -182,7 +187,14 @@ public class AiGradingService {
       log.warn("AI 解析失败 questionId={}", questionId, e);
       points.refundPoints(userId, intValue(charged.get("cost")), "AI_EXPLAIN_FAILED",
           "question", String.valueOf(questionId));
-      ai.logUsage(userId, "EXPLAIN", "unknown", questionId, null, e.getMessage(),
+      aiCallLogger.failure(
+          userId,
+          "EXPLAIN",
+          questionId,
+          result == null ? ai.provider() : result.provider(),
+          AiWorkflowKey.EXPLAIN,
+          result == null ? null : result.externalRunId(),
+          e.getMessage(),
           System.currentTimeMillis() - start);
       String reason = e.getMessage() == null || e.getMessage().isBlank()
           ? "未知错误" : e.getMessage();
@@ -200,7 +212,7 @@ public class AiGradingService {
 
   private String writeJson(Object value) {
     try {
-      return ai.objectMapper().writeValueAsString(value);
+      return objectMapper.writeValueAsString(value);
     } catch (Exception e) {
       return "{}";
     }

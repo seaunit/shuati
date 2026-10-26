@@ -1,6 +1,8 @@
 package com.shuati.practice;
 
-import com.shuati.ai.AiClient;
+import com.shuati.ai.AiCallLogger;
+import com.shuati.ai.AiWorkflowKey;
+import com.shuati.ai.AiWorkflowResult;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,7 +35,7 @@ public class ExplanationSaveConsumer {
 
   private final StringRedisTemplate redis;
   private final JdbcTemplate jdbc;
-  private final AiClient ai;
+  private final AiCallLogger aiCallLogger;
   private final ExplanationSaveQueue queue;
 
   @Scheduled(fixedDelayString = "${shuati.explain-queue.poll-ms:2000}")
@@ -78,15 +80,24 @@ public class ExplanationSaveConsumer {
   public void save(Map<String, String> fields) {
     long questionId = Long.parseLong(fields.get("questionId"));
     String content = fields.getOrDefault("content", "");
+    String provider = fields.getOrDefault("provider", "DIRECT");
+    AiWorkflowKey workflowKey = fields.getOrDefault("workflowKey", "").isBlank()
+        ? AiWorkflowKey.EXPLAIN
+        : AiWorkflowKey.fromKey(fields.get("workflowKey"));
+    String externalRunId = blankToNull(fields.get("externalRunId"));
     String model = fields.getOrDefault("model", "unknown");
     jdbc.update("update question set explanation = ? where id = ?", content, questionId);
-    ai.logUsage(
-        fields.get("userId"), "EXPLAIN", model, questionId,
-        new AiClient.AiResult(
-            content, model,
-            intOf(fields.get("promptTokens")), intOf(fields.get("completionTokens")),
-            intOf(fields.get("promptTokens")) + intOf(fields.get("completionTokens"))),
-        null, longOf(fields.get("durationMs")));
+    AiWorkflowResult result = new AiWorkflowResult(
+        content,
+        provider,
+        workflowKey,
+        externalRunId,
+        model,
+        intOf(fields.get("promptTokens")),
+        intOf(fields.get("completionTokens")),
+        intOf(fields.get("totalTokens")),
+        longOf(fields.get("durationMs")));
+    aiCallLogger.success(fields.get("userId"), "EXPLAIN", questionId, result);
   }
 
   /**
@@ -119,5 +130,9 @@ public class ExplanationSaveConsumer {
     } catch (NumberFormatException e) {
       return 0L;
     }
+  }
+
+  private String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value;
   }
 }
