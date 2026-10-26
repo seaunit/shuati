@@ -236,6 +236,8 @@ bash deploy/scripts/deploy.sh user@服务器IP
 ### Dify 生产编排
 
 正式环境使用同机原生 Dify 1.13.3，不使用 Docker。控制台只绑定 `127.0.0.1:8501`，不开放公网端口。
+由于 4G 内存机无法稳定执行 Next.js 生产构建，控制台使用官方 1.13.3 standalone
+预构建文件，由本机 Node 22 通过 systemd 运行；生产服务器不运行任何 Docker 容器。
 
 首次安装或升级：
 
@@ -269,9 +271,11 @@ sudo cat /root/dify-admin.txt
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh start
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh stop
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
-sudo journalctl -u dify-api -u dify-worker -u dify-worker-beat \
-  -u dify-plugin-daemon -u dify-web -f
+sudo journalctl -u dify-api -u dify-worker -u dify-plugin-daemon -u dify-web -f
 ```
+
+为节省 4G 服务器的内存，Celery Beat 默认停用；如确实需要定时任务，可设置
+`DIFY_ENABLE_BEAT=1` 后重新执行部署脚本。四套业务工作流不依赖 Beat。
 
 正式后端故障回滚到现有直连模型：
 

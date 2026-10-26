@@ -41,8 +41,9 @@ PNG_1PX = base64.b64decode(
 
 
 class ApiError(RuntimeError):
-    def __init__(self, status: int, body: str):
-        super().__init__(f"HTTP {status}: {body[:500]}")
+    def __init__(self, status: int, body: str, method: str = "", path: str = ""):
+        prefix = f"{method.upper()} {path} " if method and path else ""
+        super().__init__(f"{prefix}HTTP {status}: {body[:500]}")
         self.status = status
         self.body = body
 
@@ -122,10 +123,9 @@ class DifyClient:
             data = json.dumps(body).encode("utf-8")
         if data is not None:
             headers["Content-Type"] = content_type
-        if method.upper() not in {"GET", "HEAD", "OPTIONS"}:
-            csrf = self.cookie("csrf_token") or self.csrf
-            if csrf:
-                headers["X-CSRF-Token"] = csrf
+        csrf = self.cookie("csrf_token") or self.csrf
+        if csrf:
+            headers["X-CSRF-Token"] = csrf
         request = urllib.request.Request(
             path if path.startswith("http") else CONSOLE_API + path,
             data=data,
@@ -140,7 +140,7 @@ class DifyClient:
                 return json.loads(payload)
         except urllib.error.HTTPError as exc:
             body_text = exc.read().decode("utf-8", errors="replace")
-            raise ApiError(exc.code, body_text) from exc
+            raise ApiError(exc.code, body_text, method, path) from exc
 
     def login(self, email: str, password: str) -> None:
         encoded = base64.b64encode(password.encode("utf-8")).decode("ascii")
@@ -410,17 +410,22 @@ def main() -> int:
 
     values = read_env(ENV_FILE)
     client = DifyClient()
+    print("[bootstrap] 检查 Dify 初始化状态", flush=True)
     client.ensure_setup(values)
     values = read_env(ENV_FILE)
+    print("[bootstrap] 登录 Dify 管理控制台", flush=True)
     client.login(
         values["DIFY_ADMIN_EMAIL"],
         values["DIFY_ADMIN_PASSWORD"],
     )
+    print("[bootstrap] 安装 DeepSeek 插件", flush=True)
     client.install_plugin()
+    print("[bootstrap] 配置 DeepSeek 模型凭证", flush=True)
     client.configure_provider(values.get("DEEPSEEK_API_KEY", ""))
 
     tokens: dict[str, str] = {}
     for app_name, env_key in WORKFLOWS.items():
+        print(f"[bootstrap] 处理工作流 {app_name}", flush=True)
         workflow_file = WORKFLOW_DIR / f"{app_name}.yml"
         if not workflow_file.exists():
             raise RuntimeError(f"缺少工作流 DSL：{workflow_file}")

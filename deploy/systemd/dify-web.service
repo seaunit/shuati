@@ -7,14 +7,14 @@ Wants=dify-api.service
 Type=simple
 User=dify
 Group=dify
-WorkingDirectory=/opt/dify/web
+WorkingDirectory=/opt/dify/web-runtime
 EnvironmentFile=/etc/shuati/env
 Environment=NODE_ENV=production
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3000
 Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=PATH=/opt/node22/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/opt/node22/bin/node /opt/dify/web/scripts/copy-and-start.mjs
+ExecStart=/opt/node22/bin/node /opt/dify/web-runtime/server.js
 Restart=always
 RestartSec=5
 TimeoutStopSec=30

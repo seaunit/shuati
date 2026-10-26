@@ -94,6 +94,11 @@ prepare_environment() {
   ensure_secret PLUGIN_DAEMON_KEY
   ensure_secret PLUGIN_DIFY_INNER_API_KEY
   ensure_secret SANDBOX_API_KEY
+  local init_password
+  init_password="$(get_env INIT_PASSWORD)"
+  if (( ${#init_password} > 30 )); then
+    set_env INIT_PASSWORD "$(openssl rand -hex 12)"
+  fi
 
   local db_password
   db_password="$(get_env DB_PASSWORD)"
@@ -213,6 +218,13 @@ install_source() {
   rm -rf "$workdir" "$archive"
 }
 
+patch_postgresql_compatibility() {
+  local migration="$DIFY_ROOT/api/migrations/versions/2025_07_02_2332-1c9ba48be8e4_add_uuidv7_function_in_sql.py"
+  if [[ -f "$migration" ]]; then
+    sed -i 's/COMMENT ON FUNCTION uuidv7 IS/COMMENT ON FUNCTION public.uuidv7() IS/' "$migration"
+  fi
+}
+
 install_uv_and_python() {
   if ! command -v uv >/dev/null 2>&1; then
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
@@ -244,12 +256,22 @@ NEXT_PUBLIC_MARKETPLACE_URL_PREFIX=https://marketplace.dify.ai
 NEXT_TELEMETRY_DISABLED=1
 EOF
   chown -R dify:dify "$DIFY_ROOT/web"
+  if [[ "${DIFY_BUILD_WEB:-0}" != "1" ]]; then
+    log "默认跳过生产机 Web 构建；使用官方预构建 standalone 运行文件"
+    return
+  fi
   sudo -u dify env \
     PATH="/opt/node22/bin:$PATH" \
     HOME="$DIFY_ROOT" \
     NODE_ENV=production \
-    NODE_OPTIONS=--max-old-space-size=768 \
-    bash -lc "cd '$DIFY_ROOT/web' && pnpm install --frozen-lockfile && pnpm run build"
+    NODE_OPTIONS=--max-old-space-size=512 \
+    bash -lc "cd '$DIFY_ROOT/web' && pnpm install --frozen-lockfile && pnpm exec next build --webpack"
+  rm -rf "$DIFY_ROOT/web-runtime"
+  cp -a "$DIFY_ROOT/web/.next/standalone" "$DIFY_ROOT/web-runtime"
+  install -d "$DIFY_ROOT/web-runtime/.next/static" "$DIFY_ROOT/web-runtime/public"
+  cp -a "$DIFY_ROOT/web/.next/static/." "$DIFY_ROOT/web-runtime/.next/static/"
+  cp -a "$DIFY_ROOT/web/public/." "$DIFY_ROOT/web-runtime/public/"
+  chown -R dify:dify "$DIFY_ROOT/web-runtime"
 }
 
 install_plugin_daemon() {
@@ -264,6 +286,34 @@ install_plugin_daemon() {
   chown -R dify:dify "$DIFY_ROOT/bin" "$DIFY_ROOT/plugin_storage"
 }
 
+install_prebuilt_web() {
+  local archive="${DIFY_WEB_EXPORT_TARBALL:-}"
+  [[ -f "$archive" ]] || die "请通过 DIFY_WEB_EXPORT_TARBALL 指定官方 Dify Web 导出包"
+  local workdir
+  workdir="$(mktemp -d)"
+  tar -xzf "$archive" -C "$workdir"
+  if [[ -f "$workdir/dify-web-export.tar" ]]; then
+    mkdir -p "$workdir/root"
+    tar -xf "$workdir/dify-web-export.tar" -C "$workdir/root"
+  elif [[ -d "$workdir/app/web" ]]; then
+    mkdir -p "$workdir/root/app"
+    cp -a "$workdir/app/web" "$workdir/root/app/web"
+  fi
+  [[ -f "$workdir/root/app/web/server.js" ]] || die "预构建包中缺少 app/web/server.js"
+  if [[ -d "$DIFY_ROOT/web-runtime" ]]; then
+    mv "$DIFY_ROOT/web-runtime" "$DIFY_ROOT/web-runtime.bak.$(date +%Y%m%d-%H%M%S)"
+  fi
+  cp -a "$workdir/root/app/web" "$DIFY_ROOT/web-runtime"
+  chown -R dify:dify "$DIFY_ROOT/web-runtime"
+  rm -rf "$workdir"
+  install -m 0644 "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/systemd/dify-web.service" \
+    /etc/systemd/system/dify-web.service
+  systemctl daemon-reload
+  systemctl enable --now dify-web
+  systemctl restart dify-web
+  log "Dify Web 预构建运行目录已安装"
+}
+
 install_services() {
   local source_root
   source_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -275,12 +325,24 @@ install_services() {
   install -m 0644 "$source_root/dify/nginx-internal.conf" /etc/nginx/conf.d/dify-internal.conf
   nginx -t
   systemctl daemon-reload
-  systemctl enable dify-plugin-daemon dify-api dify-worker dify-worker-beat dify-web
+  systemctl enable dify-plugin-daemon dify-api dify-worker
+  if [[ "${DIFY_ENABLE_BEAT:-0}" == "1" ]]; then
+    systemctl enable dify-worker-beat
+  else
+    systemctl disable --now dify-worker-beat 2>/dev/null || true
+  fi
+  if [[ -f "$DIFY_ROOT/web-runtime/server.js" ]]; then
+    systemctl enable dify-web
+  fi
   systemctl restart dify-plugin-daemon
   systemctl restart dify-api
   systemctl restart dify-worker
-  systemctl restart dify-worker-beat
-  systemctl restart dify-web
+  if [[ "${DIFY_ENABLE_BEAT:-0}" == "1" ]]; then
+    systemctl restart dify-worker-beat
+  fi
+  if [[ -f "$DIFY_ROOT/web-runtime/server.js" ]]; then
+    systemctl restart dify-web
+  fi
   systemctl reload nginx
 }
 
@@ -303,6 +365,7 @@ install_all() {
   ensure_swap
   setup_postgres
   install_source
+  patch_postgresql_compatibility
   install_uv_and_python
   install_node_and_web
   install_plugin_daemon
@@ -313,7 +376,10 @@ install_all() {
 
 status() {
   systemctl --no-pager --full status \
-    dify-plugin-daemon dify-api dify-worker dify-worker-beat dify-web >/dev/null
+    dify-plugin-daemon dify-api dify-worker >/dev/null
+  if [[ -f "$DIFY_ROOT/web-runtime/server.js" ]]; then
+    systemctl --no-pager --full status dify-web >/dev/null
+  fi
   curl -fsS --max-time 15 "$CONSOLE_URL/console/api/setup"
   printf '\n'
   ss -ltnp | grep -E ':(3000|5001|5002|8501)\b' || true
@@ -322,7 +388,13 @@ status() {
 
 start() {
   systemctl start redis-server postgresql
-  systemctl start dify-plugin-daemon dify-api dify-worker dify-worker-beat dify-web
+  systemctl start dify-plugin-daemon dify-api dify-worker
+  if [[ "${DIFY_ENABLE_BEAT:-0}" == "1" ]]; then
+    systemctl start dify-worker-beat
+  fi
+  if [[ -f "$DIFY_ROOT/web-runtime/server.js" ]]; then
+    systemctl start dify-web
+  fi
   wait_http
   status
 }
@@ -341,6 +413,16 @@ case "${1:-status}" in
     require_root
     start
     ;;
+  build-web)
+    require_root
+    install_node_and_web
+    systemctl enable --now dify-web
+    systemctl restart dify-web
+    ;;
+  install-web-runtime)
+    require_root
+    install_prebuilt_web
+    ;;
   stop)
     require_root
     stop
@@ -350,6 +432,6 @@ case "${1:-status}" in
     status
     ;;
   *)
-    die "用法：$0 {install|start|stop|status}"
+    die "用法：$0 {install|install-web-runtime|build-web|start|stop|status}"
     ;;
 esac
