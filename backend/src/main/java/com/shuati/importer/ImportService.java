@@ -726,7 +726,7 @@ public class ImportService {
   }
 
   private List<Map<String, Object>> parseQuestionItems(String content) throws Exception {
-    JsonNode root = objectMapper.readTree(content);
+    JsonNode root = objectMapper.readTree(normalizeQuestionJson(content));
     JsonNode questions = root.path("questions");
     List<Map<String, Object>> items = new ArrayList<>();
     if (questions.isArray()) {
@@ -750,6 +750,22 @@ public class ImportService {
       }
     }
     return items;
+  }
+
+  private String normalizeQuestionJson(String content) {
+    String normalized = content == null ? "" : content.strip();
+    if (normalized.startsWith("\uFEFF")) {
+      normalized = normalized.substring(1).stripLeading();
+    }
+    if (!normalized.startsWith("```")) {
+      return normalized;
+    }
+    int bodyStart = normalized.indexOf('\n');
+    int bodyEnd = normalized.lastIndexOf("```");
+    if (bodyStart < 0 || bodyEnd <= bodyStart) {
+      return normalized;
+    }
+    return normalized.substring(bodyStart + 1, bodyEnd).strip();
   }
 
   private String sourceTextOf(Map<String, Object> task) throws Exception {
