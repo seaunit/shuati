@@ -102,6 +102,35 @@ class ImportDifyWorkflowTest {
   }
 
   @Test
+  void screenshotTaskAcceptsMarkdownFencedJsonFromDify() {
+    String userId = createUser();
+    when(aiWorkflow.extractScreenshot(
+        anyString(), any(AiWorkflowInputs.ExtractScreenshotInput.class)))
+        .thenReturn(new AiWorkflowResult(
+            "```json\n"
+                + "{\"questions\":[{\"content\":\"围栏中的截图题目\",\"type\":\"SHORT\","
+                + "\"answer\":\"参考答案\"}]}\n"
+                + "```",
+            "DIFY", AiWorkflowKey.EXTRACT_IMAGE, "run-image-fenced",
+            "dify:extract-image", 0, 0, 20, 200));
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("kind", "screenshot");
+    body.put("bankName", "Dify围栏截图");
+    body.put("base64", PNG);
+    body.put("fileName", "screenshot.png");
+    String taskId = String.valueOf(importService.createTask(userId, body).get("taskId"));
+
+    importService.runTask(taskId);
+
+    assertThat(jdbc.queryForObject(
+        "select status from import_task where id = ?", String.class, taskId))
+        .isEqualTo("COMPLETED");
+    assertThat(jdbc.queryForObject(
+        "select cast(items as char) from import_task where id = ?", String.class, taskId))
+        .contains("围栏中的截图题目");
+  }
+
+  @Test
   void invalidDifyQuestionJsonFailsAndRefundsImportCharge() {
     String userId = createUser();
     when(aiWorkflow.extractText(anyString(), any(AiWorkflowInputs.ExtractTextInput.class)))
