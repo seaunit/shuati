@@ -6,5 +6,5 @@
 - [x] T004 [US1] 修改 `backend/src/main/java/com/shuati/ai/PromptTemplates.java`，要求代码题 feedback 提供伪代码
 - [x] T005 [US1] 运行定向测试和前端构建
 - [x] T006 运行后端全量测试
-- [ ] T007 提交推送 `main` 与 `test`
-- [ ] T008 部署生产并确认真实算法题展示代码块
+- [x] T007 提交推送 `main` 与 `test`
+- [x] T008 部署生产并确认真实算法题展示代码块
