@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.xwpf.usermodel.Borders;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -153,15 +152,14 @@ public class BankWordExportService {
 
     String meta = "共 %d 个单元 · %d 道题 · 导出于 %s"
         .formatted(unitCount, questionCount, EXPORT_TIME.format(Instant.now()));
-    XWPFParagraph metaParagraph = addParagraph(
+    addParagraph(
         document, meta, 9, false, MUTED, BODY_FONT,
         ParagraphAlignment.CENTER, 0, 260, 0);
-    metaParagraph.setBorderBottom(Borders.SINGLE);
   }
 
   private void addUnitTitle(XWPFDocument document, String name, int questionCount) {
     XWPFParagraph paragraph = addParagraph(
-        document, name, 15, true, MOSS, HEADING_FONT,
+        document, name, 15, true, INK, HEADING_FONT,
         ParagraphAlignment.LEFT, 280, 50, 0);
     paragraph.setKeepNext(true);
     XWPFParagraph count = addParagraph(
@@ -296,10 +294,16 @@ public class BankWordExportService {
       XWPFParagraph paragraph, String value, double size, String color, String font) {
     String[] lines = value.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
     for (int i = 0; i < lines.length; i++) {
+      if (lines[i].trim().startsWith("```")) {
+        continue;
+      }
       if (i > 0) {
         paragraph.createRun().addBreak();
       }
-      addRun(paragraph, lines[i], size, false, color, font);
+      String line = lines[i]
+          .replaceFirst("^\\s*#{1,6}\\s+", "")
+          .replaceFirst("^\\s*[-*+]\\s+", "• ");
+      addRun(paragraph, line, size, false, color, font);
     }
   }
 
