@@ -2233,6 +2233,34 @@ async function mockQuestionFormPage(page: import("@playwright/test").Page) {
   );
 }
 
+test("bank management exports a word document", async ({ page }) => {
+  await mockQuestionFormPage(page);
+  let exportRequests = 0;
+  await page.route("**/api/manage/banks/11/export.docx", (route) => {
+    exportRequests += 1;
+    return route.fulfill({
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": "attachment; filename*=UTF-8''%E6%88%91%E7%9A%84%E9%A2%98%E5%BA%93.docx",
+      },
+      body: Buffer.from("PK\u0003\u0004test-docx"),
+    });
+  });
+
+  await page.goto("/app/banks/11");
+  const exportLink = page.getByRole("link", { name: "导出 Word" });
+  await expect(exportLink).toBeVisible();
+  await expect(exportLink).toHaveAttribute("href", "/api/manage/banks/11/export.docx");
+
+  const downloadPromise = page.waitForEvent("download");
+  await exportLink.click();
+  const download = await downloadPromise;
+
+  expect(exportRequests).toBe(1);
+  expect(download.suggestedFilename()).toMatch(/\.docx$/);
+});
+
 test("deleting a bank needs the email code from the dialog", async ({ page }) => {
   await mockQuestionFormPage(page);
   let codeRequests = 0;
