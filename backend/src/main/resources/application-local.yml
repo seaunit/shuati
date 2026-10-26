@@ -16,6 +16,9 @@ logging:
 shuati:
   ai:
     engine: ${SHUATI_AI_ENGINE:dify}
+  dify:
+    # Docker Desktop 在 Windows 上可能让 Java 访问 IPv4 的 8501 挂起，本地固定走 IPv6。
+    base-url: ${DIFY_BASE_URL:http://[::1]:8501/v1}
   cookie:
     secure: false
   jwt:

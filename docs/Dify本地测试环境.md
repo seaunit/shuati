@@ -53,7 +53,7 @@ pwsh -File deploy/scripts/dify-local.ps1 start
 
 ```text
 SHUATI_AI_ENGINE=dify
-DIFY_BASE_URL=http://localhost:8501/v1
+DIFY_BASE_URL=http://[::1]:8501/v1
 DIFY_WORKFLOW_JUDGE_TOKEN=
 DIFY_WORKFLOW_EXPLAIN_TOKEN=
 DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN=
@@ -108,3 +108,4 @@ docker logs -f docker-plugin_daemon-1
 - 真实冒烟结果：判题、解析、文本出题、截图出题均返回 `succeeded`。
 - 截图工作流必须上传为真实 `image/png` 等 MIME；`application/octet-stream` 会被模型供应商拒绝。
 - Spring Boot `local` profile 已实际启动并通过 `/actuator/health` 检查。
+- Windows Docker Desktop 下 Java 访问 IPv4 `127.0.0.1:8501` 会超时，本地 Dify 地址统一使用 IPv6 `[::1]:8501`。

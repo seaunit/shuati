@@ -26,7 +26,7 @@ Expected:
 
 ```text
 SHUATI_AI_ENGINE=dify
-DIFY_BASE_URL=http://localhost:8501/v1
+DIFY_BASE_URL=http://[::1]:8501/v1
 DIFY_WORKFLOW_JUDGE_TOKEN=
 DIFY_WORKFLOW_EXPLAIN_TOKEN=
 DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN=
@@ -51,6 +51,7 @@ Expected: 仓库中无真实 Token。
 - 四条真实冒烟均返回 `succeeded`。
 - 截图上传使用 `image/png` MIME；Octet-stream 会被 DeepSeek 拒绝。
 - Spring Boot `local` profile 启动成功，健康接口返回 `UP`。
+- Windows Docker Desktop 的 Java 客户端使用 `http://[::1]:8501/v1`，IPv4 `127.0.0.1:8501` 会超时。
 
 ## 3. Run Automated Tests
 
