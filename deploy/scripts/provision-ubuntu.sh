@@ -33,7 +33,13 @@ DB_USER="shuati"
 # 交互输入的等待上限（秒）：超时按「直接回车」处理，即保留现有值/留空。
 # 部署脚本大多挂在终端里跑，人离开一会儿不该把流程卡住。
 PROMPT_TIMEOUT="${SHUATI_PROMPT_TIMEOUT:-60}"
-ADMIN_EMAIL="${SHUATI_BOOTSTRAP_ADMIN_EMAIL:-shuati.admin@gmail.com}"
+EXISTING_ADMIN_EMAIL=""
+if [ -s "$ENV_DIR/env" ]; then
+  EXISTING_ADMIN_EMAIL="$(
+    sed -n "s/^SHUATI_BOOTSTRAP_ADMIN_EMAIL='\\(.*\\)'$/\\1/p" "$ENV_DIR/env" | head -1
+  )"
+fi
+ADMIN_EMAIL="${SHUATI_BOOTSTRAP_ADMIN_EMAIL:-${EXISTING_ADMIN_EMAIL:-a115846}}"
 # 管理员初始口令不设公共默认值（避免仓库里出现真实生产口令）：
 # 环境变量 > 已有 /etc/shuati/env > 随机生成并在部署结束时打印
 ADMIN_PASSWORD="${SHUATI_BOOTSTRAP_ADMIN_PASSWORD:-}"

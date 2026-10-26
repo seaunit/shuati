@@ -54,9 +54,14 @@ public class AdminBootstrap implements ApplicationRunner {
           (id, email, password_hash, nickname, role, status, email_verified_at)
         values (?, ?, ?, ?, 'ADMIN', 'ENABLED', now(6))
         """, id, normalized, passwordEncoder.encode(password),
-        normalized.substring(0, normalized.indexOf('@')));
+        adminNickname(normalized));
     points.ensureAccount(id);
     log.info("已创建管理员账号 {}", normalized);
+  }
+
+  private String adminNickname(String account) {
+    int at = account.indexOf('@');
+    return at > 0 ? account.substring(0, at) : account;
   }
 
   private record MapRow(String id) {

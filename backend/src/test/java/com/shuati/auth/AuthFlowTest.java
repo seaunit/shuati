@@ -135,7 +135,7 @@ class AuthFlowTest {
     mvc.perform(post("/api/auth/login").header("X-Requested-With", "ShuatiApp")
             .contentType(MediaType.APPLICATION_JSON).content(credentials(email, "wrong-pass")))
         .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.message").value("邮箱或密码错误"));
+        .andExpect(jsonPath("$.message").value("账号或密码错误"));
   }
 
   @Test

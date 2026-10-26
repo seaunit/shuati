@@ -285,17 +285,21 @@ test("captcha is required for login and register, not forgot password", async ({
   );
 
   await page.goto("/login");
+  const accountInput = page.getByPlaceholder("邮箱或账号");
+  await expect(accountInput).toHaveAttribute("type", "text");
   const captchaInput = page.getByPlaceholder("请输入图中字符");
   await expect(captchaInput).toBeVisible();
 
   // 注册也要图形验证码：邮箱验证码挡不住脚本（临时邮箱收件箱是公开可读的）
   await page.getByRole("button", { name: "注册", exact: true }).click();
+  await expect(page.getByPlaceholder("you@example.com")).toHaveAttribute("type", "email");
   await expect(captchaInput).toBeVisible();
 
   await page.getByRole("button", { name: "找回密码", exact: true }).click();
   await expect(captchaInput).toBeHidden();
 
   await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByPlaceholder("邮箱或账号")).toHaveAttribute("type", "text");
   await expect(captchaInput).toBeVisible();
 });
 
