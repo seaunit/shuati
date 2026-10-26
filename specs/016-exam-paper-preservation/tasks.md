@@ -30,8 +30,8 @@
 ## Phase 5: Delivery
 
 - [x] T012 运行后端全量测试
-- [ ] T013 提交推送 `main` 与 `test`
-- [ ] T014 部署生产并确认真实图片解析结果
+- [x] T013 提交推送 `main` 与 `test`
+- [x] T014 部署生产并确认真实图片解析结果
 
 ## Dependencies
 
