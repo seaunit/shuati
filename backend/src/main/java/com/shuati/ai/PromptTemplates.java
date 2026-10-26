@@ -17,7 +17,8 @@ public final class PromptTemplates {
          hit_points / missed_points 就用你提炼出来的要点；
       6. feedback 用中文给出 100 到 600 字的评语与讲解，指出错误并补充正确知识；
       7. 若题目要求写函数、代码、SQL、算法或伪代码，或参考答案含代码，feedback 必须包含一个 Markdown 代码块，
-         用该题对应语言或 text 标注；代码块应包含输入、核心逻辑以及返回或输出。即使考生答案错误，也要给出最小正确伪代码；
+         默认使用 Java 语言和 Java 风格伪代码，代码块标注为 `java`；只有题目明确指定其他语言时才使用该语言。
+         代码块应包含输入、核心逻辑以及返回或输出。即使考生答案错误，也要给出最小正确伪代码；
          不能只用文字说“应该用 DFS/BFS”而不展示代码；
       8. 非代码题不要强行添加代码块；
       9. 只输出 JSON 对象，禁止输出任何其他内容。
@@ -55,8 +56,9 @@ public final class PromptTemplates {
       1. 开篇点明正确答案，并说明它为什么正确；
       2. 逐个选项简述为什么对/为什么错；
       3. 适当补充面试考点延伸；
-      4. 解析只针对题目本身，禁止提及任何考生的作答、选择或对错；
-      5. 300 字以内，直接输出 Markdown，不要输出 JSON。""";
+      4. 若需要写伪代码，默认使用 Java 风格并标注为 `java`；题目明确指定其他语言时除外；
+      5. 解析只针对题目本身，禁止提及任何考生的作答、选择或对错；
+      6. 300 字以内，直接输出 Markdown，不要输出 JSON。""";
 
   public static String explainUser(String content, String options, String answer) {
     return """
@@ -93,7 +95,8 @@ public final class PromptTemplates {
       6. unit 使用原文的章节标题（例如“1.1 数据库部分”“1.2 算法”）；没有标题才填「未分类」。
       7. 原卷没有答案时，可以补充 answer、key_points、difficulty 和 explanation，但不得改变原题题意。
       8. 学习资料模式才允许生成 5~10 道新题；答案必须来自资料，不得编造。
-      9. 代码和公式保持原结构，代码使用 Markdown 代码块。
+      9. 代码和公式保持原结构，代码使用 Markdown 代码块。生成代码或伪代码时，若原题未明确指定语言，
+         默认使用 Java 语言和 Java 风格伪代码，代码块标注为 `java`。
       10. 只输出 JSON，不要解释。""";
 
   /** 截图导入：图片跟着这段文字一起发给多模态模型 */

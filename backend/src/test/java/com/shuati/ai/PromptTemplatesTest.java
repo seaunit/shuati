@@ -65,4 +65,11 @@ class PromptTemplatesTest {
         .contains("返回")
         .contains("SQL");
   }
+
+  @Test
+  void codeGenerationDefaultsToJavaAcrossImportGradingAndExplanation() {
+    assertThat(PromptTemplates.ESSAY_SYSTEM).contains("默认使用 Java").contains("java");
+    assertThat(PromptTemplates.EXPLAIN_SYSTEM).contains("默认使用 Java").contains("java");
+    assertThat(PromptTemplates.EXTRACT_SYSTEM).contains("默认使用 Java").contains("java");
+  }
 }
