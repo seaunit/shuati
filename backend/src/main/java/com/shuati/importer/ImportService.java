@@ -26,6 +26,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.extractor.WordExtractor;
+import org.apache.poi.poifs.filesystem.FileMagic;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFShape;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
@@ -733,18 +734,21 @@ public class ImportService {
     }
     byte[] bytes = Base64.getDecoder().decode(source);
     String name = String.valueOf(task.getOrDefault("source_name", "")).toLowerCase(Locale.ROOT);
+    FileMagic magic = FileMagic.valueOf(bytes);
     if (name.endsWith(".pdf")) {
       try (PDDocument document = Loader.loadPDF(bytes)) {
         return new PDFTextStripper().getText(document);
       }
     }
-    if (name.endsWith(".docx")) {
+    if (name.endsWith(".docx")
+        || (name.endsWith(".doc") && magic == FileMagic.OOXML)) {
       try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(bytes));
            XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
         return extractor.getText();
       }
     }
-    if (name.endsWith(".doc")) {
+    if (name.endsWith(".doc")
+        || (name.endsWith(".docx") && magic == FileMagic.OLE2)) {
       try (HWPFDocument document = new HWPFDocument(new ByteArrayInputStream(bytes));
            WordExtractor extractor = new WordExtractor(document)) {
         return extractor.getText();
