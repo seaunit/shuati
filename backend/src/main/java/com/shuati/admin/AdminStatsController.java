@@ -109,8 +109,17 @@ public class AdminStatsController {
   @GetMapping("/api/admin/stats/ai-usage")
   public ApiResponse<Map<String, Object>> aiUsage() {
     List<Map<String, Object>> rows = jdbc.queryForList("""
-        select purpose, success, prompt_tokens, completion_tokens, total_tokens, duration_ms, created_at
+        select purpose, provider, workflow_key, external_run_id, success,
+               prompt_tokens, completion_tokens, total_tokens, duration_ms, created_at
           from ai_call_log
+        """);
+    List<Map<String, Object>> recentCalls = jdbc.queryForList("""
+        select purpose, provider, workflow_key, external_run_id, model,
+               prompt_tokens, completion_tokens, total_tokens, success,
+               error, duration_ms, created_at
+          from ai_call_log
+         order by created_at desc, id desc
+         limit 50
         """);
     long failed = rows.stream().filter(r -> intValue(r.get("success")) == 0).count();
     Map<String, Object> summary = new LinkedHashMap<>();
@@ -124,6 +133,7 @@ public class AdminStatsController {
     summary.put("avg_duration_ms", rows.isEmpty() ? 0 : Math.round((double) totalDuration / rows.size()));
 
     Map<String, Map<String, Object>> byPurpose = new LinkedHashMap<>();
+    Map<String, Map<String, Object>> byProvider = new LinkedHashMap<>();
     for (Map<String, Object> row : rows) {
       String purpose = String.valueOf(row.get("purpose"));
       Map<String, Object> group = byPurpose.computeIfAbsent(purpose, key -> {
@@ -135,6 +145,17 @@ public class AdminStatsController {
       group.put("calls", ((Number) group.get("calls")).intValue() + 1);
       group.put("total_tokens", ((Number) group.get("total_tokens")).intValue()
           + intValue(row.get("total_tokens")));
+      String provider = row.get("provider") == null
+          ? "DIRECT" : String.valueOf(row.get("provider"));
+      Map<String, Object> providerGroup = byProvider.computeIfAbsent(provider, key -> {
+        Map<String, Object> created = new LinkedHashMap<>();
+        created.put("calls", 0);
+        created.put("total_tokens", 0);
+        return created;
+      });
+      providerGroup.put("calls", ((Number) providerGroup.get("calls")).intValue() + 1);
+      providerGroup.put("total_tokens", ((Number) providerGroup.get("total_tokens")).intValue()
+          + intValue(row.get("total_tokens")));
     }
     List<Map<String, Object>> purposeList = new ArrayList<>();
     byPurpose.forEach((purpose, value) -> {
@@ -143,10 +164,19 @@ public class AdminStatsController {
       item.putAll(value);
       purposeList.add(item);
     });
+    List<Map<String, Object>> providerList = new ArrayList<>();
+    byProvider.forEach((provider, value) -> {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("provider", provider);
+      item.putAll(value);
+      providerList.add(item);
+    });
 
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("summary", summary);
     result.put("by_purpose", purposeList);
+    result.put("by_provider", providerList);
+    result.put("recent_calls", recentCalls);
     return ApiResponse.ok(result);
   }
 

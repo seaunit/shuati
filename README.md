@@ -42,6 +42,19 @@ npm --prefix frontend run dev
 
 访问 http://localhost:5173 ，开发服务器会把 `/api` 代理到 `127.0.0.1:8080`。
 
+### 本地 Dify（测试环境）
+
+本地 `local` profile 默认使用 Dify 编排 AI；生产 `prod` profile 继续使用直连模型。
+
+```powershell
+pwsh -File deploy/scripts/dify-local.ps1 start
+pwsh -File deploy/scripts/dify-local.ps1 status
+```
+
+控制台为 `http://localhost:8501`。四个工作流 DSL 位于
+`deploy/dify/workflows/`，Service API Token 只填写到本机 `.env.local`。
+完整说明见 [`docs/Dify本地测试环境.md`](docs/Dify本地测试环境.md)。
+
 ## 测试
 
 ```bash

@@ -1,5 +1,7 @@
 package com.shuati.practice;
 
+import com.shuati.ai.AiWorkflowKey;
+
 /**
  * 解析结果落库事件。
  *
@@ -11,8 +13,12 @@ public record ExplanationSaveEvent(
     long questionId,
     String userId,
     String explanation,
+    String provider,
+    AiWorkflowKey workflowKey,
+    String externalRunId,
     String model,
     int promptTokens,
     int completionTokens,
+    int totalTokens,
     long durationMs) {
 }

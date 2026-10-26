@@ -1,13 +1,17 @@
 package com.shuati.importer;
 
 import com.shuati.abuse.NewAccountAiLimit;
-import com.shuati.ai.AiClient;
-import com.shuati.ai.PromptTemplates;
+import com.shuati.ai.AiCallLogger;
+import com.shuati.ai.AiWorkflowInputs;
+import com.shuati.ai.AiWorkflowKey;
+import com.shuati.ai.AiWorkflowPort;
+import com.shuati.ai.AiWorkflowResult;
 import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
 import com.shuati.common.Json;
 import com.shuati.common.QuestionContent;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -53,7 +57,9 @@ public class ImportService {
 
   private final JdbcTemplate jdbc;
   private final Json json;
-  private final AiClient ai;
+  private final AiWorkflowPort ai;
+  private final AiCallLogger aiCallLogger;
+  private final ObjectMapper objectMapper;
   private final NewAccountAiLimit newAccountAiLimit;
   private final PointAccountService points;
   private final RobotsPolicy robotsPolicy;
@@ -633,9 +639,25 @@ public class ImportService {
 
   private List<Map<String, Object>> extractChunk(String chunk, String userId) throws Exception {
     newAccountAiLimit.check(userId);
-    AiClient.AiResult result = ai.chat("EXTRACT", PromptTemplates.EXTRACT_SYSTEM, chunk, true);
-    ai.logUsage(userId, "EXTRACT", result.model(), null, result, null, 0);
-    return parseQuestionItems(result.content());
+    long start = System.currentTimeMillis();
+    AiWorkflowResult result = null;
+    try {
+      result = ai.extractText(userId, new AiWorkflowInputs.ExtractTextInput(chunk));
+      List<Map<String, Object>> items = parseQuestionItems(result.content());
+      aiCallLogger.success(userId, "EXTRACT", null, result);
+      return items;
+    } catch (Exception e) {
+      aiCallLogger.failure(
+          userId,
+          "EXTRACT",
+          null,
+          result == null ? ai.provider() : result.provider(),
+          AiWorkflowKey.EXTRACT_TEXT,
+          result == null ? null : result.externalRunId(),
+          e.getMessage(),
+          System.currentTimeMillis() - start);
+      throw e;
+    }
   }
 
   /** 截图任务：多模态一次出题，计费按 1 万字等价（10 点），失败全额退。 */
@@ -654,12 +676,10 @@ public class ImportService {
     int chargedCost = intValue(charged.get("cost"));
 
     long start = System.currentTimeMillis();
+    AiWorkflowResult result = null;
     try {
-      AiClient.AiResult result = ai.chatWithImage(
-          "EXTRACT", PromptTemplates.EXTRACT_SYSTEM, PromptTemplates.EXTRACT_IMAGE_USER,
-          dataUrl, true);
-      ai.logUsage(userId, "EXTRACT", result.model(), null, result, null,
-          System.currentTimeMillis() - start);
+      result = ai.extractScreenshot(userId, new AiWorkflowInputs.ExtractScreenshotInput(
+          dataUrl, "识别截图中的题目并输出题目 JSON"));
 
       List<Map<String, Object>> items = parseQuestionItems(result.content());
       if (items.isEmpty()) {
@@ -671,7 +691,17 @@ public class ImportService {
                  phase = 'READY', status = 'COMPLETED', error = null
            where id = ?
           """, writeJson(items), taskId);
+      aiCallLogger.success(userId, "EXTRACT", null, result);
     } catch (Exception e) {
+      aiCallLogger.failure(
+          userId,
+          "EXTRACT",
+          null,
+          result == null ? ai.provider() : result.provider(),
+          AiWorkflowKey.EXTRACT_IMAGE,
+          result == null ? null : result.externalRunId(),
+          e.getMessage(),
+          System.currentTimeMillis() - start);
       if (chargedCost > 0) {
         points.refundPoints(userId, chargedCost, "AI_SCREENSHOT_FAILED", "import_task", taskId);
       }
@@ -696,7 +726,7 @@ public class ImportService {
   }
 
   private List<Map<String, Object>> parseQuestionItems(String content) throws Exception {
-    JsonNode root = ai.objectMapper().readTree(content);
+    JsonNode root = objectMapper.readTree(content);
     JsonNode questions = root.path("questions");
     List<Map<String, Object>> items = new ArrayList<>();
     if (questions.isArray()) {
@@ -706,11 +736,11 @@ public class ImportService {
         item.put("type", node.path("type").asText("SINGLE"));
         item.put("content", node.path("content").asText(""));
         if (node.has("options") && node.get("options").isArray()) {
-          item.put("options", ai.objectMapper().convertValue(node.get("options"), List.class));
+          item.put("options", objectMapper.convertValue(node.get("options"), List.class));
         }
         item.put("answer", node.path("answer").asText(""));
         if (node.has("key_points") && node.get("key_points").isArray()) {
-          item.put("key_points", ai.objectMapper().convertValue(node.get("key_points"), List.class));
+          item.put("key_points", objectMapper.convertValue(node.get("key_points"), List.class));
         }
         item.put("difficulty", node.path("difficulty").asText("MEDIUM"));
         if (node.has("explanation")) {
@@ -853,7 +883,7 @@ public class ImportService {
 
   private String writeJson(Object value) {
     try {
-      return ai.objectMapper().writeValueAsString(value);
+      return objectMapper.writeValueAsString(value);
     } catch (Exception e) {
       return "null";
     }

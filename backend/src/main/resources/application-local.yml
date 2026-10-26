@@ -14,6 +14,8 @@ logging:
     com.shuati: DEBUG
 
 shuati:
+  ai:
+    engine: ${SHUATI_AI_ENGINE:dify}
   cookie:
     secure: false
   jwt:

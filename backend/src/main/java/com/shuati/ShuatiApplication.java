@@ -7,11 +7,16 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import com.shuati.email.EmailVerificationProperties;
+import com.shuati.ai.DifyWorkflowProperties;
 import com.shuati.seo.SeoProperties;
 
 @EnableAsync
 @EnableScheduling
-@EnableConfigurationProperties({EmailVerificationProperties.class, SeoProperties.class})
+@EnableConfigurationProperties({
+    EmailVerificationProperties.class,
+    SeoProperties.class,
+    DifyWorkflowProperties.class
+})
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class ShuatiApplication {
 

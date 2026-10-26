@@ -1,11 +1,15 @@
 package com.shuati.practice;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.shuati.ai.AiClient;
+import com.shuati.ai.AiWorkflowInputs;
+import com.shuati.ai.AiWorkflowKey;
+import com.shuati.ai.AiWorkflowPort;
+import com.shuati.ai.AiWorkflowResult;
 import com.shuati.billing.PointAccountService;
 import java.util.Map;
 import java.util.UUID;
@@ -34,14 +38,18 @@ class AiExplanationBillingTest {
   @MockitoBean
   AiClient ai;
 
+  @MockitoBean
+  AiWorkflowPort aiWorkflow;
+
   @Test
   void clickingExplainAgainRegeneratesAndOverwritesLibraryEntry() {
-    when(ai.chat(anyString(), anyString(), anyString(), anyBoolean()))
-        .thenReturn(new AiClient.AiResult("重新生成的解析内容", "test-model", 10, 20, 30));
-
     String userId = createUser();
     points.ensureAccount(userId);
     long questionId = createQuestionWithStoredExplanation();
+    when(aiWorkflow.explain(anyString(), any(AiWorkflowInputs.ExplainInput.class)))
+        .thenReturn(new AiWorkflowResult(
+            "重新生成的解析内容", "DIFY", AiWorkflowKey.EXPLAIN,
+            "run-explain", "dify:explain", 0, 0, 30, 100));
 
     int before = intValue(points.entitlements(userId).get("available"));
     Map<String, Object> response = aiGradingService.explanation(userId, questionId);
@@ -59,6 +67,11 @@ class AiExplanationBillingTest {
          where user_id = ? and reason = 'AI_EXPLAIN' and ref_type = 'question' and ref_id = ?
         """, Integer.class, userId, String.valueOf(questionId));
     assertThat(ledgerCount).isEqualTo(1);
+    assertThat(jdbc.queryForObject("""
+        select provider from ai_call_log
+         where question_id = ? and purpose = 'EXPLAIN'
+         order by id desc limit 1
+        """, String.class, questionId)).isEqualTo("DIFY");
   }
 
   private long createQuestionWithStoredExplanation() {
