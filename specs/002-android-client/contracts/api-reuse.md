@@ -59,6 +59,7 @@
 | 选择题提交 | `POST /api/practice/submit-choice` `{questionId,selected:[..],durationMs}` | `{recordId,verdict,score,correctAnswer}` |
 | 简答提交 | `POST /api/practice/submit-essay` `{questionId,answer,durationMs}` | `{recordId,verdict,score,feedback,referenceAnswer,degraded}`；点数不足 → 402 + 原文提示 |
 | AI 解析 | `GET /api/practice/questions/{id}/explanation` | `{explanation}`；按题缓存，重复查看不重复扣点 |
+| 背题答案 | `GET /api/practice/questions/{id}/answer` | `{answer}`；需题库可见权限，不写练习记录 |
 | 自评 | `POST /api/practice/records/{id}/self-eval` `{verdict}` | 仅 `degraded` 时使用 |
 
 ## 4. 错题与统计

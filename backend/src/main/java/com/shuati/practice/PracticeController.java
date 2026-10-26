@@ -1,5 +1,6 @@
 package com.shuati.practice;
 
+import com.shuati.bank.BankService;
 import com.shuati.common.ApiResponse;
 import com.shuati.rate.RateLimit;
 import java.util.List;
@@ -18,6 +19,7 @@ public class PracticeController {
 
   private final PracticeService practiceService;
   private final AiGradingService aiGradingService;
+  private final BankService bankService;
 
   @PostMapping("/api/practice/submit-choice")
   public ApiResponse<Map<String, Object>> submitChoice(@RequestBody Map<String, Object> body) {
@@ -88,5 +90,12 @@ public class PracticeController {
     // 考生自己的对错由前端依据本地判定结果展示，避免把别人的作答写进缓存的解析里。
     return ApiResponse.ok(aiGradingService.explanation(
         com.shuati.common.CurrentUser.id(), id));
+  }
+
+  @GetMapping("/api/practice/questions/{id}/answer")
+  @RateLimit(name = "practice:answer", limit = 240, windowSeconds = 60,
+      scope = RateLimit.Scope.USER)
+  public ApiResponse<Map<String, Object>> answer(@PathVariable long id) {
+    return ApiResponse.ok(bankService.questionAnswer(id));
   }
 }

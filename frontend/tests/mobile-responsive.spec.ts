@@ -1344,6 +1344,146 @@ test("code answer grading renders pseudocode blocks for reference and feedback",
   await expect(codeBlocks.first()).toBeVisible();
 });
 
+test("study mode reveals answer and auto-generates missing explanation", async ({ page }) => {
+  let explanationRequests = 0;
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 31,
+            unit_id: 1,
+            type: "SINGLE",
+            content: "背题模式测试题",
+            options: [
+              { key: "A", text: "正确答案" },
+              { key: "B", text: "错误答案" },
+            ],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/questions/31/answer", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { answer: "A" } } }),
+  );
+  await page.route("**/api/practice/questions/31/explanation*", (route) => {
+    explanationRequests += 1;
+    return route.fulfill({
+      json: { code: 200, message: "ok", data: { explanation: "自动生成的 AI 解析" } },
+    });
+  });
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 1, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByText("背题模式测试题")).toBeVisible();
+  await expect(page.getByText("正确答案：A")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "背题模式" }).click();
+
+  await expect(page.getByText("正确答案：A")).toBeVisible();
+  await expect(page.getByRole("button", { name: /A 正确答案/ })).toHaveClass(/border-moss/);
+  await expect(page.getByText("自动生成的 AI 解析")).toBeVisible();
+  expect(explanationRequests).toBe(1);
+
+  await page.getByRole("button", { name: "背题模式" }).click();
+  await expect(page.getByText("正确答案：A")).toHaveCount(0);
+  await expect(page.getByText("自动生成的 AI 解析")).toHaveCount(0);
+});
+
+test("study mode uses library explanation without calling ai again", async ({ page }) => {
+  let explanationRequests = 0;
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 32,
+            unit_id: 1,
+            type: "SHORT",
+            content: "已有解析的背题题",
+            options: null,
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: "解析库里已有的内容",
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/questions/32/answer", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { answer: "参考答案内容" } } }),
+  );
+  await page.route("**/api/practice/questions/32/explanation*", (route) => {
+    explanationRequests += 1;
+    return route.fulfill({ json: { code: 500, message: "不应调用", data: null } });
+  });
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 1, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await page.getByRole("button", { name: "背题模式" }).click();
+
+  await expect(page.getByText("参考答案", { exact: true })).toBeVisible();
+  await expect(page.getByText("参考答案内容")).toBeVisible();
+  await expect(page.getByText("解析库里已有的内容")).toBeVisible();
+  expect(explanationRequests).toBe(0);
+});
+
 test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({
