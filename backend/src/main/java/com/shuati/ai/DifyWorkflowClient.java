@@ -7,6 +7,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
@@ -15,6 +16,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+@Slf4j
 public class DifyWorkflowClient implements AiWorkflowPort {
 
   private static final String PROVIDER = "DIFY";
@@ -106,12 +108,16 @@ public class DifyWorkflowClient implements AiWorkflowPort {
           .retrieve()
           .body(JsonNode.class);
     } catch (ResourceAccessException e) {
+      log.warn("Dify 工作流网络异常 workflow={}", workflowKey.key(), e);
       throw new ApiException(502, "AI 编排服务响应超时或不可用");
     } catch (RestClientResponseException e) {
+      log.warn("Dify 工作流 HTTP 异常 workflow={} status={}",
+          workflowKey.key(), e.getStatusCode().value());
       throw new ApiException(502, "AI 编排服务不可用");
     } catch (ApiException e) {
       throw e;
     } catch (Exception e) {
+      log.warn("Dify 工作流调用异常 workflow={}", workflowKey.key(), e);
       throw new ApiException(502, "AI 编排服务调用失败");
     }
     if (root == null || root.isNull()) {
