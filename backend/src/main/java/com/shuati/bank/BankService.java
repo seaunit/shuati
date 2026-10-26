@@ -126,6 +126,23 @@ public class BankService {
     return questionsByUnitIds(unitIds, mode);
   }
 
+  /**
+   * 背题模式按题读取答案。答案不在题目列表里批量下发，避免普通刷题时提前泄题。
+   */
+  public Map<String, Object> questionAnswer(long questionId) {
+    List<Map<String, Object>> rows = jdbc.queryForList("""
+        select q.answer, q.status, u.bank_id
+          from question q
+          join unit u on u.id = q.unit_id
+         where q.id = ?
+        """, questionId);
+    if (rows.isEmpty() || !"ON".equals(rows.get(0).get("status"))) {
+      throw new ApiException(404, "题目不存在或已下架");
+    }
+    requireBankAccess(((Number) rows.get(0).get("bank_id")).longValue());
+    return Map.of("answer", rows.get(0).get("answer"));
+  }
+
   public Map<String, Object> bankProgress(long bankId) {
     requireBankAccess(bankId);
     List<Long> unitIds = jdbc.queryForList(

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-vue-next";
+import { BookOpenCheck, ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-vue-next";
 import { api } from "@/api/client";
 import MarkdownText from "@/components/MarkdownText.vue";
 import { useBillingStore } from "@/stores/billing";
@@ -35,6 +35,10 @@ const loading = ref(true);
 const selected = ref<string[]>([]);
 const textAnswer = ref("");
 const submitting = ref(false);
+const studyMode = ref(false);
+const studyAnswers = ref<Record<number, string>>({});
+const studyAnswerLoading = ref(false);
+const autoExplanationIds = new Set<number>();
 const result = ref<{
   recordId: number | null;
   verdict: string;
@@ -75,6 +79,13 @@ const doneCount = computed(() => scopeAnsweredIds.value.length);
 const scopeTotalCount = computed(() => scopeTotal.value || questions.value.length);
 
 const current = computed(() => questions.value[index.value]);
+const studyAnswer = computed(() =>
+  current.value ? studyAnswers.value[current.value.id] ?? "" : "",
+);
+const revealedChoiceAnswer = computed(() =>
+  result.value?.correctAnswer
+    ?? (studyMode.value && current.value?.type !== "SHORT" ? studyAnswer.value : ""),
+);
 // 只有选择题才回显「你的答案」：简答的长文本再贴一遍太啰嗦
 const answeredChoice = computed(
   () => !!result.value && current.value?.type !== "SHORT" && selected.value.length > 0,
@@ -98,7 +109,7 @@ function verdictLabel(verdict: string) {
 }
 
 function toggleOption(key: string) {
-  if (result.value || !current.value) return;
+  if (result.value || studyMode.value || !current.value) return;
   if (current.value.type === "SINGLE") {
     selected.value = [key];
     return;
@@ -138,10 +149,13 @@ const OPTION_STATE_LABEL: Record<OptionState, string> = {
 };
 
 function optionState(key: string): OptionState {
+  if (studyMode.value && !result.value) {
+    return revealedChoiceAnswer.value.toUpperCase().includes(key) ? "correct" : "idle";
+  }
   if (!result.value) {
     return selected.value.includes(key) ? "chosen" : "idle";
   }
-  if (result.value.correctAnswer?.toUpperCase().includes(key)) {
+  if (revealedChoiceAnswer.value.toUpperCase().includes(key)) {
     return "correct";
   }
   return selected.value.includes(key) ? "wrong" : "idle";
@@ -218,24 +232,85 @@ async function submit() {
   }
 }
 
-async function loadExplanation() {
-  if (!current.value || !result.value) return;
+async function loadExplanation(): Promise<boolean> {
+  if (!current.value) return false;
+  const questionId = current.value.id;
   explanationLoading.value = true;
   explanationError.value = "";
   try {
     const response = await api<{ explanation: string }>(
-      `/api/practice/questions/${current.value.id}/explanation`,
+      `/api/practice/questions/${questionId}/explanation`,
     );
-    // 同步更新当前题目对象，切题再返回时 resetState 才能带出刚生成的解析。
-    current.value.explanation = response.explanation;
-    explanation.value = response.explanation;
-    explanationFromLibrary.value = false;
+    const question = questions.value.find((item) => item.id === questionId);
+    if (question) {
+      // 同步更新题目对象，切题再返回时 resetState 才能带出刚生成的解析。
+      question.explanation = response.explanation;
+    }
+    if (current.value?.id === questionId) {
+      explanation.value = response.explanation;
+      explanationFromLibrary.value = false;
+    }
     await billing.load();
+    return true;
   } catch (e) {
     // 重新生成失败时保留解析库里原有的解析，只提示错误
-    explanationError.value = e instanceof Error ? e.message : "解析失败";
+    if (current.value?.id === questionId) {
+      explanationError.value = e instanceof Error ? e.message : "解析失败";
+    }
+    return false;
   } finally {
-    explanationLoading.value = false;
+    if (current.value?.id === questionId) {
+      explanationLoading.value = false;
+    }
+  }
+}
+
+async function revealStudyQuestion() {
+  const question = current.value;
+  if (!studyMode.value || !question) return;
+  const questionId = question.id;
+
+  if (!studyAnswers.value[questionId]) {
+    studyAnswerLoading.value = true;
+    try {
+      const response = await api<{ answer: string }>(
+        `/api/practice/questions/${questionId}/answer`,
+      );
+      studyAnswers.value = { ...studyAnswers.value, [questionId]: response.answer };
+    } catch (e) {
+      if (current.value?.id === questionId) {
+        explanationError.value = e instanceof Error ? e.message : "加载答案失败";
+      }
+      return;
+    } finally {
+      if (current.value?.id === questionId) {
+        studyAnswerLoading.value = false;
+      }
+    }
+  }
+
+  if (current.value?.id !== questionId) return;
+  if (question.explanation) {
+    if (!explanation.value) {
+      explanation.value = question.explanation;
+      explanationFromLibrary.value = true;
+    }
+    return;
+  }
+  if (explanation.value || autoExplanationIds.has(questionId)) return;
+
+  autoExplanationIds.add(questionId);
+  const generated = await loadExplanation();
+  if (!generated) {
+    autoExplanationIds.delete(questionId);
+  }
+}
+
+function toggleStudyMode() {
+  studyMode.value = !studyMode.value;
+  explanationError.value = "";
+  if (studyMode.value) {
+    void revealStudyQuestion();
   }
 }
 
@@ -380,6 +455,9 @@ async function clearCursor() {
 // 任何一次切题（下一题 / 上一题 / 从头开始 / 落位）都把位置记下来
 watch(index, () => {
   void saveCursor();
+  if (studyMode.value) {
+    void revealStudyQuestion();
+  }
 });
 
 onMounted(async () => {
@@ -463,6 +541,15 @@ onMounted(async () => {
           </div>
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-4">
+          <button
+            class="flex items-center gap-1 text-sm transition"
+            :class="studyMode ? 'font-medium text-moss' : 'text-oat hover:text-ink'"
+            :aria-pressed="studyMode"
+            @click="toggleStudyMode"
+          >
+            <BookOpenCheck class="h-4 w-4" />
+            背题模式
+          </button>
           <button class="text-sm text-oat transition hover:text-ink" @click="restart">从头开始</button>
           <button class="text-sm text-oat transition hover:text-ink" @click="finish">结束练习</button>
         </div>
@@ -492,7 +579,7 @@ onMounted(async () => {
         <div v-if="current.type === 'SHORT'" class="mt-5">
           <textarea
             v-model="textAnswer"
-            :disabled="!!result"
+            :disabled="!!result || studyMode"
             rows="6"
             class="w-full rounded-xl border border-mist bg-paper px-4 py-3 text-sm outline-none transition focus:border-moss disabled:opacity-80"
             placeholder="写下你的答案、解题思路或伪代码…"
@@ -504,7 +591,7 @@ onMounted(async () => {
             :key="option.key"
             class="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm transition"
             :class="OPTION_ROW_CLASS[optionState(option.key)]"
-            :disabled="!!result"
+            :disabled="!!result || studyMode"
             @click="toggleOption(option.key)"
           >
             <span
@@ -518,6 +605,41 @@ onMounted(async () => {
               <span class="sr-only">{{ OPTION_STATE_LABEL[optionState(option.key)] }}</span>
             </span>
           </button>
+        </div>
+
+        <div
+          v-if="studyMode && !result"
+          data-testid="study-panel"
+          class="mt-5 rounded-xl border border-moss/30 bg-moss/8 p-4"
+        >
+          <template v-if="current.type === 'SHORT'">
+            <p class="text-sm font-medium text-ink">参考答案</p>
+            <MarkdownText v-if="studyAnswer" :text="studyAnswer" class="mt-1" />
+            <p v-else-if="studyAnswerLoading" class="mt-1 text-sm text-oat">正在加载答案…</p>
+          </template>
+          <p v-else-if="studyAnswer" class="text-sm text-ink">
+            正确答案：<span class="font-semibold text-moss">{{ studyAnswer }}</span>
+          </p>
+          <p v-else-if="studyAnswerLoading" class="text-sm text-oat">正在加载答案…</p>
+
+          <div class="mt-4 border-t border-moss/20 pt-3">
+            <p class="mb-2 text-sm font-medium text-ink">AI 解析</p>
+            <MarkdownText v-if="explanation" :text="explanation" />
+            <p v-else-if="explanationLoading" class="flex items-center gap-2 text-sm text-oat">
+              <Loader2 class="h-4 w-4 animate-spin" />
+              解析库暂无内容，正在生成…
+            </p>
+            <p v-else-if="explanationError" class="text-sm text-rose">{{ explanationError }}</p>
+            <button
+              v-if="!explanationLoading && (!explanation || explanationError)"
+              class="mt-1 flex items-center gap-1 text-sm text-moss transition hover:text-moss/80"
+              @click="loadExplanation"
+            >
+              <Sparkles class="h-4 w-4" />
+              {{ explanationError ? "重新生成解析" : "生成 AI 解析" }}
+            </button>
+            <p class="mt-3 text-xs text-oat">解析缺失时会自动生成，并按现有规则扣除点数。</p>
+          </div>
         </div>
 
         <div v-if="result" class="mt-5 space-y-3 rounded-xl bg-mist/60 p-4">
@@ -589,7 +711,7 @@ onMounted(async () => {
             {{ explanation ? "重新生成解析" : "AI 解析" }}
           </button>
           <button
-            v-if="!result"
+            v-if="!result && !studyMode"
             class="flex shrink-0 items-center gap-1 rounded-xl bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-ink/90 disabled:opacity-50 sm:px-5"
             :disabled="submitting"
             @click="submit"
