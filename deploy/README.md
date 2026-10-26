@@ -233,6 +233,60 @@ bash deploy/scripts/deploy.sh user@服务器IP
 
 脚本做的事：前端 `npm run build` → 后端 `mvn package` → 上传 jar/dist/payments → 远端 `npm ci` → 重启 `shuati` 与 `shuati-payments` → reload Nginx。
 
+### Dify 生产编排
+
+正式环境使用同机 Dify 1.13.3。控制台只绑定 `127.0.0.1:8501`，不开放公网端口。
+
+首次安装或升级：
+
+```bash
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh install
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
+```
+
+初始化管理员、安装 DeepSeek 插件、导入并发布四个工作流、创建四个 Service API Token：
+
+```bash
+sudo python3 /opt/shuati/deploy/scripts/dify-prod-bootstrap.py
+```
+
+脚本先直接调用四类 Dify 工作流；全部成功后再切换正式后端：
+
+```bash
+sudo python3 /opt/shuati/deploy/scripts/dify-prod-bootstrap.py --activate
+```
+
+脚本会自动生成 Dify 运行时密钥和独立管理员口令，只写入 `/etc/shuati/env`（600）；
+管理员登录信息另存为 `/root/dify-admin.txt`（600），可用以下命令查看：
+
+```bash
+sudo cat /root/dify-admin.txt
+```
+
+运维命令：
+
+```bash
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh start
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh stop
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
+sudo docker compose \
+  --project-directory /opt/dify \
+  --env-file /etc/shuati/env \
+  -f /opt/dify/docker-compose.yaml \
+  -f /opt/dify/docker-compose.prod.yaml \
+  logs -f --tail=200 api worker
+```
+
+正式后端故障回滚到现有直连模型：
+
+```bash
+sudo sed -i 's/^SHUATI_AI_ENGINE=.*/SHUATI_AI_ENGINE=direct/' /etc/shuati/env
+sudo systemctl restart shuati
+curl -fsS http://127.0.0.1:8080/actuator/health
+```
+
+回滚不删除 Dify 数据卷，修复后可再次切回 `dify`。
+
 ## 5. 启用 systemd 与 Nginx（首次部署时手动做一次）
 
 ```bash
