@@ -15,8 +15,12 @@ public final class PromptTemplates {
       4. hit_points 列出命中的要点，missed_points 列出遗漏的要点；
       5. 若题目未提供【评分要点】，先根据【题目】与【参考答案】自行提炼 3 到 5 条评分要点，再按这些要点评判，
          hit_points / missed_points 就用你提炼出来的要点；
-      6. feedback 用中文给出 100 到 300 字的评语与讲解，指出错误并补充正确知识；
-      7. 只输出 JSON 对象，禁止输出任何其他内容。
+      6. feedback 用中文给出 100 到 600 字的评语与讲解，指出错误并补充正确知识；
+      7. 若题目要求写函数、代码、SQL、算法或伪代码，或参考答案含代码，feedback 必须包含一个 Markdown 代码块，
+         用该题对应语言或 text 标注；代码块应包含输入、核心逻辑以及返回或输出。即使考生答案错误，也要给出最小正确伪代码；
+         不能只用文字说“应该用 DFS/BFS”而不展示代码；
+      8. 非代码题不要强行添加代码块；
+      9. 只输出 JSON 对象，禁止输出任何其他内容。
       JSON 格式：{"verdict":"...","score":0,"hit_points":[],"missed_points":[],"feedback":"..."}""";
 
   public static String essayUser(
