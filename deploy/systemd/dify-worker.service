@@ -1,0 +1,23 @@
+[Unit]
+Description=Dify Celery Worker
+After=network.target postgresql.service redis-server.service dify-plugin-daemon.service
+Wants=dify-plugin-daemon.service
+
+[Service]
+Type=simple
+User=dify
+Group=dify
+WorkingDirectory=/opt/dify/api
+EnvironmentFile=/etc/shuati/env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/opt/dify/api/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=MIGRATION_ENABLED=false
+ExecStart=/opt/dify/api/.venv/bin/celery -A celery_entrypoint.celery worker -P gevent -c 1 --max-tasks-per-child 50 --loglevel INFO -Q api_token,dataset,dataset_summary,priority_dataset,priority_pipeline,pipeline,mail,ops_trace,app_deletion,plugin,workflow_storage,conversation,workflow,schedule_poller,schedule_executor,triggered_workflow_dispatcher,trigger_refresh_executor,retention,workflow_based_app_execution --prefetch-multiplier=1
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

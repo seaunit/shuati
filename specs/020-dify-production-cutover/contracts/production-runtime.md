@@ -35,5 +35,5 @@ payment /health -> ok
 ## Secret Boundary
 
 - 仓库只允许出现空 Token 占位。
-- 真实值只允许在 `/etc/shuati/env` 或 Dify 容器加密存储中。
+- 真实值只允许在 `/etc/shuati/env` 或 Dify 数据库加密存储中。
 - 日志、截图、构建产物不得包含真实 Token。

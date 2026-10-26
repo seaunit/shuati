@@ -5,7 +5,8 @@
 ```bash
 ssh root@8.210.73.129
 free -m
-docker --version
+python3 --version
+node --version
 systemctl is-active shuati nginx mysql redis-server
 ```
 

@@ -9,13 +9,13 @@
 - 单独购买 4G 以上服务器：隔离更好，但增加成本且当前用户要求继续使用现有香港服务器。
 - 使用 Dify Cloud：不符合现有数据与运维边界。
 
-## Decision: 官方 Compose + 额外 2 GiB Swap + 低并发
+## Decision: 原生 systemd + 额外 2 GiB Swap + 低并发
 
-**Rationale**: 保持升级路径与 Dify 官方一致；Swap 和单 Worker 可以降低 3.5 GiB 物理内存被 OOM 击穿的概率。
+**Rationale**: 服务器上的其他应用都使用原生方式运行，复用现有 Python、Node、PostgreSQL、Redis 和 systemd 可以避免 Docker 常驻开销；Swap 和单 Worker 可以降低 3.5 GiB 物理内存被 OOM 击穿的概率。
 
 **Alternatives considered**:
 
-- 手工拆解为多个裸进程：可节省少量内存，但维护成本高且难以升级。
+- Docker Compose：部署集中，但用户明确要求不使用容器，且会增加额外常驻开销。
 
 ## Decision: 控制台仅绑定 `127.0.0.1:8501`
 

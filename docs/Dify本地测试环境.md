@@ -112,4 +112,4 @@ docker logs -f docker-plugin_daemon-1
 
 ## 生产环境
 
-正式服务运行在香港服务器，Dify 1.13.3 只监听 `127.0.0.1:8501`。完整安装、四个工作流导入、Service API Token 创建和直连回滚见 `deploy/README.md`。
+正式服务运行在香港服务器，Dify 1.13.3 采用 Python/Node/PostgreSQL/Redis 原生安装，只监听 `127.0.0.1:8501`。完整安装、四个工作流导入、Service API Token 创建和直连回滚见 `deploy/README.md`。

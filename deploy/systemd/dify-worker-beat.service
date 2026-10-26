@@ -1,0 +1,22 @@
+[Unit]
+Description=Dify Celery Beat
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=dify
+Group=dify
+WorkingDirectory=/opt/dify/api
+EnvironmentFile=/etc/shuati/env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/opt/dify/api/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=MIGRATION_ENABLED=false
+ExecStart=/opt/dify/api/.venv/bin/celery -A app.celery beat --loglevel INFO
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

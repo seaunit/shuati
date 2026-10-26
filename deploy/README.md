@@ -235,7 +235,7 @@ bash deploy/scripts/deploy.sh user@服务器IP
 
 ### Dify 生产编排
 
-正式环境使用同机 Dify 1.13.3。控制台只绑定 `127.0.0.1:8501`，不开放公网端口。
+正式环境使用同机原生 Dify 1.13.3，不使用 Docker。控制台只绑定 `127.0.0.1:8501`，不开放公网端口。
 
 首次安装或升级：
 
@@ -269,12 +269,8 @@ sudo cat /root/dify-admin.txt
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh start
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh stop
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
-sudo docker compose \
-  --project-directory /opt/dify \
-  --env-file /etc/shuati/env \
-  -f /opt/dify/docker-compose.yaml \
-  -f /opt/dify/docker-compose.prod.yaml \
-  logs -f --tail=200 api worker
+sudo journalctl -u dify-api -u dify-worker -u dify-worker-beat \
+  -u dify-plugin-daemon -u dify-web -f
 ```
 
 正式后端故障回滚到现有直连模型：
@@ -285,7 +281,7 @@ sudo systemctl restart shuati
 curl -fsS http://127.0.0.1:8080/actuator/health
 ```
 
-回滚不删除 Dify 数据卷，修复后可再次切回 `dify`。
+回滚不删除 Dify 数据库和插件目录，修复后可再次切回 `dify`。
 
 ## 5. 启用 systemd 与 Nginx（首次部署时手动做一次）
 

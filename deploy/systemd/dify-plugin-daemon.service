@@ -1,0 +1,22 @@
+[Unit]
+Description=Dify Plugin Daemon
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=dify
+Group=dify
+WorkingDirectory=/opt/dify
+EnvironmentFile=/etc/shuati/env
+Environment=SERVER_PORT=5002
+Environment=PLUGIN_REMOTE_INSTALLING_HOST=127.0.0.1
+Environment=PLUGIN_REMOTE_INSTALLING_PORT=5003
+ExecStart=/bin/bash -c 'export SERVER_KEY="$PLUGIN_DAEMON_KEY"; export DB_DATABASE="$DB_PLUGIN_DATABASE"; export DIFY_INNER_API_KEY="$PLUGIN_DIFY_INNER_API_KEY"; exec /opt/dify/bin/dify-plugin'
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

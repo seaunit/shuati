@@ -10,7 +10,7 @@
 
 ## Phase 2: Foundational
 
-- [ ] T004 在生产服务器安装 Docker Engine/Compose、增加 2 GiB Swap，并确认现有服务仍在线
+- [ ] T004 在生产服务器安装 Python/Node/系统依赖、增加 2 GiB Swap，并确认现有服务仍在线
 - [ ] T005 将 Dify 1.13.3 部署到 `/opt/dify`，只绑定 `127.0.0.1:8501`
 - [ ] T006 [P] 将生产脚本与四个无密钥工作流同步到 `/opt/shuati`，检查 `/etc/shuati/env` 权限
 
@@ -34,7 +34,7 @@
 
 - [ ] T012 [US2] 验证 8501 只监听回环地址且公网不可访问
 - [ ] T013 [US2] 扫描仓库、构建产物和服务器日志，确认无真实密钥泄露
-- [ ] T014 [US2] 备份 `/etc/shuati/env`、systemd 与 Dify Compose 配置
+- [ ] T014 [US2] 备份 `/etc/shuati/env`、systemd、Nginx 与 Dify 原生配置
 - [ ] T015 [US2] 演练 `SHUATI_AI_ENGINE=direct` 回滚并确认后端恢复
 
 ## Phase 5: User Story 3 - 正式发布验收 (P3)
@@ -44,7 +44,7 @@
 **Independent Test**: 公网页面、健康检查和登录入口全部通过。
 
 - [ ] T016 [US3] 检查正式首页、登录页、价格页、下载页和 Sitemap
-- [ ] T017 [US3] 检查后端健康、支付侧车健康、Nginx、MySQL、Redis 和 Dify 容器状态
+- [ ] T017 [US3] 检查后端健康、支付侧车健康、Nginx、MySQL、Redis 和 Dify systemd 服务状态
 - [ ] T018 [US3] 确认正式账号可登录且页面调用 AI 功能成功
 
 ## Phase 6: Polish

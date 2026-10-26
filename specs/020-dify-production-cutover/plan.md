@@ -4,15 +4,15 @@
 
 ## Summary
 
-在现有香港服务器上部署固定版本 Dify 1.13.3，复用业务服务器并保持现有 MySQL、支付和邮件配置不变。Dify 控制台只监听 `127.0.0.1:8501`，正式 Spring Boot 通过 `SHUATI_AI_ENGINE=dify` 调用本机服务 API。部署脚本负责安装 Docker、增加 Swap、生成独立密钥、导入四套工作流、创建四个 Service API Token、更新 `/etc/shuati/env`、重启服务并执行四类真实冒烟。失败时切回 `direct`。
+在现有香港服务器上原生部署固定版本 Dify 1.13.3，复用业务服务器并保持现有 MySQL、支付和邮件配置不变。Dify 控制台只监听 `127.0.0.1:8501`，正式 Spring Boot 通过 `SHUATI_AI_ENGINE=dify` 调用本机服务 API。部署脚本负责安装 Python/Node/插件守护进程、增加 Swap、生成独立密钥、导入四套工作流、创建四个 Service API Token、更新 `/etc/shuati/env`、重启服务并执行四类真实冒烟。失败时切回 `direct`。
 
 ## Technical Context
 
 **Language/Version**: Java 17 / Spring Boot 3.5.16；Dify 1.13.3；Bash 5
 
-**Primary Dependencies**: Docker Engine、Docker Compose、Dify API/Worker/Web、PostgreSQL、Redis、Weaviate、DeepSeek 插件 0.0.26
+**Primary Dependencies**: Python 3.12、Node 22、Dify API/Worker/Web、Dify Plugin Daemon、PostgreSQL 18、Redis 7、pgvector、DeepSeek 插件 0.0.26
 
-**Storage**: Dify 独立 Docker 数据卷；业务 MySQL 不变；密钥只写 `/etc/shuati/env`
+**Storage**: PostgreSQL 独立数据库 `dify` / `dify_plugin`；Redis DB 3/4；业务 MySQL 不变；密钥只写 `/etc/shuati/env`
 
 **Testing**: `mvn -f backend/pom.xml test`、`npm --prefix frontend run build`、Dify 健康检查、四类真实工作流冒烟、公网页面与端口检查
 
@@ -31,7 +31,7 @@
 | 原则 | 结论 | 说明 |
 | --- | --- | --- |
 | I 密钥与用户数据 | PASS | 所有 Token 和 Dify 密钥写 `/etc/shuati/env`，仓库只保留空占位 |
-| II 数据库迁移 | PASS | 业务 schema 不变；Dify 使用独立数据卷 |
+| II 数据库迁移 | PASS | 业务 schema 不变；Dify 使用独立 PostgreSQL 数据库 |
 | III 测试与证据 | PASS | 上线前跑全量测试与构建，上线后执行真实工作流冒烟 |
 | IV 收录边界 | PASS | 本次不新增公开页面，Nginx 只保留现有公开路由 |
 | V 点数与 AI | PASS | 继续使用现有点数、退款、`ai_call_log` 与外部运行 ID |
@@ -67,7 +67,7 @@ deploy/README.md                    # 生产部署与回滚说明
 
 ## Phase 0: Research
 
-见 [research.md](./research.md)。已确定使用官方 Dify 1.13.3 Compose、受限回环端口、低并发和直连回滚。
+见 [research.md](./research.md)。已确定使用官方 Dify 1.13.3 原生源码、受限回环端口、低并发和直连回滚。
 
 ## Phase 1: Design
 
