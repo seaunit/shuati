@@ -152,7 +152,7 @@
 - [x] T055 执行密钥扫描，检查 `DIFY_WORKFLOW_*_TOKEN`、模型 Key、Authorization Header 和 Dify `.env` 未进入仓库
 - [x] T056 在真实本地 Dify 导入四个 DSL，配置模型供应商并完成四个工作流冒烟
 - [x] T057 逐项验证判题、解析、文本出题和截图出题，不依赖公网时记录 Mock 证据，真实冒烟记录 Dify 运行 ID
-- [ ] T058 提交代码并保持生产未切换，提交信息说明本阶段仅本地 Dify
+- [x] T058 提交代码并保持生产未切换，提交信息说明本阶段仅本地 Dify
 - [x] T059 运行 `$speckit-analyze` 对齐 spec、plan、tasks、代码和测试结果
 
 ---
