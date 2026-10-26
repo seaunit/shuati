@@ -52,7 +52,7 @@ class BankWordExportTest {
             """,
         "B",
         "EASY",
-        "现代 JDK 默认通常使用 G1。");
+        "现代 JDK 默认通常使用 G1。\n## 延伸\n- 对比 Serial GC");
     insertChoice(
         advanced,
         "MULTI",
@@ -93,6 +93,8 @@ class BankWordExportTest {
       assertThat(text).contains("简述类加载过程。");
       assertThat(text).contains("加载、验证、准备、解析、初始化。");
       assertThat(text).doesNotContain("**");
+      assertThat(text).doesNotContain("##");
+      assertThat(text).contains("• 对比 Serial GC");
 
       var pageSize = document.getDocument().getBody().getSectPr().getPgSz();
       assertThat(((Number) pageSize.getW()).intValue()).isEqualTo(11906);
