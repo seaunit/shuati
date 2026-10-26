@@ -533,7 +533,10 @@ onMounted(async () => {
               你的答案：<span class="font-medium" :class="yourAnswerClass()">{{ selected.join("") }}</span>
             </p>
           </div>
-          <p v-if="result.referenceAnswer" class="text-sm text-ink/80">参考答案：{{ result.referenceAnswer }}</p>
+          <div v-if="result.referenceAnswer" data-testid="reference-answer" class="text-sm text-ink/80">
+            <p class="font-medium text-ink">参考答案</p>
+            <MarkdownText :text="String(result.referenceAnswer)" />
+          </div>
           <div v-if="result.feedback" class="text-sm text-ink/80">
             <MarkdownText :text="String(result.feedback.feedback ?? '')" />
             <ul v-if="Array.isArray(result.feedback.hit_points) && result.feedback.hit_points.length" class="mt-2 list-disc pl-5 text-xs text-moss">

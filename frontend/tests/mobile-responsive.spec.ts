@@ -1268,6 +1268,82 @@ test("practice header shows both the cursor position and the completed count", a
   await expect(page.getByTestId("practice-done")).toHaveText("已完成 2 / 3 题");
 });
 
+test("code answer grading renders pseudocode blocks for reference and feedback", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 91,
+            unit_id: 1,
+            type: "SHORT",
+            content: "请写一个函数，将一个整数分解为最少数量的四次方数之和。",
+            options: null,
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 1, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } }),
+  );
+  await page.route("**/api/practice/submit-essay", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          recordId: 9,
+          verdict: "WRONG",
+          score: 0,
+          referenceAnswer: "```text\nfunction solve(m):\n  return dfs(m)\n```",
+          feedback: {
+            feedback: "需要补充完整搜索：\n\n```text\nfunction solve(m):\n  for limit in 1..19:\n    if dfs(m, limit): return limit\n```",
+            hit_points: [],
+            missed_points: ["缺少核心搜索逻辑"],
+          },
+          degraded: false,
+        },
+      },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await page.getByPlaceholder("写下你的答案、解题思路或伪代码…").fill("233呃呃呃");
+  await page.getByRole("button", { name: "提交答案" }).click();
+
+  const codeBlocks = page.locator("pre").filter({ hasText: "function solve(m)" });
+  await expect(codeBlocks).toHaveCount(2);
+  await expect(codeBlocks.first()).toBeVisible();
+});
+
 test("stored explanation shows after answering and can be regenerated", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

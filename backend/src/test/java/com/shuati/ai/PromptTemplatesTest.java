@@ -54,4 +54,15 @@ class PromptTemplatesTest {
         .contains("不得拆题")
         .contains("不得虚构选项");
   }
+
+  @Test
+  void essayGradingRequiresReadablePseudocodeForCodeQuestions() {
+    assertThat(PromptTemplates.ESSAY_SYSTEM)
+        .contains("函数")
+        .contains("伪代码")
+        .contains("代码块")
+        .contains("输入")
+        .contains("返回")
+        .contains("SQL");
+  }
 }
