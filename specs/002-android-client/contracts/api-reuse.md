@@ -99,6 +99,7 @@
 | 题目列表 | `GET /api/manage/banks/{id}/questions?status=ALL\|ON\|OFF&q=` |
 | 新增题目 | `POST /api/manage/questions` `{bankId, unitId, type, content, answer, options, keyPoints, difficulty, explanation, tags}` |
 | 编辑题目 | `PUT /api/manage/questions/{id}`（**整题改写，注意是 PUT 不是 PATCH**；`unitId` 传 null 表示移到「未分类」） |
+| 导出题库 Word | `GET /api/manage/banks/{id}/export.docx` | 返回 `.docx` 附件；权限与题库维护一致 |
 | 上下架 | `PATCH /api/manage/questions/{id}/status` `{status}` |
 | 删除题目 | `DELETE /api/manage/questions/{id}` |
 

@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { Check, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-vue-next";
+import {
+  Check,
+  FileDown,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-vue-next";
 import { api, ApiRequestError } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 
@@ -56,6 +66,7 @@ const units = ref<Unit[]>([]);
 const questions = ref<Question[]>([]);
 const loading = ref(true);
 const busy = ref(false);
+const exporting = ref(false);
 const notice = ref("");
 const noticeError = ref("");
 // 新增/编辑题目这类「点了按钮就关窗」的操作，结果必须显示在视口里：
@@ -245,6 +256,57 @@ async function saveBank() {
     fail(e, "保存失败");
   } finally {
     busy.value = false;
+  }
+}
+
+function downloadFileName(contentDisposition: string | null) {
+  if (contentDisposition) {
+    const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    if (encoded) {
+      try {
+        return decodeURIComponent(encoded);
+      } catch {
+        // 回退到题库名
+      }
+    }
+    const plain = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
+    if (plain) return plain;
+  }
+  const safeBankName = (bankName.value.trim() || "题库").replace(/[\\/:*?"<>|]+/g, "_");
+  return `${safeBankName}.docx`;
+}
+
+async function exportWord() {
+  if (exporting.value) return;
+  exporting.value = true;
+  notice.value = "";
+  noticeError.value = "";
+  try {
+    const response = await fetch(`/api/manage/banks/${bankId}/export.docx`, {
+      credentials: "include",
+      headers: { "X-Requested-With": "ShuatiApp" },
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      throw new ApiRequestError(payload?.message || "导出 Word 失败", response.status);
+    }
+    const blob = await response.blob();
+    if (blob.size === 0) {
+      throw new Error("导出的 Word 文件为空");
+    }
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = downloadFileName(response.headers.get("Content-Disposition"));
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    showToast("Word 已开始下载");
+  } catch (e) {
+    fail(e, "导出 Word 失败");
+  } finally {
+    exporting.value = false;
   }
 }
 
@@ -670,6 +732,19 @@ onBeforeUnmount(() => {
             <Check v-else class="h-4 w-4" />
             保存
           </button>
+          <a
+            :href="`/api/manage/banks/${bankId}/export.docx`"
+            download
+            data-testid="bank-export-word"
+            :aria-disabled="exporting"
+            class="flex items-center gap-1.5 rounded-xl border border-moss px-4 py-2 text-sm text-moss transition hover:bg-moss/10"
+            :class="exporting ? 'pointer-events-none opacity-60' : ''"
+            @click.prevent="exportWord"
+          >
+            <Loader2 v-if="exporting" class="h-4 w-4 animate-spin" />
+            <FileDown v-else class="h-4 w-4" />
+            导出 Word
+          </a>
           <button
             class="flex items-center gap-1.5 rounded-xl border border-rose/40 px-4 py-2 text-sm text-rose transition hover:bg-rose/10"
             @click="openDeleteDialog"

@@ -14,12 +14,17 @@ import com.shuati.rate.RateLimit;
 import com.shuati.user.Profile;
 import com.shuati.user.ProfileRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -58,6 +63,7 @@ public class BankManageController {
   private final ProfileRepository profiles;
   private final EmailVerificationService emails;
   private final EmailDispatchService emailDispatch;
+  private final BankWordExportService wordExport;
 
   /** 我能维护的题库：自己的，加上管理员能看到的公共题库 */
   @GetMapping("/api/manage/banks")
@@ -132,6 +138,26 @@ public class BankManageController {
         "update bank set name = coalesce(nullif(?, ''), name), description = ? where id = ?",
         name, description, id);
     return ApiResponse.ok(null);
+  }
+
+  /** 导出当前账号有维护权限的完整题库，格式为自动排版的 Word 2007+ 文档。 */
+  @GetMapping(value = "/api/manage/banks/{id}/export.docx",
+      produces = "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+  @RateLimit(name = "bank:export-word", limit = 5, windowSeconds = 60,
+      scope = RateLimit.Scope.USER)
+  public ResponseEntity<byte[]> exportWord(@PathVariable long id) {
+    requireManage(id);
+    BankWordExportService.ExportFile file = wordExport.export(id);
+    ContentDisposition disposition = ContentDisposition.attachment()
+        .filename(file.fileName(), StandardCharsets.UTF_8)
+        .build();
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+        .contentLength(file.content().length)
+        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+        .header(HttpHeaders.CACHE_CONTROL, "no-store")
+        .body(file.content());
   }
 
   /**
