@@ -36,4 +36,22 @@ class PromptTemplatesTest {
     // 提示词里要明确交代「自己提炼要点」这条规则
     assertThat(PromptTemplates.ESSAY_SYSTEM).contains("自行提炼");
   }
+
+  @Test
+  void extractPromptPreservesExistingExamQuestionsInsteadOfInventingMore() {
+    assertThat(PromptTemplates.EXTRACT_SYSTEM)
+        .contains("试卷模式")
+        .contains("不得新增")
+        .contains("题内小问")
+        .contains("没有显式选项")
+        .contains("SHORT")
+        .contains("Markdown 表格")
+        .contains("2 选 1");
+
+    assertThat(PromptTemplates.EXTRACT_IMAGE_USER)
+        .contains("纸质试卷")
+        .contains("原样抽取")
+        .contains("不得拆题")
+        .contains("不得虚构选项");
+  }
 }
