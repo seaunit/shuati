@@ -28,7 +28,8 @@ interface Props {
 
 - 不请求后端。
 - 不自动播放。
-- 组件卸载、页面隐藏、题目变化时调用 `speechSynthesis.cancel()`。
+- 组件卸载、题目变化、脚本更新时调用 `speechSynthesis.cancel()`。
+- 浏览器窗口失焦、标签页切换或 `visibilitychange` 不主动取消播放。
 
 ## Accessibility
 
