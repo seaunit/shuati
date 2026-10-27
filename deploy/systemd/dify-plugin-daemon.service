@@ -1,0 +1,40 @@
+[Unit]
+Description=Dify Plugin Daemon
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=dify
+Group=dify
+WorkingDirectory=/opt/dify
+EnvironmentFile=/etc/shuati/env
+Environment=PLATFORM=local
+Environment=SERVER_HOST=127.0.0.1
+Environment=SERVER_PORT=5002
+Environment=GIN_MODE=release
+Environment=DIFY_INNER_API_URL=http://127.0.0.1:5001
+Environment=PLUGIN_REMOTE_INSTALLING_ENABLED=false
+Environment=DB_DEFAULT_DATABASE=postgres
+Environment=DB_SSL_MODE=disable
+Environment=PLUGIN_MAX_EXECUTION_TIMEOUT=600
+Environment=PLUGIN_LOCAL_LAUNCHING_CONCURRENT=2
+Environment=ROUTINE_POOL_SIZE=64
+Environment=LIFETIME_COLLECTION_HEARTBEAT_INTERVAL=60
+Environment=LIFETIME_COLLECTION_GC_INTERVAL=300
+Environment=LIFETIME_STATE_GC_INTERVAL=600
+Environment=DIFY_INVOCATION_CONNECTION_IDLE_TIMEOUT=120
+Environment=MAX_BUNDLE_PACKAGE_SIZE=52428800
+Environment=PYTHON_ENV_INIT_TIMEOUT=120
+Environment=PYTHON_INTERPRETER_PATH=/usr/bin/python3
+Environment=UV_PATH=/usr/local/bin/uv
+Environment=PERSISTENCE_STORAGE_PATH=/opt/dify/plugin_storage/persistence
+Environment=PERSISTENCE_STORAGE_MAX_SIZE=104857600
+ExecStart=/bin/bash -c 'export SERVER_KEY="$PLUGIN_DAEMON_KEY"; export DB_DATABASE="$DB_PLUGIN_DATABASE"; export DIFY_INNER_API_KEY="$PLUGIN_DIFY_INNER_API_KEY"; export REDIS_DB=5; exec /opt/dify/bin/dify-plugin-daemon'
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

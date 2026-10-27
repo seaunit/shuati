@@ -233,6 +233,60 @@ bash deploy/scripts/deploy.sh user@服务器IP
 
 脚本做的事：前端 `npm run build` → 后端 `mvn package` → 上传 jar/dist/payments → 远端 `npm ci` → 重启 `shuati` 与 `shuati-payments` → reload Nginx。
 
+### Dify 生产编排
+
+正式环境使用同机原生 Dify 1.13.3，不使用 Docker。控制台只绑定 `127.0.0.1:8501`，不开放公网端口。
+由于 4G 内存机无法稳定执行 Next.js 生产构建，控制台使用官方 1.13.3 standalone
+预构建文件，由本机 Node 22 通过 systemd 运行；生产服务器不运行任何 Docker 容器。
+
+首次安装或升级：
+
+```bash
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh install
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
+```
+
+初始化管理员、安装 DeepSeek 插件、导入并发布四个工作流、创建四个 Service API Token：
+
+```bash
+sudo python3 /opt/shuati/deploy/scripts/dify-prod-bootstrap.py
+```
+
+脚本先直接调用四类 Dify 工作流；全部成功后再切换正式后端：
+
+```bash
+sudo python3 /opt/shuati/deploy/scripts/dify-prod-bootstrap.py --activate
+```
+
+脚本会自动生成 Dify 运行时密钥和独立管理员口令，只写入 `/etc/shuati/env`（600）；
+管理员登录信息另存为 `/root/dify-admin.txt`（600），可用以下命令查看：
+
+```bash
+sudo cat /root/dify-admin.txt
+```
+
+运维命令：
+
+```bash
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh start
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh stop
+sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
+sudo journalctl -u dify-api -u dify-worker -u dify-plugin-daemon -u dify-web -f
+```
+
+为节省 4G 服务器的内存，Celery Beat 默认停用；如确实需要定时任务，可设置
+`DIFY_ENABLE_BEAT=1` 后重新执行部署脚本。四套业务工作流不依赖 Beat。
+
+正式后端故障回滚到现有直连模型：
+
+```bash
+sudo sed -i 's/^SHUATI_AI_ENGINE=.*/SHUATI_AI_ENGINE=direct/' /etc/shuati/env
+sudo systemctl restart shuati
+curl -fsS http://127.0.0.1:8080/actuator/health
+```
+
+回滚不删除 Dify 数据库和插件目录，修复后可再次切回 `dify`。
+
 ## 5. 启用 systemd 与 Nginx（首次部署时手动做一次）
 
 ```bash
@@ -372,6 +426,11 @@ cd mobile && npm run publish:apk
 `deploy/nginx/shuati-prod.conf`（域名与证书目录从线上那份配置里读出来），
 没证书就用 `deploy/nginx/shuati.conf`；改完先 `nginx -t`，不过就自动回滚到备份
 （`/etc/nginx/conf.d/shuati.conf.bak.<时间戳>`）。
+
+两份模板都在 HTTPS/HTTP server 内包含
+`/etc/nginx/snippets/seaunit-integrations/*.conf`。拾题只负责提供这个稳定 include，
+识海等独立应用各自安装并维护自己的 location snippet，因此重新部署拾题不会再删除 `/kb`。
+根路径 `/` 和 `/seaunit-portal/` 固定指向 `https://seaunit.site/` 双应用门户。
 
 > 以前这里是"线上已有 `ssl_certificate` 就整份跳过"，怕覆盖 certbot 改过的证书行。
 > 代价是之后所有 Nginx 改动都进不到线上——`/apk/` 规则就是这样漏掉的。

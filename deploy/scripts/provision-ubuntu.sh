@@ -541,6 +541,7 @@ install -m 0644 "$APP_DIR/deploy/systemd/shuati-payments.service" \
 # /apk/shuati-android.apk 掉进 SPA 回退，把一个 2KB 的首页 HTML 当安装包发给用户。
 # 现在改成：按线上现状（域名 + 证书目录）选模板重建，改坏了自动回滚。
 NGINX_CONF=/etc/nginx/conf.d/shuati.conf
+install -d -m 0755 /etc/nginx/snippets/seaunit-integrations
 SITE_DOMAIN="${SHUATI_DOMAIN:-seaunit.site}"
 CERT_DIR="/etc/letsencrypt/live/$SITE_DOMAIN"
 LIVE_NAMES=""
@@ -573,6 +574,13 @@ elif [ -n "$LIVE_CERT" ]; then
 else
   echo "    Nginx：临时 HTTP 模板（还没有证书）"
   install -m 0644 "$APP_DIR/deploy/nginx/shuati.conf" "$NGINX_CONF"
+fi
+if ! grep -q 'include /etc/nginx/snippets/seaunit-integrations/\*\.conf;' "$NGINX_CONF"; then
+  echo "    ! Nginx 配置缺少 SEAUNIT 应用集成目录，拒绝覆盖现有服务" >&2
+  if [ -n "$NGINX_BACKUP" ]; then
+    cp -a "$NGINX_BACKUP" "$NGINX_CONF"
+  fi
+  exit 1
 fi
 if ! nginx -t; then
   if [ -n "$NGINX_BACKUP" ]; then

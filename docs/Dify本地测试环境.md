@@ -2,7 +2,7 @@
 
 ## 定位
 
-本地测试阶段由 Dify 负责 AI 编排，Spring Boot 继续负责鉴权、点数、退款、AI 调用日志、题目解析异步落库和题库写入。生产环境的 AI 路径在本阶段保持现状。
+由 Dify 负责 AI 编排，Spring Boot 继续负责鉴权、点数、退款、AI 调用日志、题目解析异步落库和题库写入。本地测试使用本文命令，生产部署使用 `deploy/scripts/dify-prod.sh` 和 `dify-prod-bootstrap.py`。
 
 ## 运行环境
 
@@ -109,3 +109,7 @@ docker logs -f docker-plugin_daemon-1
 - 截图工作流必须上传为真实 `image/png` 等 MIME；`application/octet-stream` 会被模型供应商拒绝。
 - Spring Boot `local` profile 已实际启动并通过 `/actuator/health` 检查。
 - Windows Docker Desktop 下 Java 访问 IPv4 `127.0.0.1:8501` 会超时，本地 Dify 地址统一使用 IPv6 `[::1]:8501`。
+
+## 生产环境
+
+正式服务运行在香港服务器，Dify 1.13.3 采用 Python/Node/PostgreSQL/Redis 原生安装，只监听 `127.0.0.1:8501`。完整安装、四个工作流导入、Service API Token 创建和直连回滚见 `deploy/README.md`。

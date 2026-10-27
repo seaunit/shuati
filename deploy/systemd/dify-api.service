@@ -1,0 +1,23 @@
+[Unit]
+Description=Dify API
+After=network.target postgresql.service redis-server.service dify-plugin-daemon.service
+Wants=dify-plugin-daemon.service
+
+[Service]
+Type=simple
+User=dify
+Group=dify
+WorkingDirectory=/opt/dify/api
+EnvironmentFile=/etc/shuati/env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/opt/dify/api/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStartPre=/opt/dify/api/.venv/bin/flask upgrade-db
+ExecStart=/opt/dify/api/.venv/bin/gunicorn --bind 127.0.0.1:5001 --workers 1 --worker-class gevent --worker-connections 2 --timeout 360 app:app
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
