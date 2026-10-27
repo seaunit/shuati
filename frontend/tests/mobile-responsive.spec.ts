@@ -740,6 +740,18 @@ test("practice actions stay directly above the mobile navigation", async ({ page
       },
     }),
   );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: null } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 1, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
   await page.route("**/api/units/1/questions*", (route) =>
     route.fulfill({
       json: {
@@ -786,6 +798,12 @@ test("practice shows a clear single or multiple choice badge", async ({ page }) 
   await page.route("**/api/points", (route) =>
     route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
   );
+  await page.route("**/api/practice/last-scope", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: {} } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: null } }),
+  );
   await page.route("**/api/units/1/questions*", (route) =>
     route.fulfill({
       json: {
@@ -821,6 +839,15 @@ test("practice shows a clear single or multiple choice badge", async ({ page }) 
   await page.route("**/api/practice/sessions", (route) =>
     route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
   );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 2, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
 
   await page.goto("/app/practice?unitId=1");
   await expect(page.getByTestId("practice-type")).toHaveText("单选题");
@@ -852,6 +879,9 @@ test("practice resumes from the first unanswered question", async ({ page }) => 
   );
   await page.route("**/api/points", (route) =>
     route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: null } }),
   );
   await page.route("**/api/units/1/questions*", (route) =>
     route.fulfill({
@@ -1034,6 +1064,9 @@ test("practice can restart from the first question whatever the progress is", as
   );
   await page.route("**/api/points", (route) =>
     route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: null } }),
   );
   await page.route("**/api/units/1/questions*", (route) =>
     route.fulfill({
@@ -1497,6 +1530,12 @@ test("stored explanation shows after answering and can be regenerated", async ({
   await page.route("**/api/points", (route) =>
     route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
   );
+  await page.route("**/api/practice/last-scope", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: {} } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } }),
+  );
   await page.route("**/api/units/1/questions*", (route) =>
     route.fulfill({
       json: {
@@ -1593,6 +1632,9 @@ test("wrongly picked option is marked red while correct ones stay green", async 
   );
   await page.route("**/api/points", (route) =>
     route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: null } }),
   );
   await page.route("**/api/units/1/questions*", (route) =>
     route.fulfill({

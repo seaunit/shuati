@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { BookOpenCheck, ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-vue-next";
 import { api } from "@/api/client";
+import AnswerSpeechPlayer from "@/components/AnswerSpeechPlayer.vue";
 import MarkdownText from "@/components/MarkdownText.vue";
 import { useBillingStore } from "@/stores/billing";
 
@@ -106,6 +107,12 @@ function verdictLabel(verdict: string) {
   if (verdict === "PARTIAL") return "部分正确";
   if (verdict === "WRONG") return "错误";
   return "待复核";
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
 }
 
 function toggleOption(key: string) {
@@ -639,6 +646,11 @@ onMounted(async () => {
               {{ explanationError ? "重新生成解析" : "生成 AI 解析" }}
             </button>
             <p class="mt-3 text-xs text-oat">解析缺失时会自动生成，并按现有规则扣除点数。</p>
+            <AnswerSpeechPlayer
+              :content-key="`study-${current.id}`"
+              :reference-answer="studyAnswer"
+              :explanation="explanation"
+            />
           </div>
         </div>
 
@@ -668,6 +680,14 @@ onMounted(async () => {
               <li v-for="(point, i) in result.feedback.missed_points as string[]" :key="i">遗漏：{{ point }}</li>
             </ul>
           </div>
+          <AnswerSpeechPlayer
+            :content-key="`result-${current.id}`"
+            :reference-answer="result.referenceAnswer"
+            :feedback="String(result.feedback?.feedback ?? '')"
+            :hit-points="stringList(result.feedback?.hit_points)"
+            :missed-points="stringList(result.feedback?.missed_points)"
+            :explanation="explanation"
+          />
           <div v-if="result.degraded" class="flex gap-2">
             <button class="rounded-lg border border-mist bg-white px-3 py-1.5 text-xs text-ink" @click="selfEval('CORRECT')">自评：正确</button>
             <button class="rounded-lg border border-mist bg-white px-3 py-1.5 text-xs text-ink" @click="selfEval('PARTIAL')">自评：部分</button>
