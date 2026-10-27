@@ -15,7 +15,7 @@ npx playwright test tests/answer-speech.spec.ts
 
 Expected: 所有朗读交互测试通过。
 
-当前测试结果：`9 passed`，覆盖 Markdown 清洗和重新生成解析后刷新朗读脚本。
+当前测试结果：`12 passed`，覆盖 Markdown 清洗、重新生成解析、失败音色剔除、在线音色主动隐藏和可用音色自动降级。
 
 刷题页相关既有回归：`12 passed`。
 

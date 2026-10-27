@@ -3,8 +3,34 @@ import { expect, test, type Page } from "@playwright/test";
 const QUESTION_WITH_CODE =
   "参考答案第一段。\n\n```java\npublic class A { private B b; }\n```\n\n解析最后一段。";
 
-async function mockChineseSpeech(page: Page, withChineseVoice = true) {
-  await page.addInitScript((hasChineseVoice) => {
+type MockVoice = Pick<
+  SpeechSynthesisVoice,
+  "default" | "lang" | "localService" | "name" | "voiceURI"
+>;
+
+interface MockSpeechOptions {
+  voices?: MockVoice[];
+  failureByVoiceURI?: Record<string, string>;
+  selectedVoiceURI?: string;
+}
+
+const DEFAULT_TEST_VOICE: MockVoice = {
+  default: true,
+  lang: "zh-CN",
+  localService: true,
+  name: "中文测试音色",
+  voiceURI: "zh-CN-test",
+};
+
+async function mockChineseSpeech(
+  page: Page,
+  options: MockSpeechOptions = {},
+) {
+  const voices = options.voices ?? [DEFAULT_TEST_VOICE];
+  await page.addInitScript(({ mockVoices, failureByVoiceURI, selectedVoiceURI }) => {
+    if (selectedVoiceURI) {
+      window.sessionStorage.setItem("shuati.speech.voice", selectedVoiceURI);
+    }
     class FakeUtterance {
       text: string;
       lang = "";
@@ -25,15 +51,7 @@ async function mockChineseSpeech(page: Page, withChineseVoice = true) {
       paused = false;
       speaking = false;
       pending = false;
-      voices = hasChineseVoice
-        ? [{
-            default: true,
-            lang: "zh-CN",
-            localService: true,
-            name: "中文测试音色",
-            voiceURI: "zh-CN-test",
-          } as SpeechSynthesisVoice]
-        : [];
+      voices = mockVoices as SpeechSynthesisVoice[];
 
       getVoices() {
         return this.voices;
@@ -47,7 +65,21 @@ async function mockChineseSpeech(page: Page, withChineseVoice = true) {
           text: utterance.text,
           rate: utterance.rate,
           lang: utterance.lang,
+          voice: utterance.voice?.name ?? "",
         });
+
+        const failure = failureByVoiceURI[utterance.voice?.voiceURI ?? ""];
+        if (failure) {
+          window.setTimeout(() => {
+            if (this.current !== utterance) return;
+            this.current = null;
+            this.speaking = false;
+            utterance.onerror?.({
+              error: failure,
+              message: `mock ${failure}`,
+            } as SpeechSynthesisErrorEvent);
+          }, 0);
+        }
       }
 
       pause() {
@@ -91,7 +123,11 @@ async function mockChineseSpeech(page: Page, withChineseVoice = true) {
         };
       },
     });
-  }, withChineseVoice);
+  }, {
+    mockVoices: voices,
+    failureByVoiceURI: options.failureByVoiceURI ?? {},
+    selectedVoiceURI: options.selectedVoiceURI ?? "",
+  });
 }
 
 async function mockPracticePage(page: Page, explanation = QUESTION_WITH_CODE) {
@@ -240,6 +276,110 @@ test("answer speech supports play, pause, resume and stop", async ({ page }) => 
   await page.getByRole("button", { name: "停止朗读" }).click();
   await expect(page.getByRole("button", { name: "朗读答案与解析" })).toBeVisible({ timeout: 1_000 });
   expect((await page.evaluate(() => (window as any).__speechState())).cancelled).toBeGreaterThan(0);
+});
+
+test("failed online voice is removed and falls back to a working local voice", async ({ page }) => {
+  const onlineVoice: MockVoice = {
+    default: true,
+    lang: "zh-CN",
+    localService: false,
+    name: "Remote Cloud Voice",
+    voiceURI: "remote-cloud-voice",
+  };
+  const localVoice: MockVoice = {
+    default: false,
+    lang: "zh-CN",
+    localService: true,
+    name: "Microsoft Huihui Desktop",
+    voiceURI: "microsoft-huihui-desktop",
+  };
+
+  await mockChineseSpeech(page, {
+    voices: [onlineVoice, localVoice],
+    failureByVoiceURI: { [onlineVoice.voiceURI]: "synthesis-failed" },
+    selectedVoiceURI: onlineVoice.voiceURI,
+  });
+  await mockPracticePage(page);
+  await page.goto("/app/practice?unitId=1");
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await page.getByRole("button", { name: "朗读答案与解析" }).click();
+
+  await expect(page.getByTestId("speech-voice-notice")).toContainText("已切换");
+  await expect(page.getByRole("button", { name: "暂停朗读" })).toBeVisible({ timeout: 1_000 });
+  await expect(page.getByLabel("朗读音色")).toHaveCount(0);
+  await expect(page.getByText(onlineVoice.name)).toHaveCount(0);
+  await expect.poll(async () =>
+    page.evaluate(() => sessionStorage.getItem("shuati.speech.unavailableVoices")),
+  ).toContain(onlineVoice.voiceURI);
+  await expect.poll(async () =>
+    page.evaluate(() => (window as any).__speechState().spoken.at(-1)?.voice),
+  ).toBe(localVoice.name);
+
+  await page.reload();
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await expect(page.getByText(onlineVoice.name)).toHaveCount(0);
+  await page.getByRole("button", { name: "朗读答案与解析" }).click();
+  await expect.poll(async () =>
+    page.evaluate(() => (window as any).__speechState().spoken.at(-1)?.voice),
+  ).toBe(localVoice.name);
+});
+
+test("online natural voice is hidden while a local Chinese voice is available", async ({ page }) => {
+  const onlineVoice: MockVoice = {
+    default: true,
+    lang: "zh-CN",
+    localService: false,
+    name: "Microsoft 晓晓 Online (Natural) - Chinese (Mandarin, Simplified)",
+    voiceURI: "microsoft-xiaoxiao-online",
+  };
+  const localVoice: MockVoice = {
+    default: false,
+    lang: "zh-CN",
+    localService: true,
+    name: "Microsoft Huihui Desktop",
+    voiceURI: "microsoft-huihui-desktop",
+  };
+
+  await mockChineseSpeech(page, {
+    voices: [onlineVoice, localVoice],
+    selectedVoiceURI: onlineVoice.voiceURI,
+  });
+  await mockPracticePage(page);
+  await page.goto("/app/practice?unitId=1");
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+
+  await expect(page.getByText(onlineVoice.name)).toHaveCount(0);
+  await expect(page.getByLabel("朗读音色")).toHaveCount(0);
+  await page.getByRole("button", { name: "朗读答案与解析" }).click();
+  await expect.poll(async () =>
+    page.evaluate(() => (window as any).__speechState().spoken.at(-1)?.voice),
+  ).toBe(localVoice.name);
+});
+
+test("autoplay restriction does not hide a valid voice", async ({ page }) => {
+  const alternateVoice: MockVoice = {
+    default: false,
+    lang: "zh-CN",
+    localService: true,
+    name: "中文备用音色",
+    voiceURI: "zh-CN-backup",
+  };
+  await mockChineseSpeech(page, {
+    voices: [DEFAULT_TEST_VOICE, alternateVoice],
+    failureByVoiceURI: { [DEFAULT_TEST_VOICE.voiceURI]: "not-allowed" },
+  });
+  await mockPracticePage(page);
+  await page.goto("/app/practice?unitId=1");
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await page.getByRole("button", { name: "朗读答案与解析" }).click();
+
+  await expect(page.getByText("浏览器阻止了语音播放，请再次点击朗读")).toBeVisible();
+  await expect(page.getByLabel("朗读音色").locator("option")).toHaveCount(2);
+  await expect(page.getByLabel("朗读音色")).toHaveValue(DEFAULT_TEST_VOICE.voiceURI);
 });
 
 test("answer speech applies rate and code preference", async ({ page }) => {

@@ -21,6 +21,7 @@ type SpeechRate = "0.75" | "1" | "1.25" | "1.5";
 const RATE_KEY = "shuati.speech.rate";
 const READ_CODE_KEY = "shuati.speech.readCode";
 const VOICE_KEY = "shuati.speech.voice";
+const UNAVAILABLE_VOICES_KEY = "shuati.speech.unavailableVoices";
 
 const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
 const supported = Boolean(
@@ -32,10 +33,13 @@ const errorMessage = ref("");
 const currentIndex = ref(-1);
 const availableVoices = ref<SpeechSynthesisVoice[]>([]);
 const selectedVoiceURI = ref(readPreference(VOICE_KEY) ?? "");
+const unavailableVoiceURIs = ref(new Set(readUnavailableVoiceURIs()));
+const voiceNotice = ref("");
 const rate = ref<SpeechRate>(normalizeRate(readPreference(RATE_KEY)));
 const readCode = ref(readPreference(READ_CODE_KEY) === "true");
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let playbackGeneration = 0;
+let voiceNoticeTimer: number | undefined;
 
 const hasContent = computed(() =>
   Boolean(
@@ -60,15 +64,34 @@ const segments = computed<SpeechSegment[]>(() =>
   ),
 );
 
-const chineseVoices = computed(() =>
-  availableVoices.value.filter((voice) => /^zh(?:-|_)/i.test(voice.lang)),
+const chineseVoices = computed(() => {
+  const candidates = availableVoices.value.filter(
+    (voice) =>
+      /^zh(?:-|_)/i.test(voice.lang)
+      && !unavailableVoiceURIs.value.has(voice.voiceURI),
+  );
+  const hasLocalVoice = candidates.some((voice) => voice.localService);
+  return candidates
+    .filter(
+      (voice) =>
+        !hasLocalVoice
+        || voice.localService
+        || !/\b(?:online|natural)\b/i.test(voice.name),
+    )
+    .sort((left, right) => Number(right.localService) - Number(left.localService));
+});
+
+const preferredVoice = computed(() =>
+  chineseVoices.value.find((voice) => voice.localService && voice.default)
+  ?? chineseVoices.value.find((voice) => voice.localService)
+  ?? chineseVoices.value.find((voice) => voice.default)
+  ?? chineseVoices.value[0]
+  ?? null,
 );
 
 const selectedVoice = computed(() =>
   chineseVoices.value.find((voice) => voice.voiceURI === selectedVoiceURI.value)
-  ?? chineseVoices.value.find((voice) => voice.default)
-  ?? chineseVoices.value[0]
-  ?? null,
+  ?? preferredVoice.value,
 );
 
 const currentSegment = computed(() =>
@@ -93,11 +116,33 @@ function readPreference(key: string): string | null {
   }
 }
 
+function readUnavailableVoiceURIs(): string[] {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(UNAVAILABLE_VOICES_KEY) ?? "[]");
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function writePreference(key: string, value: string) {
   try {
     window.sessionStorage.setItem(key, value);
   } catch {
     // 隐私模式下可能禁用 sessionStorage，不影响当前会话播放。
+  }
+}
+
+function writeUnavailableVoiceURIs() {
+  try {
+    window.sessionStorage.setItem(
+      UNAVAILABLE_VOICES_KEY,
+      JSON.stringify([...unavailableVoiceURIs.value]),
+    );
+  } catch {
+    // 隐私模式下仍可在当前组件生命周期内隐藏失败音色。
   }
 }
 
@@ -108,9 +153,34 @@ function normalizeRate(value: string | null): SpeechRate {
 function refreshVoices() {
   if (!synth) return;
   availableVoices.value = synth.getVoices();
-  if (!selectedVoiceURI.value && selectedVoice.value) {
+  if (selectedVoice.value && selectedVoiceURI.value !== selectedVoice.value.voiceURI) {
     selectedVoiceURI.value = selectedVoice.value.voiceURI;
   }
+}
+
+function markVoiceUnavailable(voice: SpeechSynthesisVoice) {
+  if (unavailableVoiceURIs.value.has(voice.voiceURI)) return;
+  const next = new Set(unavailableVoiceURIs.value);
+  next.add(voice.voiceURI);
+  unavailableVoiceURIs.value = next;
+  writeUnavailableVoiceURIs();
+}
+
+function findFallbackVoice(failedVoiceURI: string): SpeechSynthesisVoice | null {
+  const candidates = chineseVoices.value.filter((voice) => voice.voiceURI !== failedVoiceURI);
+  return candidates.find((voice) => voice.localService)
+    ?? candidates.find((voice) => voice.default)
+    ?? candidates[0]
+    ?? null;
+}
+
+function showVoiceNotice(message: string) {
+  voiceNotice.value = message;
+  if (voiceNoticeTimer !== undefined) window.clearTimeout(voiceNoticeTimer);
+  voiceNoticeTimer = window.setTimeout(() => {
+    voiceNotice.value = "";
+    voiceNoticeTimer = undefined;
+  }, 5_000);
 }
 
 async function ensureVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -149,10 +219,16 @@ async function start() {
     return;
   }
   errorMessage.value = "";
+  voiceNotice.value = "";
   const voices = await ensureVoices();
   if (!voices.some((voice) => /^zh(?:-|_)/i.test(voice.lang))) {
     state.value = "error";
     errorMessage.value = "设备未安装中文语音";
+    return;
+  }
+  if (!chineseVoices.value.length) {
+    state.value = "error";
+    errorMessage.value = "当前没有可用的中文语音，请更换系统语音包后重试";
     return;
   }
   if (!segments.value.length) {
@@ -173,8 +249,9 @@ function speakCurrent(generation: number) {
   }
 
   const utterance = new SpeechSynthesisUtterance(segment.text);
-  utterance.lang = selectedVoice.value?.lang || "zh-CN";
-  utterance.voice = selectedVoice.value;
+  const voice = selectedVoice.value;
+  utterance.lang = voice?.lang || "zh-CN";
+  if (voice) utterance.voice = voice;
   utterance.rate = Number(rate.value);
   utterance.onend = () => {
     if (generation !== playbackGeneration || state.value !== "playing") return;
@@ -190,8 +267,37 @@ function speakCurrent(generation: number) {
       return;
     }
     activeUtterance = null;
+    if (event.error === "not-allowed") {
+      state.value = "error";
+      errorMessage.value = "浏览器阻止了语音播放，请再次点击朗读";
+      return;
+    }
+    const failedVoice = selectedVoice.value;
+    const isVoiceFailure = [
+      "network",
+      "language-unavailable",
+      "voice-unavailable",
+      "synthesis-failed",
+    ].includes(event.error);
+    if (isVoiceFailure && failedVoice) {
+      const fallback = findFallbackVoice(failedVoice.voiceURI);
+      markVoiceUnavailable(failedVoice);
+      if (fallback) {
+        selectedVoiceURI.value = fallback.voiceURI;
+        writePreference(VOICE_KEY, fallback.voiceURI);
+        showVoiceNotice(`当前音色不可用，已切换为 ${fallback.name}`);
+        synth.cancel();
+        speakCurrent(generation);
+        return;
+      }
+      state.value = "error";
+      errorMessage.value = "当前没有可用的中文语音，请更换系统语音包后重试";
+      return;
+    }
     state.value = "error";
-    errorMessage.value = "语音朗读失败，请重试";
+    errorMessage.value = event.error === "audio-busy"
+      ? "语音设备正忙，请稍后重试"
+      : "语音朗读失败，请重试";
   };
   activeUtterance = utterance;
   state.value = "playing";
@@ -213,6 +319,11 @@ function resume() {
 function stop() {
   cancelPlayback();
   errorMessage.value = "";
+  voiceNotice.value = "";
+  if (voiceNoticeTimer !== undefined) {
+    window.clearTimeout(voiceNoticeTimer);
+    voiceNoticeTimer = undefined;
+  }
 }
 
 function togglePlayback() {
@@ -261,6 +372,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stop();
+  if (voiceNoticeTimer !== undefined) window.clearTimeout(voiceNoticeTimer);
   (synth as unknown as EventTarget | undefined)?.removeEventListener?.(
     "voiceschanged",
     refreshVoices,
@@ -368,6 +480,15 @@ watch(
         {{ statusText }}
       </span>
     </div>
+
+    <p
+      v-if="voiceNotice"
+      data-testid="speech-voice-notice"
+      role="status"
+      class="mt-2 text-xs text-moss"
+    >
+      {{ voiceNotice }}
+    </p>
 
     <p
       v-if="currentSegment"
