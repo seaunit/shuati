@@ -357,17 +357,12 @@ function changeVoice(event: Event) {
   stop();
 }
 
-function handleVisibilityChange() {
-  if (document.hidden) stop();
-}
-
 onMounted(() => {
   refreshVoices();
   (synth as unknown as EventTarget | undefined)?.addEventListener?.(
     "voiceschanged",
     refreshVoices,
   );
-  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onBeforeUnmount(() => {
@@ -377,7 +372,6 @@ onBeforeUnmount(() => {
     "voiceschanged",
     refreshVoices,
   );
-  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
 watch(

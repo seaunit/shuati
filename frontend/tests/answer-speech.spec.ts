@@ -454,7 +454,7 @@ test("switching question cancels active speech", async ({ page }) => {
   await expect(page.getByTestId("answer-speech-player")).toHaveCount(0);
 });
 
-test("page visibility change cancels active speech", async ({ page }) => {
+test("switching away from the browser does not cancel active speech", async ({ page }) => {
   await openAnsweredQuestion(page);
   await page.getByRole("button", { name: "朗读答案与解析" }).click();
 
@@ -463,9 +463,15 @@ test("page visibility change cancels active speech", async ({ page }) => {
     Object.defineProperty(document, "hidden", { configurable: true, value: true });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect.poll(async () =>
-    page.evaluate(() => (window as any).__speechState().cancelled),
-  ).toBeGreaterThan(before);
+  expect((await page.evaluate(() => (window as any).__speechState())).cancelled).toBe(before);
+  await expect(page.getByRole("button", { name: "暂停朗读" })).toBeVisible();
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+    (window as any).__finishSpeech();
+  });
+  await expect(page.getByTestId("speech-current-segment")).toContainText("此处有一段代码");
 });
 
 test("study mode reuses the same speech player", async ({ page }) => {
