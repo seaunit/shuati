@@ -40,6 +40,7 @@ npx playwright test tests/mobile-responsive.spec.ts
 - 判断题与相关刷题前端回归：`15 passed`。
 - 前端类型检查及生产构建通过。
 - Dify 文本/截图工作流 YAML 解析通过。
+- 本地 Dify 文本出题真实冒烟返回 `TRUE_FALSE`、固定 T/F 选项和答案 `T`。
 
 ## 3. 手工验收
 
