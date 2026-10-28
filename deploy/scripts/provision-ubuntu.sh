@@ -530,6 +530,13 @@ chown -R shuati:shuati "$ENV_DIR"
 chmod 600 "$ENV_DIR/env" "$ENV_DIR/payments.env"
 chown -R shuati:shuati "$APP_DIR"
 
+echo "==> 同步生产 Dify 工作流"
+if systemctl is-active --quiet dify-api; then
+  python3 "$APP_DIR/deploy/scripts/dify-prod-bootstrap.py"
+else
+  echo "    Dify 未运行，跳过工作流同步"
+fi
+
 echo "==> 9/9 安装 systemd / Nginx 并启动"
 install -m 0644 "$APP_DIR/deploy/systemd/shuati.service" /etc/systemd/system/shuati.service
 install -m 0644 "$APP_DIR/deploy/systemd/shuati-payments.service" \

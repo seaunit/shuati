@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import shlex
@@ -227,16 +228,27 @@ class DifyClient:
         print("[bootstrap] DeepSeek 模型凭证已配置")
 
     def import_or_reuse_app(self, workflow_file: Path, app_name: str) -> str:
+        yaml_content = workflow_file.read_text(encoding="utf-8")
+        version = hashlib.sha256(yaml_content.encode("utf-8")).hexdigest()[:8]
+        versioned_name = f"{app_name}-{version}"
         apps = self.list_apps()
         for app in apps:
-            if app.get("name") == app_name:
+            if app.get("name") == versioned_name:
                 return str(app["id"])
+        original_name_line = f"  name: {app_name}\n"
+        if original_name_line not in yaml_content:
+            raise RuntimeError(f"{workflow_file} 缺少 app.name: {app_name}")
+        versioned_yaml = yaml_content.replace(
+            original_name_line,
+            f"  name: {versioned_name}\n",
+            1,
+        )
         result = self.request(
             "POST",
             "/apps/imports",
             {
                 "mode": "yaml-content",
-                "yaml_content": workflow_file.read_text(encoding="utf-8"),
+                "yaml_content": versioned_yaml,
             },
             timeout=120,
         )
