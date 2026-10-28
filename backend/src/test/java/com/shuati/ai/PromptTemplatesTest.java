@@ -45,6 +45,9 @@ class PromptTemplatesTest {
         .contains("题内小问")
         .contains("没有显式选项")
         .contains("SHORT")
+        .contains("TRUE_FALSE")
+        .contains("\"key\":\"T\"")
+        .contains("\"key\":\"F\"")
         .contains("Markdown 表格")
         .contains("2 选 1");
 

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { api } from "@/api/client";
+import {
+  TRUE_FALSE_OPTIONS,
+  normalizeTrueFalseAnswer,
+  typeLabel,
+  type QuestionType,
+} from "@/questionTypes";
 
 interface Bank {
   id: number;
@@ -131,7 +137,7 @@ const appealStatus = ref("PENDING");
 const bankForm = ref({ name: "", description: "" });
 const unitForm = ref({ name: "", sort: 0 });
 const questionForm = ref({
-  type: "SINGLE",
+  type: "SINGLE" as QuestionType,
   content: "",
   answer: "",
   options: '[{"key":"A","text":""},{"key":"B","text":""}]',
@@ -139,6 +145,8 @@ const questionForm = ref({
   difficulty: "MEDIUM",
   explanation: "",
 });
+
+const adminQuestionIsTrueFalse = computed(() => questionForm.value.type === "TRUE_FALSE");
 const aiForm = ref({
   name: "DeepSeek 默认",
   baseUrl: "https://api.deepseek.com",
@@ -359,15 +367,25 @@ async function createQuestion() {
     notice.value = "请先选择单元";
     return;
   }
+  if (adminQuestionIsTrueFalse.value && !normalizeTrueFalseAnswer(questionForm.value.answer)) {
+    notice.value = "请选择正确或错误";
+    return;
+  }
   await api("/api/admin/questions", {
     method: "POST",
     body: JSON.stringify({
       unitId: selectedUnit.value,
       type: questionForm.value.type,
       content: questionForm.value.content,
-      answer: questionForm.value.answer,
-      options: JSON.parse(questionForm.value.options || "null"),
-      keyPoints: JSON.parse(questionForm.value.keyPoints || "null"),
+      answer: adminQuestionIsTrueFalse.value
+        ? normalizeTrueFalseAnswer(questionForm.value.answer)
+        : questionForm.value.answer,
+      options: adminQuestionIsTrueFalse.value
+        ? TRUE_FALSE_OPTIONS.map((option) => ({ ...option }))
+        : JSON.parse(questionForm.value.options || "null"),
+      keyPoints: questionForm.value.type === "SHORT"
+        ? JSON.parse(questionForm.value.keyPoints || "null")
+        : null,
       difficulty: questionForm.value.difficulty,
       explanation: questionForm.value.explanation || null,
     }),
@@ -375,6 +393,14 @@ async function createQuestion() {
   questionForm.value.content = "";
   questionForm.value.answer = "";
   await loadQuestions();
+}
+
+function onAdminQuestionTypeChange() {
+  questionForm.value.answer = "";
+  questionForm.value.keyPoints = "[]";
+  questionForm.value.options = questionForm.value.type === "TRUE_FALSE"
+    ? JSON.stringify(TRUE_FALSE_OPTIONS)
+    : '[{"key":"A","text":""},{"key":"B","text":""}]';
 }
 
 async function deleteQuestion(id: number) {
@@ -634,9 +660,14 @@ watch(tab, refresh);
       </div>
       <div class="space-y-2 rounded-2xl border border-mist bg-white/70 p-4">
         <div class="flex flex-col gap-2 sm:flex-row">
-          <select v-model="questionForm.type" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
+          <select
+            v-model="questionForm.type"
+            class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto"
+            @change="onAdminQuestionTypeChange"
+          >
             <option value="SINGLE">单选</option>
             <option value="MULTI">多选</option>
+            <option value="TRUE_FALSE">判断</option>
             <option value="SHORT">简答</option>
           </select>
           <select v-model="questionForm.difficulty" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm sm:w-auto">
@@ -646,16 +677,40 @@ watch(tab, refresh);
           </select>
         </div>
         <textarea v-model="questionForm.content" rows="2" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="题干" />
-        <input v-model="questionForm.answer" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm" placeholder="答案（选择题如 A / AB；简答题为参考答案）" />
-        <input v-model="questionForm.options" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 font-mono text-xs" placeholder='选项 JSON' />
-        <input v-model="questionForm.keyPoints" class="w-full rounded-xl border border-mist bg-paper px-3 py-2 font-mono text-xs" placeholder='评分要点 JSON' />
+        <select
+          v-if="adminQuestionIsTrueFalse"
+          v-model="questionForm.answer"
+          class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm"
+        >
+          <option value="">请选择正确答案</option>
+          <option value="T">正确</option>
+          <option value="F">错误</option>
+        </select>
+        <input
+          v-else
+          v-model="questionForm.answer"
+          class="w-full rounded-xl border border-mist bg-paper px-3 py-2 text-sm"
+          placeholder="答案（选择题如 A / AB；简答题为参考答案）"
+        />
+        <input
+          v-if="!adminQuestionIsTrueFalse"
+          v-model="questionForm.options"
+          class="w-full rounded-xl border border-mist bg-paper px-3 py-2 font-mono text-xs"
+          placeholder="选项 JSON"
+        />
+        <input
+          v-if="questionForm.type === 'SHORT'"
+          v-model="questionForm.keyPoints"
+          class="w-full rounded-xl border border-mist bg-paper px-3 py-2 font-mono text-xs"
+          placeholder="评分要点 JSON"
+        />
         <button class="w-full rounded-xl bg-ink px-4 py-2 text-sm text-white sm:w-auto" @click="createQuestion">新增题目</button>
       </div>
       <div class="space-y-2">
         <div v-for="question in questions" :key="question.id" class="rounded-xl border border-mist bg-white/70 p-3 text-sm">
           <p class="whitespace-pre-wrap text-ink">{{ question.content }}</p>
           <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-oat">
-            <span>{{ question.type }} · {{ question.difficulty }} · {{ question.status }}</span>
+            <span>{{ typeLabel(question.type) }} · {{ question.difficulty }} · {{ question.status }}</span>
             <button class="text-moss" @click="toggleQuestion(question)">
               {{ question.status === "ON" ? "下架" : "上架" }}
             </button>

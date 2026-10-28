@@ -3,6 +3,7 @@ package com.shuati.practice;
 import com.shuati.common.ApiException;
 import com.shuati.common.CurrentUser;
 import com.shuati.common.Json;
+import com.shuati.question.QuestionTypeSupport;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -38,11 +39,12 @@ public class PracticeService {
     }
     Map<String, Object> question = rows.get(0);
     String type = String.valueOf(question.get("type"));
-    if (!"ON".equals(question.get("status")) || (!"SINGLE".equals(type) && !"MULTI".equals(type))) {
+    if (!"ON".equals(question.get("status")) || !QuestionTypeSupport.isChoiceType(type)) {
       throw new ApiException(404, "题目不存在或已下架");
     }
 
-    String answer = normalizeSelected(question.get("answer"));
+    String answer = normalizeSelected(
+        QuestionTypeSupport.normalizeAnswer(type, question.get("answer")));
     String verdict = answer.equals(selected) ? "CORRECT" : "WRONG";
     int score = "CORRECT".equals(verdict) ? 10 : 0;
 

@@ -102,6 +102,26 @@ class SeoPageTest {
   }
 
   @Test
+  void publicPagesShowTrueFalseLabelAndChineseAnswer() {
+    long bankId = createBank(null, "判断题题库" + UUID.randomUUID());
+    long unitId = createUnit(bankId, "Spring");
+    long questionId = createTrueFalseQuestion(unitId, "Spring Bean 默认是单例。");
+
+    String unit = controller.unit(bankId, unitId).getBody();
+    String question = controller.question(bankId, questionId).getBody();
+
+    assertThat(unit)
+        .contains("判断题")
+        .contains("答案：正确")
+        .contains(">T. 正确<")
+        .contains(">F. 错误<");
+    assertThat(question)
+        .contains("判断题")
+        .contains("答案：正确")
+        .contains("正确答案：正确");
+  }
+
+  @Test
   void privateBankAndItsQuestionsAreNotExposed() {
     String ownerId = createUser();
     long bankId = createBank(ownerId, "我的私有题库" + UUID.randomUUID());
@@ -188,6 +208,18 @@ class SeoPageTest {
         values (?, 'SINGLE', ?,
                 cast('[{"key":"A","text":"加快查询"},{"key":"B","text":"加快写入"}]' as json),
                 'A', cast('[]' as json), 'MEDIUM', 'ON')
+        """, unitId, content);
+    return jdbc.queryForObject(
+        "select id from question where unit_id = ? and content = ?", Long.class, unitId, content);
+  }
+
+  private long createTrueFalseQuestion(long unitId, String content) {
+    jdbc.update("""
+        insert into question
+          (unit_id, type, content, options, answer, key_points, difficulty, status)
+        values (?, 'TRUE_FALSE', ?,
+                cast('[{"key":"T","text":"正确"},{"key":"F","text":"错误"}]' as json),
+                'T', null, 'EASY', 'ON')
         """, unitId, content);
     return jdbc.queryForObject(
         "select id from question where unit_id = ? and content = ?", Long.class, unitId, content);

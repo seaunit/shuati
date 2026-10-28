@@ -131,6 +131,34 @@ class ImportDifyWorkflowTest {
   }
 
   @Test
+  void trueFalseImportNormalizesTypeOptionsAndAnswer() {
+    String userId = createUser();
+    when(aiWorkflow.extractText(anyString(), any(AiWorkflowInputs.ExtractTextInput.class)))
+        .thenReturn(new AiWorkflowResult(
+            "{\"questions\":[{\"content\":\"Spring Bean 默认是单例。\",\"type\":\"判断题\","
+                + "\"options\":[{\"key\":\"A\",\"text\":\"错误\"}],\"answer\":\"对\"}]}",
+            "DIFY", AiWorkflowKey.EXTRACT_TEXT, "run-true-false",
+            "dify:extract-text", 0, 0, 10, 100));
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("kind", "text");
+    body.put("bankName", "判断题导入");
+    body.put("text", "判断：Spring Bean 默认是单例。");
+    String taskId = String.valueOf(importService.createTask(userId, body).get("taskId"));
+
+    importService.runTask(taskId);
+
+    String items = jdbc.queryForObject(
+        "select cast(items as char) from import_task where id = ?", String.class, taskId);
+    assertThat(items)
+        .contains("\"type\": \"TRUE_FALSE\"")
+        .contains("\"key\": \"T\"")
+        .contains("\"text\": \"正确\"")
+        .contains("\"key\": \"F\"")
+        .contains("\"text\": \"错误\"")
+        .contains("\"answer\": \"T\"");
+  }
+
+  @Test
   void invalidDifyQuestionJsonFailsAndRefundsImportCharge() {
     String userId = createUser();
     when(aiWorkflow.extractText(anyString(), any(AiWorkflowInputs.ExtractTextInput.class)))

@@ -40,7 +40,7 @@
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` / `unit_id` | number | |
-| `type` | `SINGLE` / `MULTI` / `SHORT` | 决定作答界面形态 |
+| `type` | `SINGLE` / `MULTI` / `TRUE_FALSE` / `SHORT` | 决定作答界面形态 |
 | `content` | string | 题干（Markdown 文本，安卓端按纯文本 + 简单加粗渲染） |
 | `options` | `[{key,text}]?` | 选择题选项；简答题为 null |
 | `difficulty` | `EASY` / `MEDIUM` / `HARD` | |

@@ -12,7 +12,7 @@ interface RouteMeta {
 const DEFAULT: RouteMeta = {
   title: "拾题 - 在线刷题与 AI 解析",
   description:
-    "拾题提供软考等考试的真题题库，选择题本地判分、简答题 AI 判分，还能把自己的资料一键变成可以刷的题库。",
+    "拾题提供软考等考试的真题题库，选择题和判断题本地判分、简答题 AI 判分，还能把自己的资料一键变成可以刷的题库。",
 };
 
 const ROUTES: Record<string, RouteMeta> = {
@@ -22,7 +22,7 @@ const ROUTES: Record<string, RouteMeta> = {
   },
   "/app/practice": {
     title: "刷题 - 拾题",
-    description: "在线刷题：选择题本地判分，简答题与伪代码交给 AI 判分并给出解析。",
+    description: "在线刷题：选择题和判断题本地判分，简答题与伪代码交给 AI 判分并给出解析。",
   },
   "/app/wrong-book": {
     title: "错题本 - 拾题",

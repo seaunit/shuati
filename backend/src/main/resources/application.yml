@@ -121,7 +121,7 @@ shuati:
     site-url: ${SHUATI_SITE_URL:https://www.seaunit.site}
     site-name: ${SHUATI_SITE_NAME:拾题}
     tagline: ${SHUATI_SITE_TAGLINE:在线刷题与 AI 解析}
-    description: ${SHUATI_SITE_DESCRIPTION:拾题提供软考等考试的真题题库，选择题本地判分、简答题 AI 判分，还能把自己的讲义或真题文档一键变成可以刷的题库。}
+    description: ${SHUATI_SITE_DESCRIPTION:拾题提供软考等考试的真题题库，选择题和判断题本地判分、简答题 AI 判分，还能把自己的讲义或真题文档一键变成可以刷的题库。}
     keywords: ${SHUATI_SITE_KEYWORDS:拾题,在线刷题,软考真题,软考题库,AI判题,AI解析,错题本,题库生成}
     contact-email: ${SHUATI_CONTACT_EMAIL:sealevel666@163.com}
     # 百度统计站点 ID（公开标识），留空则不注入统计脚本

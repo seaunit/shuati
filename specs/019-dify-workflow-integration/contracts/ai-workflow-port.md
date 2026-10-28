@@ -51,7 +51,7 @@ extractScreenshot(ExtractScreenshotInput) -> AiWorkflowResult
   "questions": [
     {
       "unit": "未分类",
-      "type": "SINGLE | MULTI | SHORT",
+      "type": "SINGLE | MULTI | TRUE_FALSE | SHORT",
       "content": "题干",
       "options": [{"key": "A", "text": "选项"}],
       "answer": "A",

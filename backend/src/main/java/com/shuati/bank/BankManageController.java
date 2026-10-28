@@ -10,6 +10,7 @@ import com.shuati.common.QuestionContent;
 import com.shuati.email.EmailDispatchService;
 import com.shuati.email.EmailPurpose;
 import com.shuati.email.EmailVerificationService;
+import com.shuati.question.QuestionTypeSupport;
 import com.shuati.rate.RateLimit;
 import com.shuati.user.Profile;
 import com.shuati.user.ProfileRepository;
@@ -338,11 +339,12 @@ public class BankManageController {
     }
     String type = string(body.get("type")).toUpperCase();
     String content = string(body.get("content")).trim();
-    String answer = string(body.get("answer")).trim();
+    String answer = QuestionTypeSupport.normalizeAnswer(type, body.get("answer"));
+    Object options = QuestionTypeSupport.normalizeOptions(type, body.get("options"));
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer);
+    validateQuestion(type, options, answer);
 
     long targetUnitId = unitId;
     KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -358,9 +360,10 @@ public class BankManageController {
       ps.setString(2, type);
       ps.setString(3, content);
       ps.setString(4, QuestionContent.hash(content));
-      ps.setString(5, writeJson(body.get("options")));
+      ps.setString(5, writeJson(options));
       ps.setString(6, answer);
-      ps.setString(7, writeJson(body.get("keyPoints")));
+      ps.setString(7, QuestionTypeSupport.isTrueFalse(type)
+          ? null : writeJson(body.get("keyPoints")));
       ps.setString(8, normalizeDifficulty(body.get("difficulty")));
       ps.setString(9, body.get("explanation") == null ? null : string(body.get("explanation")));
       ps.setString(10, writeJson(body.get("tags") == null ? List.of() : body.get("tags")));
@@ -377,11 +380,12 @@ public class BankManageController {
     requireManage(scope.bankId());
     String type = string(body.get("type")).toUpperCase();
     String content = string(body.get("content")).trim();
-    String answer = string(body.get("answer")).trim();
+    String answer = QuestionTypeSupport.normalizeAnswer(type, body.get("answer"));
+    Object options = QuestionTypeSupport.normalizeOptions(type, body.get("options"));
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer);
+    validateQuestion(type, options, answer);
     long unitId = resolveUnitId(body, scope);
     jdbc.update("""
         update question
@@ -390,8 +394,9 @@ public class BankManageController {
                difficulty = ?, explanation = ?, tags = cast(? as json)
          where id = ?
         """, unitId, type, content, QuestionContent.hash(content),
-        writeJson(body.get("options")), answer,
-        writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
+        writeJson(options), answer,
+        QuestionTypeSupport.isTrueFalse(type) ? null : writeJson(body.get("keyPoints")),
+        normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")), id);
     return ApiResponse.ok(null);
@@ -545,17 +550,17 @@ public class BankManageController {
   }
 
   private void validateQuestion(String type, Object options, String answer) {
-    if (!List.of("SINGLE", "MULTI", "SHORT").contains(type)) {
+    if (!QuestionTypeSupport.isValidType(type)) {
       throw new ApiException(400, "题型不正确");
     }
     if (answer.isEmpty()) {
       throw new ApiException(400, "答案不能为空");
     }
-    if (("SINGLE".equals(type) || "MULTI".equals(type))
+    if (QuestionTypeSupport.isChoiceType(type)
         && !(options instanceof List<?> list && !list.isEmpty())) {
       throw new ApiException(400, "选择题必须提供选项");
     }
-    if ("SINGLE".equals(type) && answer.length() != 1) {
+    if (QuestionTypeSupport.SINGLE.equals(type) && answer.length() != 1) {
       throw new ApiException(400, "单选题答案只能是一个选项");
     }
     // 简答题的评分要点是可选的：留空时由 AI 判分时自行提炼（见 PromptTemplates.ESSAY_SYSTEM）
