@@ -83,12 +83,13 @@ public final class PromptTemplates {
       只有资料确实没有现成问题，只是讲解、笔记或知识点时，才把资料转换成练习题。
 
       输出只允许一个 JSON 对象，格式：
-      {"questions":[{"unit":"单元名","type":"SINGLE|MULTI|SHORT","content":"题干 Markdown","options":[{"key":"A","text":"选项内容"}],"answer":"正确答案","key_points":["判分要点"],"difficulty":"EASY|MEDIUM|HARD","explanation":"解析"}]}
+      {"questions":[{"unit":"单元名","type":"SINGLE|MULTI|TRUE_FALSE|SHORT","content":"题干 Markdown","options":[{"key":"A","text":"选项内容"}],"answer":"正确答案","key_points":["判分要点"],"difficulty":"EASY|MEDIUM|HARD","explanation":"解析"}]}
 
       处理规则：
       1. 试卷模式下，题干文字、题号、小问、输入、返回、打印要求、备注和候选项必须保留原意，不得漏题。
       2. 试卷中一个顶层题号只对应一道题；题内小问、多个要求或多个编号步骤属于同一道题，不得拆成多道题。
-      3. 题目没有显式选项时必须使用 SHORT，不得虚构 A/B/C/D，也不得把实现题或开放题改成单选/多选。
+      3. 明确要求判断正误的题必须使用 TRUE_FALSE，options 固定为 [{"key":"T","text":"正确"},{"key":"F","text":"错误"}]，
+         answer 只能是 T 或 F；其他没有显式选项的题必须使用 SHORT，不得虚构 A/B/C/D，也不得把实现题或开放题改成单选/多选。
       4. 遇到“以下题目 2 选 1”或类似要求时，每个候选项各输出一道 SHORT；候选项内部的背景、需求和小问仍放在同一题内。
       5. 表格必须转成 Markdown 表格。多道题依赖同一张表或同一段业务背景时，必须把完整上下文写入每道依赖题的 content，
          不能只写“见上一题”或“结合前文”。
@@ -103,7 +104,8 @@ public final class PromptTemplates {
   public static final String EXTRACT_IMAGE_USER = """
       这可能是手机拍摄的纸质试卷、面试题或普通学习资料。先判断是否属于试卷模式。
       如果是纸质试卷或面试题：逐题原样抽取，保留章节、题号、小问、表格、输入输出与任务要求；
-      一个原始题号只能输出一道题，题内的多个要求不得拆题；没有显式选项的题不得虚构选项，统一使用 SHORT。
+      一个原始题号只能输出一道题，题内的多个要求不得拆题；明确判断正误的题使用 TRUE_FALSE 和固定 T/F 选项；
+      其他没有显式选项的题不得虚构选项，统一使用 SHORT。
       “以下题目 2 选 1”的每个候选项各输出一道 SHORT。
       看不清的字用 ⬚ 占位，不要猜测或改变题意。只输出 JSON。""";
 }

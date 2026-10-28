@@ -5,17 +5,20 @@ import { BookOpenCheck, ChevronLeft, ChevronRight, Loader2, Sparkles } from "luc
 import { api } from "@/api/client";
 import AnswerSpeechPlayer from "@/components/AnswerSpeechPlayer.vue";
 import MarkdownText from "@/components/MarkdownText.vue";
+import {
+  answerText,
+  isSingleChoiceQuestion,
+  optionBadgeLabel,
+  typeLabel,
+  type QuestionOption as Option,
+  type QuestionType,
+} from "@/questionTypes";
 import { useBillingStore } from "@/stores/billing";
-
-interface Option {
-  key: string;
-  text: string;
-}
 
 interface Question {
   id: number;
   unit_id: number;
-  type: "SINGLE" | "MULTI" | "SHORT";
+  type: QuestionType;
   content: string;
   options: Option[] | null;
   difficulty: string;
@@ -95,13 +98,6 @@ const progress = computed(() =>
   questions.value.length ? Math.round(((index.value + (result.value ? 1 : 0)) / questions.value.length) * 100) : 0,
 );
 
-function typeLabel(type: string) {
-  if (type === "SINGLE") return "单选题";
-  if (type === "MULTI") return "多选题";
-  if (type === "SHORT") return "简答题";
-  return type;
-}
-
 function verdictLabel(verdict: string) {
   if (verdict === "CORRECT") return "正确";
   if (verdict === "PARTIAL") return "部分正确";
@@ -117,7 +113,7 @@ function stringList(value: unknown): string[] {
 
 function toggleOption(key: string) {
   if (result.value || studyMode.value || !current.value) return;
-  if (current.value.type === "SINGLE") {
+  if (isSingleChoiceQuestion(current.value.type)) {
     selected.value = [key];
     return;
   }
@@ -605,7 +601,7 @@ onMounted(async () => {
               class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition"
               :class="OPTION_BADGE_CLASS[optionState(option.key)]"
             >
-              {{ option.key }}
+              {{ optionBadgeLabel(current.type, option.key) }}
             </span>
             <span class="pt-0.5 text-ink/85">
               {{ option.text }}
@@ -625,7 +621,7 @@ onMounted(async () => {
             <p v-else-if="studyAnswerLoading" class="mt-1 text-sm text-oat">正在加载答案…</p>
           </template>
           <p v-else-if="studyAnswer" class="text-sm text-ink">
-            正确答案：<span class="font-semibold text-moss">{{ studyAnswer }}</span>
+            正确答案：<span class="font-semibold text-moss">{{ answerText(current.type, studyAnswer) }}</span>
           </p>
           <p v-else-if="studyAnswerLoading" class="text-sm text-oat">正在加载答案…</p>
 
@@ -648,7 +644,7 @@ onMounted(async () => {
             <p class="mt-3 text-xs text-oat">解析缺失时会自动生成，并按现有规则扣除点数。</p>
             <AnswerSpeechPlayer
               :content-key="`study-${current.id}`"
-              :reference-answer="studyAnswer"
+              :reference-answer="answerText(current.type, studyAnswer)"
               :explanation="explanation"
             />
           </div>
@@ -661,10 +657,10 @@ onMounted(async () => {
           </p>
           <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm text-ink/80">
             <p v-if="result.correctAnswer">
-              正确答案：<span class="font-medium text-moss">{{ result.correctAnswer }}</span>
+              正确答案：<span class="font-medium text-moss">{{ answerText(current.type, result.correctAnswer) }}</span>
             </p>
             <p v-if="answeredChoice">
-              你的答案：<span class="font-medium" :class="yourAnswerClass()">{{ selected.join("") }}</span>
+              你的答案：<span class="font-medium" :class="yourAnswerClass()">{{ answerText(current.type, selected.join("")) }}</span>
             </p>
           </div>
           <div v-if="result.referenceAnswer" data-testid="reference-answer" class="text-sm text-ink/80">

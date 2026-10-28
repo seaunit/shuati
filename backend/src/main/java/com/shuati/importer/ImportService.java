@@ -10,6 +10,7 @@ import com.shuati.billing.PointAccountService;
 import com.shuati.common.ApiException;
 import com.shuati.common.Json;
 import com.shuati.common.QuestionContent;
+import com.shuati.question.QuestionTypeSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
@@ -518,6 +519,12 @@ public class ImportService {
         continue;
       }
       String content = String.valueOf(item.getOrDefault("content", "")).trim();
+      String type = QuestionTypeSupport.normalizeType(item.getOrDefault("type", "SINGLE"));
+      if (type.isEmpty()) {
+        type = QuestionTypeSupport.SINGLE;
+      }
+      Object options = QuestionTypeSupport.normalizeOptions(type, item.get("options"));
+      String answer = QuestionTypeSupport.normalizeAnswer(type, item.get("answer"));
       jdbc.update("""
           insert into question
             (unit_id, type, content, content_hash, options, answer, key_points,
@@ -525,11 +532,11 @@ public class ImportService {
           values (?, ?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?, ?, 'ON')
           """,
           unitId,
-          String.valueOf(item.getOrDefault("type", "SINGLE")),
+          type,
           content,
           QuestionContent.hash(content),
-          item.get("options") == null ? null : writeJson(item.get("options")),
-          String.valueOf(item.getOrDefault("answer", "")),
+          options == null ? null : writeJson(options),
+          answer,
           item.get("key_points") == null ? null : writeJson(item.get("key_points")),
           normalizeDifficulty(item.get("difficulty")),
           item.get("explanation") == null ? null : String.valueOf(item.get("explanation")),
@@ -733,12 +740,18 @@ public class ImportService {
       for (JsonNode node : questions) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("unit", node.path("unit").asText("未分类"));
-        item.put("type", node.path("type").asText("SINGLE"));
+        String type = QuestionTypeSupport.normalizeType(node.path("type").asText("SINGLE"));
+        if (type.isEmpty()) {
+          type = QuestionTypeSupport.SINGLE;
+        }
+        item.put("type", type);
         item.put("content", node.path("content").asText(""));
-        if (node.has("options") && node.get("options").isArray()) {
+        if (QuestionTypeSupport.isTrueFalse(type)) {
+          item.put("options", QuestionTypeSupport.trueFalseOptions());
+        } else if (node.has("options") && node.get("options").isArray()) {
           item.put("options", objectMapper.convertValue(node.get("options"), List.class));
         }
-        item.put("answer", node.path("answer").asText(""));
+        item.put("answer", QuestionTypeSupport.normalizeAnswer(type, node.path("answer").asText("")));
         if (node.has("key_points") && node.get("key_points").isArray()) {
           item.put("key_points", objectMapper.convertValue(node.get("key_points"), List.class));
         }

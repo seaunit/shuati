@@ -65,6 +65,16 @@ class BankWordExportTest {
         "MEDIUM",
         "`ConcurrentHashMap` 和 `CopyOnWriteArrayList` 是线程安全实现。");
     insertShort(advanced, "简述类加载过程。", "加载、验证、准备、解析、初始化。", "HARD");
+    insertChoice(
+        basics,
+        "TRUE_FALSE",
+        "Spring Bean 默认是单例。",
+        """
+            [{"key":"T","text":"正确"},{"key":"F","text":"错误"}]
+            """,
+        "T",
+        "EASY",
+        "Spring 单例作用域是默认值。");
     authenticate(userId, false);
 
     ResponseEntity<byte[]> response = controller.exportWord(bankId);
@@ -92,6 +102,9 @@ class BankWordExportTest {
       assertThat(text).contains("解析：");
       assertThat(text).contains("简述类加载过程。");
       assertThat(text).contains("加载、验证、准备、解析、初始化。");
+      assertThat(text).contains("判断题");
+      assertThat(text).contains("Spring Bean 默认是单例。");
+      assertThat(text).contains("答案：正确");
       assertThat(text).doesNotContain("**");
       assertThat(text).doesNotContain("##");
       assertThat(text).contains("• 对比 Serial GC");

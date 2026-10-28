@@ -88,6 +88,64 @@ class BankManageQuestionApiTest {
   }
 
   @Test
+  void ownerCanCreateAndEditTrueFalseQuestionWithCanonicalAnswer() {
+    String userId = createUser("USER");
+    long unitId = createUnit(createBank(userId, "判断题题库"), "第一章");
+    authenticate(userId, false);
+
+    long questionId = createQuestion(Map.of(
+        "unitId", unitId,
+        "type", "TRUE_FALSE",
+        "content", "Spring Bean 默认是单例。",
+        "options", List.of(
+            Map.of("key", "A", "text", "错误选项"),
+            Map.of("key", "B", "text", "另一个错误选项")),
+        "answer", "正确"));
+
+    Map<String, Object> created = jdbc.queryForMap(
+        "select type, cast(options as char) options, answer from question where id = ?", questionId);
+    assertThat(created.get("type")).isEqualTo("TRUE_FALSE");
+    assertThat(String.valueOf(created.get("options")))
+        .contains("\"key\": \"T\"")
+        .contains("\"text\": \"正确\"")
+        .contains("\"key\": \"F\"")
+        .contains("\"text\": \"错误\"");
+    assertThat(created.get("answer")).isEqualTo("T");
+
+    controller.updateQuestion(questionId, Map.of(
+        "type", "TRUE_FALSE",
+        "content", "Spring Bean 默认是原型。",
+        "answer", "×"));
+
+    Map<String, Object> updated = jdbc.queryForMap(
+        "select content, answer from question where id = ?", questionId);
+    assertThat(updated.get("content")).isEqualTo("Spring Bean 默认是原型。");
+    assertThat(updated.get("answer")).isEqualTo("F");
+  }
+
+  @Test
+  void trueFalseQuestionRejectsUnknownOrDoubleAnswer() {
+    String userId = createUser("USER");
+    long unitId = createUnit(createBank(userId, "判断题题库"), "第一章");
+    authenticate(userId, false);
+
+    ApiException unknown = assertThrows(ApiException.class, () -> createQuestion(Map.of(
+        "unitId", unitId,
+        "type", "TRUE_FALSE",
+        "content", "判断题",
+        "answer", "也许")));
+    assertThat(unknown.getStatus()).isEqualTo(400);
+    assertThat(unknown.getMessage()).contains("判断题");
+
+    ApiException doubleAnswer = assertThrows(ApiException.class, () -> createQuestion(Map.of(
+        "unitId", unitId,
+        "type", "TRUE_FALSE",
+        "content", "判断题",
+        "answer", "正确错误")));
+    assertThat(doubleAnswer.getStatus()).isEqualTo(400);
+  }
+
+  @Test
   void questionWithoutUnitFallsIntoTheDefaultUnit() {
     String userId = createUser("USER");
     long bankId = createBank(userId, "我的题库");

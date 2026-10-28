@@ -1,6 +1,7 @@
 package com.shuati.seo;
 
 import com.shuati.common.Json;
+import com.shuati.question.QuestionTypeSupport;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -71,7 +72,7 @@ public class SeoController {
     body.append("""
         <h2>能做什么</h2>
         <ul>
-          <li>公共题库免费刷，选择题本地判分、简答题 AI 判分</li>
+          <li>公共题库免费刷，选择题和判断题本地判分、简答题 AI 判分</li>
           <li>上传自己的讲义或真题文档，自动切成题库</li>
           <li>每道题都能让 AI 讲一遍，解析会存下来下次直接看</li>
           <li>错题本与掌握度统计，按单元记录练习进度</li>
@@ -143,7 +144,7 @@ public class SeoController {
     String description = string(bank.get("description"));
     body.append("<p class=\"lead\">").append(SeoHtml.escape(bankName)).append("共 ")
         .append(total).append(" 道题，按 ").append(units.size())
-        .append(" 个考点单元整理。每道题都给答案，选择题可以直接在下面核对，"
+        .append(" 个考点单元整理。每道题都给答案，选择题和判断题可以直接在下面核对，"
             + "进入题库刷题会记录进度、自动收错题，简答题由 AI 按评分要点批改。")
         .append(description.isBlank() ? "" : SeoHtml.escape(description))
         .append("</p>");
@@ -209,7 +210,7 @@ public class SeoController {
     return page(new SeoHtml.Page(
         bankName + "（含答案与解析）- 在线刷题 - " + seo.siteName(),
         bankName + "共 " + total + " 道题，覆盖 " + units.size()
-            + " 个考点单元，每题给答案与解析；选择题自动判分、简答题 AI 批改，可免费开始刷题。",
+            + " 个考点单元，每题给答案与解析；选择题和判断题自动判分、简答题 AI 批改，可免费开始刷题。",
         "/bank/" + bankId, body.toString(), ld));
   }
 
@@ -231,7 +232,7 @@ public class SeoController {
                 + "如果发现某道题有疑问，可以通过页脚邮箱反馈，我们会核对修正。"},
         new String[]{
             "选择题和简答题分别怎么判分？",
-            "选择题在你作答后由本地逻辑立即判定，不消耗额度；"
+            "选择题和判断题在你作答后由本地逻辑立即判定，不消耗额度；"
                 + "简答题和伪代码题由 AI 按评分要点批改，指出命中了哪些要点、漏了哪些。"},
         new String[]{
             "手机上能刷题吗？",
@@ -313,9 +314,10 @@ public class SeoController {
     String unitName = string(question.get("unit_name"));
     String bankName = string(question.get("bank_name"));
 
-    String answer = string(question.get("answer"));
+    String type = string(question.get("type"));
+    String answer = QuestionTypeSupport.displayAnswer(type, question.get("answer"));
     String content = string(question.get("content"));
-    String typeLabel = typeLabel(string(question.get("type")));
+    String typeLabel = typeLabel(type);
 
     List<Map<String, Object>> siblings = questionsOfUnit(unitId);
     int index = -1;
@@ -462,7 +464,9 @@ public class SeoController {
     }
 
     card.append("<div class=\"answer\">答案：")
-        .append(SeoHtml.escape(string(question.get("answer")))).append("</div>");
+        .append(SeoHtml.escape(QuestionTypeSupport.displayAnswer(
+            string(question.get("type")), question.get("answer"))))
+        .append("</div>");
     String explanation = string(question.get("explanation"));
     if (!explanation.isBlank()) {
       card.append("<h4>解析</h4>").append(SeoHtml.markdown(explanation));
@@ -596,6 +600,7 @@ public class SeoController {
     return switch (type == null ? "" : type) {
       case "SINGLE" -> "单选题";
       case "MULTI" -> "多选题";
+      case "TRUE_FALSE" -> "判断题";
       case "SHORT" -> "简答题";
       default -> "题目";
     };

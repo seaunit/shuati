@@ -119,10 +119,10 @@ CREATE TABLE question (
   KEY question_status_idx (status),
   CONSTRAINT question_unit_fk FOREIGN KEY (unit_id)
     REFERENCES unit (id) ON DELETE RESTRICT,
-  CONSTRAINT question_type_chk CHECK (type IN ('SINGLE', 'MULTI', 'SHORT')),
+  CONSTRAINT question_type_chk CHECK (type IN ('SINGLE', 'MULTI', 'TRUE_FALSE', 'SHORT')),
   CONSTRAINT question_difficulty_chk CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD')),
   CONSTRAINT question_status_chk CHECK (status IN ('ON', 'OFF')),
-  CONSTRAINT question_options_chk CHECK (type NOT IN ('SINGLE', 'MULTI') OR options IS NOT NULL),
+  CONSTRAINT question_options_chk CHECK (type NOT IN ('SINGLE', 'MULTI', 'TRUE_FALSE') OR options IS NOT NULL),
   CONSTRAINT question_key_points_chk CHECK (type <> 'SHORT' OR key_points IS NOT NULL)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 

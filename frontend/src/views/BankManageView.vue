@@ -13,6 +13,14 @@ import {
   X,
 } from "lucide-vue-next";
 import { api, ApiRequestError } from "@/api/client";
+import {
+  TRUE_FALSE_OPTIONS,
+  allowsCustomOptions,
+  isSingleChoiceQuestion,
+  normalizeTrueFalseAnswer,
+  typeLabel,
+  type QuestionType,
+} from "@/questionTypes";
 import { useAuthStore } from "@/stores/auth";
 
 interface Bank {
@@ -49,8 +57,6 @@ interface Question {
   explanation?: string | null;
   tags?: string[] | null;
 }
-
-type QuestionType = "SINGLE" | "MULTI" | "SHORT";
 
 const OPTION_KEYS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const MAX_OPTIONS = 8;
@@ -122,14 +128,7 @@ const totalQuestions = computed(() =>
   units.value.reduce((sum, unit) => sum + (unit.question_count ?? 0), 0),
 );
 
-const needsOptions = computed(() => form.value.type !== "SHORT");
-
-function typeLabel(type: string) {
-  if (type === "SINGLE") return "单选";
-  if (type === "MULTI") return "多选";
-  if (type === "SHORT") return "简答";
-  return type;
-}
+const needsOptions = computed(() => allowsCustomOptions(form.value.type));
 
 function difficultyLabel(value: string | null | undefined) {
   if (value === "EASY") return "简单";
@@ -497,11 +496,13 @@ function openEditForm(question: Question) {
   form.value.unitId = question.unit_id;
   form.value.type = type;
   form.value.content = question.content ?? "";
-  if (type !== "SHORT") {
+  if (allowsCustomOptions(type)) {
     // 空行补足到至少 4 个输入框，方便继续加选项
     form.value.options = [...options, "", "", "", ""].slice(0, Math.max(4, options.length));
   }
-  form.value.selected = (question.answer ?? "").split("").filter(Boolean);
+  form.value.selected = type === "TRUE_FALSE"
+    ? [normalizeTrueFalseAnswer(question.answer)].filter(Boolean)
+    : (question.answer ?? "").split("").filter(Boolean);
   form.value.answer = type === "SHORT" ? (question.answer ?? "") : "";
   form.value.keyPoints = (question.key_points ?? []).join("\n");
   form.value.difficulty = (question.difficulty as "EASY" | "MEDIUM" | "HARD") ?? "MEDIUM";
@@ -519,6 +520,11 @@ function closeForm() {
 
 function setQuestionType(type: QuestionType) {
   form.value.type = type;
+  form.value.selected = [];
+  form.value.answer = "";
+  form.value.options = type === "TRUE_FALSE"
+    ? TRUE_FALSE_OPTIONS.map((option) => option.text)
+    : ["", "", "", ""];
   formError.value = "";
 }
 
@@ -535,7 +541,7 @@ function removeOption(index: number) {
 }
 
 function toggleAnswer(key: string) {
-  if (form.value.type === "SINGLE") {
+  if (isSingleChoiceQuestion(form.value.type)) {
     form.value.selected = [key];
     return;
   }
@@ -578,6 +584,15 @@ function buildPayload() {
       .filter(Boolean);
     payload.keyPoints = keptKeyPoints.length > 0 ? keptKeyPoints : null;
     payload.options = null;
+  } else if (form.value.type === "TRUE_FALSE") {
+    const answer = normalizeTrueFalseAnswer(form.value.selected[0]);
+    if (!answer) {
+      formError.value = "请选择正确或错误";
+      return null;
+    }
+    payload.answer = answer;
+    payload.options = TRUE_FALSE_OPTIONS.map((option) => ({ ...option }));
+    payload.keyPoints = null;
   } else {
     const options = form.value.options.map((item) => item.trim());
     // 默认给了 4 个输入框，末尾没填的直接丢掉；中间留空才算填错
@@ -933,6 +948,7 @@ onBeforeUnmount(() => {
                 v-for="item in [
                   { key: 'SINGLE', label: '单选' },
                   { key: 'MULTI', label: '多选' },
+                  { key: 'TRUE_FALSE', label: '判断' },
                   { key: 'SHORT', label: '简答' },
                 ]"
                 :key="item.key"
@@ -943,7 +959,7 @@ onBeforeUnmount(() => {
                     ? 'border-moss bg-moss/10 text-moss'
                     : 'border-mist bg-white/70 text-ink/75 hover:border-moss/60'
                 "
-                @click="setQuestionType(item.key as 'SINGLE' | 'MULTI' | 'SHORT')"
+                @click="setQuestionType(item.key as QuestionType)"
               >
                 {{ item.label }}
               </button>
@@ -1016,6 +1032,28 @@ onBeforeUnmount(() => {
               form.selected.join("") || "未选"
             }}
           </p>
+        </div>
+
+        <div v-else-if="form.type === 'TRUE_FALSE'" class="mt-3">
+          <span class="mb-1.5 block text-sm text-ink">答案</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="option in TRUE_FALSE_OPTIONS"
+              :key="option.key"
+              type="button"
+              class="rounded-xl border px-4 py-3 text-sm font-medium transition"
+              :class="
+                form.selected.includes(option.key)
+                  ? 'border-moss bg-moss/10 text-moss'
+                  : 'border-mist bg-paper text-ink/75 hover:border-moss/60'
+              "
+              :aria-pressed="form.selected.includes(option.key)"
+              @click="toggleAnswer(option.key)"
+            >
+              {{ option.text }}
+            </button>
+          </div>
+          <p class="mt-2 text-xs text-oat">判断题只能选择一个答案。</p>
         </div>
 
         <div v-else class="mt-3 grid gap-3">

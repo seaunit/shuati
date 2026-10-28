@@ -1,6 +1,7 @@
 package com.shuati.bank;
 
 import com.shuati.common.Json;
+import com.shuati.question.QuestionTypeSupport;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.time.Instant;
@@ -205,7 +206,12 @@ public class BankWordExportService {
       optionParagraph.setKeepNext(true);
     }
 
-    addLabeledBlock(document, "答案：", string(question.get("answer")), false);
+    addLabeledBlock(
+        document,
+        "答案：",
+        QuestionTypeSupport.displayAnswer(
+            string(question.get("type")), question.get("answer")),
+        false);
 
     List<Object> keyPoints = objectList(question.get("key_points"));
     if (!keyPoints.isEmpty()) {
@@ -366,6 +372,7 @@ public class BankWordExportService {
     return switch (type) {
       case "SINGLE" -> "单选题";
       case "MULTI" -> "多选题";
+      case "TRUE_FALSE" -> "判断题";
       case "SHORT" -> "简答题";
       default -> type;
     };

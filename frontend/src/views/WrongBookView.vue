@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { BookX } from "lucide-vue-next";
 import { api } from "@/api/client";
+import { typeLabel } from "@/questionTypes";
 
 interface WrongItem {
   record_id: number;
@@ -48,13 +49,6 @@ function verdictLabel(verdict: string) {
   if (verdict === "PARTIAL") return "部分正确";
   if (verdict === "WRONG") return "错误";
   return "待复核";
-}
-
-function typeLabel(type: string) {
-  if (type === "SINGLE") return "单选题";
-  if (type === "MULTI") return "多选题";
-  if (type === "SHORT") return "简答题";
-  return type;
 }
 
 onMounted(async () => {

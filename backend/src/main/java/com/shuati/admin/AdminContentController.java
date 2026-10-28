@@ -4,6 +4,7 @@ import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
 import com.shuati.common.Json;
 import com.shuati.common.QuestionContent;
+import com.shuati.question.QuestionTypeSupport;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -177,14 +178,15 @@ public class AdminContentController {
     long unitId = longValue(body.get("unitId"));
     String type = string(body.get("type")).toUpperCase();
     String content = string(body.get("content")).trim();
-    String answer = string(body.get("answer")).trim();
+    String answer = QuestionTypeSupport.normalizeAnswer(type, body.get("answer"));
+    Object options = QuestionTypeSupport.normalizeOptions(type, body.get("options"));
     if (unitId == 0) {
       throw new ApiException(400, "请先选择单元");
     }
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer);
+    validateQuestion(type, options, answer);
     jdbc.update("""
         insert into question
           (unit_id, type, content, content_hash, options, answer, key_points,
@@ -192,8 +194,9 @@ public class AdminContentController {
         values (?, ?, ?, ?, cast(? as json), ?, cast(? as json), ?, ?,
                 cast(? as json), 'ON')
         """, unitId, type, content, QuestionContent.hash(content),
-        writeJson(body.get("options")), answer,
-        writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
+        writeJson(options), answer,
+        QuestionTypeSupport.isTrueFalse(type) ? null : writeJson(body.get("keyPoints")),
+        normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")));
     return ApiResponse.ok(null);
@@ -203,19 +206,21 @@ public class AdminContentController {
   public ApiResponse<Void> updateQuestion(@PathVariable long id, @RequestBody Map<String, Object> body) {
     String type = string(body.get("type")).toUpperCase();
     String content = string(body.get("content")).trim();
-    String answer = string(body.get("answer")).trim();
+    String answer = QuestionTypeSupport.normalizeAnswer(type, body.get("answer"));
+    Object options = QuestionTypeSupport.normalizeOptions(type, body.get("options"));
     if (content.isEmpty()) {
       throw new ApiException(400, "题干不能为空");
     }
-    validateQuestion(type, body.get("options"), answer);
+    validateQuestion(type, options, answer);
     jdbc.update("""
         update question
            set type = ?, content = ?, content_hash = ?, options = cast(? as json),
                answer = ?, key_points = cast(? as json), difficulty = ?,
                explanation = ?, tags = cast(? as json)
          where id = ?
-        """, type, content, QuestionContent.hash(content), writeJson(body.get("options")), answer,
-        writeJson(body.get("keyPoints")), normalizeDifficulty(body.get("difficulty")),
+        """, type, content, QuestionContent.hash(content), writeJson(options), answer,
+        QuestionTypeSupport.isTrueFalse(type) ? null : writeJson(body.get("keyPoints")),
+        normalizeDifficulty(body.get("difficulty")),
         body.get("explanation") == null ? null : string(body.get("explanation")),
         writeJson(body.get("tags") == null ? List.of() : body.get("tags")), id);
     return ApiResponse.ok(null);
@@ -238,13 +243,13 @@ public class AdminContentController {
   }
 
   private void validateQuestion(String type, Object options, String answer) {
-    if (!List.of("SINGLE", "MULTI", "SHORT").contains(type)) {
+    if (!QuestionTypeSupport.isValidType(type)) {
       throw new ApiException(400, "题型不正确");
     }
     if (answer.isEmpty()) {
       throw new ApiException(400, "答案不能为空");
     }
-    if (("SINGLE".equals(type) || "MULTI".equals(type))
+    if (QuestionTypeSupport.isChoiceType(type)
         && !(options instanceof List<?> list && !list.isEmpty())) {
       throw new ApiException(400, "选择题必须提供选项");
     }

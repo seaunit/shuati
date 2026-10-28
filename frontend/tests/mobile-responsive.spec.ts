@@ -702,6 +702,36 @@ test("wrong book jumps straight into practising the filtered set", async ({ page
   await expect(page.getByText("第 1 / 1 题", { exact: false })).toBeVisible();
 });
 
+test("wrong book labels true false questions", async ({ page }) => {
+  await mockBankList(page, "USER");
+  await page.route("**/api/wrong-book", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            record_id: 71,
+            question_id: 1,
+            verdict: "WRONG",
+            score: 0,
+            last_at: "2026-10-28T00:00:00Z",
+            type: "TRUE_FALSE",
+            content: "Spring Bean 默认是原型。",
+            difficulty: "EASY",
+            unit_name: "Spring",
+            bank_name: "八股题库",
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("/app/wrong-book");
+  await expect(page.getByText("判断题")).toBeVisible();
+  await expect(page.getByText("Spring Bean 默认是原型。")).toBeVisible();
+});
+
 test("practice actions stay directly above the mobile navigation", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({
@@ -832,6 +862,94 @@ test("practice shows a clear single or multiple choice badge", async ({ page }) 
             tags: null,
             status: "ON",
           },
+          {
+            id: 3,
+            unit_id: 1,
+            type: "TRUE_FALSE",
+            content: "判断题题干",
+            options: [{ key: "T", text: "正确" }, { key: "F", text: "错误" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { total: 3, answered: 0, correct: 0, answeredIds: [] },
+      },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByTestId("practice-type")).toHaveText("单选题");
+  await page.getByRole("button", { name: /下一题/ }).click();
+  await expect(page.getByTestId("practice-type")).toHaveText("多选题");
+  await page.getByRole("button", { name: /下一题/ }).click();
+  await expect(page.getByTestId("practice-type")).toHaveText("判断题");
+  await expect(page.getByRole("button", { name: /正确/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /错误/ })).toBeVisible();
+});
+
+test("true false practice uses local grading, colors and study mode", async ({ page }) => {
+  const submissions: Array<Record<string, unknown>> = [];
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "tf-user", email: "tf@example.com", nickname: "tf", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { entitlements: {}, ledger: [] } } }),
+  );
+  await page.route("**/api/practice/last-scope", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: {} } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: null } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 1,
+            unit_id: 1,
+            type: "TRUE_FALSE",
+            content: "Spring Bean 默认是单例。",
+            options: [{ key: "T", text: "正确" }, { key: "F", text: "错误" }],
+            difficulty: "EASY",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: "Spring 默认作用域是 singleton。",
+          },
+          {
+            id: 2,
+            unit_id: 1,
+            type: "TRUE_FALSE",
+            content: "Spring Bean 默认是原型。",
+            options: [{ key: "T", text: "正确" }, { key: "F", text: "错误" }],
+            difficulty: "EASY",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: "默认不是 prototype。",
+          },
         ],
       },
     }),
@@ -848,11 +966,50 @@ test("practice shows a clear single or multiple choice badge", async ({ page }) 
       },
     }),
   );
+  await page.route("**/api/practice/submit-choice", (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    submissions.push(body);
+    const questionId = Number(body.questionId);
+    const selected = (body.selected as string[]).join("");
+    const correctAnswer = questionId === 1 ? "T" : "F";
+    return route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: {
+          recordId: questionId,
+          verdict: selected === correctAnswer ? "CORRECT" : "WRONG",
+          score: selected === correctAnswer ? 10 : 0,
+          correctAnswer,
+        },
+      },
+    });
+  });
+  await page.route("**/api/practice/questions/1/answer", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { answer: "T" } } }),
+  );
 
   await page.goto("/app/practice?unitId=1");
-  await expect(page.getByTestId("practice-type")).toHaveText("单选题");
+  await page.getByRole("button", { name: /正确/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await expect(page.getByText(/判定：正确/)).toBeVisible();
+  await expect(page.getByText("正确答案：正确")).toBeVisible();
+  await expect(page.getByRole("button", { name: /正确/ })).toHaveClass(/border-moss/);
+  expect(submissions[0]).toMatchObject({ questionId: 1, selected: ["T"] });
+
   await page.getByRole("button", { name: /下一题/ }).click();
-  await expect(page.getByTestId("practice-type")).toHaveText("多选题");
+  await page.getByRole("button", { name: /正确/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await expect(page.getByText(/判定：错误/)).toBeVisible();
+  await expect(page.getByText("正确答案：错误")).toBeVisible();
+  await expect(page.getByText("你的答案：正确")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^✓ 正确/ })).toHaveClass(/border-rose/);
+  await expect(page.getByRole("button", { name: /^✗ 错误/ })).toHaveClass(/border-moss/);
+
+  await page.getByRole("button", { name: "从头开始" }).click();
+  await page.getByRole("button", { name: "背题模式" }).click();
+  await expect(page.getByText("正确答案：正确")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^✓ 正确/ })).toHaveClass(/border-moss/);
 });
 
 test("practice resumes from the first unanswered question", async ({ page }) => {
@@ -2415,6 +2572,58 @@ test("bank management page imports into the bank and adds questions by hand", as
     options: [
       { key: "A", text: "加快查询" },
       { key: "B", text: "加快写入" },
+    ],
+  });
+});
+
+test("bank management creates a true false question without custom options", async ({ page }) => {
+  await mockBankList(page, "USER");
+  let created: Record<string, unknown> | null = null;
+
+  await page.route("**/api/manage/banks", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 11, name: "我的题库", description: null, is_public: false }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/units", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{ id: 21, bank_id: 11, name: "第一章", sort: 0, question_count: 0, off_count: 0 }],
+      },
+    }),
+  );
+  await page.route("**/api/manage/banks/11/questions*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: [] } }),
+  );
+  await page.route("**/api/manage/questions", (route) => {
+    created = route.request().postDataJSON();
+    return route.fulfill({ json: { code: 200, message: "ok", data: { id: 100 } } });
+  });
+
+  await page.goto("/app/banks/11");
+  await page.getByRole("button", { name: "新增题目" }).click();
+  await page.getByLabel("所属单元").selectOption({ label: "第一章" });
+  await page.getByRole("button", { name: "判断", exact: true }).click();
+  await page.getByPlaceholder("支持 Markdown 语法").fill("Spring Bean 默认是单例。");
+  await expect(page.getByPlaceholder("选项 A 内容")).toHaveCount(0);
+  await page.getByRole("button", { name: "正确", exact: true }).click();
+  await page.getByRole("button", { name: "保存题目" }).click();
+
+  expect(created).toMatchObject({
+    bankId: 11,
+    unitId: 21,
+    type: "TRUE_FALSE",
+    content: "Spring Bean 默认是单例。",
+    answer: "T",
+    options: [
+      { key: "T", text: "正确" },
+      { key: "F", text: "错误" },
     ],
   });
 });
