@@ -42,10 +42,11 @@ pwsh -File deploy/scripts/dify-local.ps1 start
 
 ## 工作流
 
-四个无密钥 DSL 位于 `deploy/dify/workflows/`：
+五个无密钥 DSL 位于 `deploy/dify/workflows/`：
 
 - 简答题判分
 - 题目解析
+- 题目追问与知识扩展
 - 文本出题
 - 截图出题
 
@@ -58,6 +59,7 @@ DIFY_WORKFLOW_JUDGE_TOKEN=
 DIFY_WORKFLOW_EXPLAIN_TOKEN=
 DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN=
 DIFY_WORKFLOW_EXTRACT_IMAGE_TOKEN=
+DIFY_WORKFLOW_ASK_TOKEN=
 ```
 
 不要把这些 Token 写入 `application.yml`、前端、Dify DSL、文档或 Git。
@@ -86,7 +88,7 @@ docker logs -f docker-plugin_daemon-1
 
 ### Dify 正常但业务返回“AI 编排服务未配置”
 
-确认当前 Spring Profile 为 `local`，并检查四个 `DIFY_WORKFLOW_*_TOKEN` 是否已写入 `.env.local`。
+确认当前 Spring Profile 为 `local`，并检查五个 `DIFY_WORKFLOW_*_TOKEN` 是否已写入 `.env.local`。
 
 ## 数据隔离
 
@@ -99,12 +101,13 @@ docker logs -f docker-plugin_daemon-1
 - Dify `1.13.3` 已启动，控制台 `http://localhost:8501` 返回 200。
 - 官方 DeepSeek 插件 `0.0.26` 已安装。
 - DeepSeek Provider `langgenius/deepseek/deepseek` 已配置，模型为 `deepseek-flash`。
-- 四个工作流均已导入并发布：
+- 原有四个工作流已导入并发布：
   - `shuati-judge`
   - `shuati-explain`
   - `shuati-extract-text`
   - `shuati-extract-image`
-- 四个 Service API Token 已写入本机 `.env.local`。
+- `shuati-ask` 为本次新增工作流，本地使用前需重新导入 DSL 并创建 Service API Token。
+- 原有四个 Service API Token 已写入本机 `.env.local`；`DIFY_WORKFLOW_ASK_TOKEN` 待本地 Dify 启动后补配。
 - 真实冒烟结果：判题、解析、文本出题、截图出题均返回 `succeeded`。
 - 截图工作流必须上传为真实 `image/png` 等 MIME；`application/octet-stream` 会被模型供应商拒绝。
 - Spring Boot `local` profile 已实际启动并通过 `/actuator/health` 检查。
@@ -112,4 +115,4 @@ docker logs -f docker-plugin_daemon-1
 
 ## 生产环境
 
-正式服务运行在香港服务器，Dify 1.13.3 采用 Python/Node/PostgreSQL/Redis 原生安装，只监听 `127.0.0.1:8501`。完整安装、四个工作流导入、Service API Token 创建和直连回滚见 `deploy/README.md`。
+正式服务运行在香港服务器，Dify 1.13.3 采用 Python/Node/PostgreSQL/Redis 原生安装，只监听 `127.0.0.1:8501`。完整安装、五个工作流导入、Service API Token 创建和直连回滚见 `deploy/README.md`。

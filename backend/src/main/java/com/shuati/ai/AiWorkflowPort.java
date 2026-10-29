@@ -8,6 +8,8 @@ public interface AiWorkflowPort {
 
   AiWorkflowResult explain(String userId, AiWorkflowInputs.ExplainInput input);
 
+  AiWorkflowResult ask(String userId, AiWorkflowInputs.AskInput input);
+
   AiWorkflowResult extractText(String userId, AiWorkflowInputs.ExtractTextInput input);
 
   AiWorkflowResult extractScreenshot(

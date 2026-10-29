@@ -21,6 +21,7 @@ public class DifyWorkflowProperties {
     return switch (key) {
       case JUDGE -> workflows.getJudge();
       case EXPLAIN -> workflows.getExplain();
+      case ASK -> workflows.getAsk();
       case EXTRACT_TEXT -> workflows.getExtractText();
       case EXTRACT_IMAGE -> workflows.getExtractImage();
     };
@@ -39,6 +40,7 @@ public class DifyWorkflowProperties {
   public static class Workflows {
     private String judge;
     private String explain;
+    private String ask;
     private String extractText;
     private String extractImage;
   }

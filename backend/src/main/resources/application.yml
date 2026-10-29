@@ -63,6 +63,7 @@ shuati:
     workflows:
       judge: ${DIFY_WORKFLOW_JUDGE_TOKEN:}
       explain: ${DIFY_WORKFLOW_EXPLAIN_TOKEN:}
+      ask: ${DIFY_WORKFLOW_ASK_TOKEN:}
       extract-text: ${DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN:}
       extract-image: ${DIFY_WORKFLOW_EXTRACT_IMAGE_TOKEN:}
   explain-queue:

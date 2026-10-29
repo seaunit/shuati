@@ -1,7 +1,9 @@
 package com.shuati.practice;
 
 import com.shuati.bank.BankService;
+import com.shuati.common.ApiException;
 import com.shuati.common.ApiResponse;
+import com.shuati.common.CurrentUser;
 import com.shuati.rate.RateLimit;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +21,7 @@ public class PracticeController {
 
   private final PracticeService practiceService;
   private final AiGradingService aiGradingService;
+  private final AskAiService askAiService;
   private final BankService bankService;
 
   @PostMapping("/api/practice/submit-choice")
@@ -90,6 +93,23 @@ public class PracticeController {
     // 考生自己的对错由前端依据本地判定结果展示，避免把别人的作答写进缓存的解析里。
     return ApiResponse.ok(aiGradingService.explanation(
         com.shuati.common.CurrentUser.id(), id));
+  }
+
+  @PostMapping("/api/practice/questions/{id}/ask-ai")
+  @RateLimit(name = "ai:ask", limit = 20, windowSeconds = 60, scope = RateLimit.Scope.USER)
+  public ApiResponse<Map<String, Object>> askAi(
+      @PathVariable long id, @RequestBody Map<String, Object> body) {
+    Object rawHistory = body.get("history");
+    if (rawHistory != null && !(rawHistory instanceof List<?>)) {
+      throw new ApiException(400, "历史消息格式不正确");
+    }
+    List<?> history = rawHistory == null ? List.of() : (List<?>) rawHistory;
+    return ApiResponse.ok(askAiService.ask(
+        CurrentUser.id(),
+        id,
+        body.get("question") == null ? "" : String.valueOf(body.get("question")),
+        history,
+        body.get("requestId") == null ? "" : String.valueOf(body.get("requestId"))));
   }
 
   @GetMapping("/api/practice/questions/{id}/answer")

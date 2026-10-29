@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | `shuati-judge.yml` | 简答题判分 | `result` JSON 字符串 |
 | `shuati-explain.yml` | 选择题 / 简答题解析 | `explanation` Markdown |
+| `shuati-ask.yml` | 围绕当前题目追问与知识扩展 | `answer` Markdown |
 | `shuati-extract-text.yml` | 文本或笔记生成题目 | `result` JSON 字符串 |
 | `shuati-extract-image.yml` | 截图生成题目 | `result` JSON 字符串 |
 
@@ -15,7 +16,7 @@
 
 1. 启动 Dify：`pwsh -File deploy/scripts/dify-local.ps1 start`
 2. 登录 `http://localhost:8501`
-3. 在工作室中依次导入四个 DSL。
+3. 在工作室中依次导入五个 DSL。
 4. 为每个工作流配置 Dify 模型供应商。
 5. 在“访问 API”中创建独立 Service API Key。
 6. 只把 API Key 写入本机 `.env.local`。

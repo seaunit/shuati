@@ -36,6 +36,7 @@ INSERT INTO ai_price_rule (purpose, points, unit, description)
 VALUES
   ('EXPLAIN', 1, 'CALL', '选择题 AI 解析，每次 1 点'),
   ('JUDGE', 3, 'CALL', '简答题 / 伪代码 AI 判分，每次 3 点'),
+  ('ASK', 1, 'CALL', '题目追问与知识扩展，每次 1 点'),
   ('EXTRACT', 10, 'PER_10K_CHARS', '文档 / 网页 / 正文 AI 解析成题库，每 1 万字 10 点'),
   ('TEST', 0, 'CALL', '后台连通性测试不扣点')
 ON DUPLICATE KEY UPDATE purpose = VALUES(purpose);

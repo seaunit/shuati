@@ -18,6 +18,15 @@ public final class AiWorkflowInputs {
       String referenceAnswer) {
   }
 
+  public record AskInput(
+      String questionContent,
+      String options,
+      String referenceAnswer,
+      String explanation,
+      String conversation,
+      String userQuestion) {
+  }
+
   public record ExtractTextInput(String sourceText) {
   }
 

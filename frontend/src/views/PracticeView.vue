@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { BookOpenCheck, ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-vue-next";
 import { api } from "@/api/client";
 import AnswerSpeechPlayer from "@/components/AnswerSpeechPlayer.vue";
+import AskAiPanel from "@/components/AskAiPanel.vue";
 import MarkdownText from "@/components/MarkdownText.vue";
 import {
   answerText,
@@ -701,6 +702,12 @@ onMounted(async () => {
           <MarkdownText v-if="explanation" :text="explanation" />
           <p v-if="explanationError" class="text-sm text-rose">{{ explanationError }}</p>
         </div>
+
+        <AskAiPanel
+          v-if="result || (studyMode && studyAnswer)"
+          :key="`ask-${current.id}`"
+          :question-id="current.id"
+        />
       </article>
 
       <div

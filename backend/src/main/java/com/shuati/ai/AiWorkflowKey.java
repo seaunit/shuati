@@ -3,6 +3,7 @@ package com.shuati.ai;
 public enum AiWorkflowKey {
   JUDGE("judge", "JUDGE"),
   EXPLAIN("explain", "EXPLAIN"),
+  ASK("ask", "ASK"),
   EXTRACT_TEXT("extract-text", "EXTRACT"),
   EXTRACT_IMAGE("extract-image", "EXTRACT");
 

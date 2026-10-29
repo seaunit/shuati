@@ -43,6 +43,7 @@ class DifyWorkflowClientTest {
     properties.setReadTimeout(Duration.ofSeconds(10));
     properties.getWorkflows().setJudge("judge-token");
     properties.getWorkflows().setExplain("explain-token");
+    properties.getWorkflows().setAsk("ask-token");
     properties.getWorkflows().setExtractText("extract-text-token");
     properties.getWorkflows().setExtractImage("extract-image-token");
 
@@ -114,6 +115,40 @@ class DifyWorkflowClientTest {
     assertThat(result.content()).contains("正确答案是 C");
     assertThat(result.content()).doesNotContain("<think>");
     assertThat(result.workflowKey()).isEqualTo(AiWorkflowKey.EXPLAIN);
+  }
+
+  @Test
+  void askReturnsMarkdownAnswerWithQuestionContext() {
+    server.expect(once(), requestTo(BASE_URL + "/workflows/run"))
+        .andExpect(header("Authorization", "Bearer ask-token"))
+        .andExpect(jsonPath("$.inputs.questionContent").value("MySQL 主从延迟如何排查"))
+        .andExpect(jsonPath("$.inputs.referenceAnswer").value("B"))
+        .andExpect(jsonPath("$.inputs.explanation").value("已有解析"))
+        .andExpect(jsonPath("$.inputs.conversation").value("[{\"role\":\"user\",\"content\":\"继续\"}]"))
+        .andExpect(jsonPath("$.inputs.userQuestion").value("半同步复制有什么作用？"))
+        .andRespond(withSuccess("""
+            {
+              "workflow_run_id": "run-ask",
+              "data": {
+                "status": "succeeded",
+                "outputs": {"answer": "<think>内部推理</think>半同步复制要求至少一个从库确认。"},
+                "total_tokens": 18
+              }
+            }
+            """, MediaType.APPLICATION_JSON));
+
+    AiWorkflowResult result = client.ask(
+        "user-1",
+        new AiWorkflowInputs.AskInput(
+            "MySQL 主从延迟如何排查",
+            "[]",
+            "B",
+            "已有解析",
+            "[{\"role\":\"user\",\"content\":\"继续\"}]",
+            "半同步复制有什么作用？"));
+
+    assertThat(result.content()).isEqualTo("半同步复制要求至少一个从库确认。");
+    assertThat(result.workflowKey()).isEqualTo(AiWorkflowKey.ASK);
   }
 
   @Test

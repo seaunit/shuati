@@ -8,6 +8,10 @@ frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
 
+# Python 工具缓存
+__pycache__/
+*.pyc
+
 # 环境与密钥
 .env
 .env.local

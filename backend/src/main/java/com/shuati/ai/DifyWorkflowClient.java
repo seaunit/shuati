@@ -60,6 +60,18 @@ public class DifyWorkflowClient implements AiWorkflowPort {
   }
 
   @Override
+  public AiWorkflowResult ask(String userId, AiWorkflowInputs.AskInput input) {
+    Map<String, Object> inputs = new LinkedHashMap<>();
+    inputs.put("questionContent", value(input.questionContent()));
+    inputs.put("options", value(input.options()));
+    inputs.put("referenceAnswer", value(input.referenceAnswer()));
+    inputs.put("explanation", value(input.explanation()));
+    inputs.put("conversation", value(input.conversation()));
+    inputs.put("userQuestion", value(input.userQuestion()));
+    return run(AiWorkflowKey.ASK, userId, inputs, null, "answer");
+  }
+
+  @Override
   public AiWorkflowResult extractText(String userId, AiWorkflowInputs.ExtractTextInput input) {
     return run(
         AiWorkflowKey.EXTRACT_TEXT,
