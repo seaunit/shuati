@@ -30,6 +30,13 @@ class RecordingDifyClient(bootstrap.DifyClient):
 
 
 class DifyBootstrapWorkflowSyncTest(unittest.TestCase):
+    def test_ask_workflow_is_registered(self):
+        self.assertIn("shuati-ask", bootstrap.WORKFLOWS)
+        self.assertEqual(
+            "DIFY_WORKFLOW_ASK_TOKEN",
+            bootstrap.WORKFLOWS["shuati-ask"],
+        )
+
     def test_legacy_same_name_app_does_not_prevent_new_workflow_import(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             workflow = Path(temp_dir) / "shuati-extract-text.yml"

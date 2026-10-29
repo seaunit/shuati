@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
     "shuati.dify.base-url=http://localhost:8501/v1",
     "shuati.dify.workflows.judge=test-judge",
     "shuati.dify.workflows.explain=test-explain",
+    "shuati.dify.workflows.ask=test-ask",
     "shuati.dify.workflows.extract-text=test-extract-text",
     "shuati.dify.workflows.extract-image=test-extract-image"
 })

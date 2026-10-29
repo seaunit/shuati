@@ -143,6 +143,29 @@ public class BankService {
     return Map.of("answer", rows.get(0).get("answer"));
   }
 
+  /**
+   * 问 AI 必须使用服务端读取的题目上下文，避免客户端篡改题干或越过题库权限。
+   */
+  public Map<String, Object> questionForAi(long questionId) {
+    List<Map<String, Object>> rows = jdbc.queryForList("""
+        select q.content, q.options, q.answer, q.explanation, q.status, u.bank_id
+          from question q
+          join unit u on u.id = q.unit_id
+         where q.id = ?
+        """, questionId);
+    if (rows.isEmpty() || !"ON".equals(rows.get(0).get("status"))) {
+      throw new ApiException(404, "题目不存在或已下架");
+    }
+    Map<String, Object> question = rows.get(0);
+    requireBankAccess(((Number) question.get("bank_id")).longValue());
+    Map<String, Object> result = new java.util.LinkedHashMap<>();
+    result.put("content", question.get("content"));
+    result.put("options", question.get("options"));
+    result.put("answer", question.get("answer"));
+    result.put("explanation", question.get("explanation"));
+    return result;
+  }
+
   public Map<String, Object> bankProgress(long bankId) {
     requireBankAccess(bankId);
     List<Long> unitIds = jdbc.queryForList(

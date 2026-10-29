@@ -4,6 +4,10 @@ spring:
     username: ${SHUATI_DB_USER:root}
     # 跑测试前先 export SHUATI_DB_PASSWORD=你的本机 MySQL 口令，仓库里不放真实口令
     password: ${SHUATI_DB_PASSWORD:}
+    hikari:
+      # 多个 Spring 测试上下文会并存，默认每池 10 个连接会耗尽 MySQL max_connections。
+      maximum-pool-size: 6
+      minimum-idle: 1
   flyway:
     baseline-on-migrate: true
     baseline-version: 2

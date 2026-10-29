@@ -232,7 +232,7 @@ CREATE TABLE ai_call_log (
   KEY ai_call_log_user_id_idx (user_id),
   CONSTRAINT ai_call_log_user_fk FOREIGN KEY (user_id)
     REFERENCES profiles (id) ON DELETE SET NULL,
-  CONSTRAINT ai_call_log_purpose_chk CHECK (purpose IN ('JUDGE', 'EXPLAIN', 'EXTRACT', 'TEST'))
+  CONSTRAINT ai_call_log_purpose_chk CHECK (purpose IN ('JUDGE', 'EXPLAIN', 'ASK', 'EXTRACT', 'TEST'))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 -- ============ 6. 导入任务 ============
@@ -325,7 +325,7 @@ CREATE TABLE ai_price_rule (
   updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
     ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (purpose),
-  CONSTRAINT ai_price_rule_purpose_chk CHECK (purpose IN ('JUDGE', 'EXPLAIN', 'EXTRACT', 'TEST')),
+  CONSTRAINT ai_price_rule_purpose_chk CHECK (purpose IN ('JUDGE', 'EXPLAIN', 'ASK', 'EXTRACT', 'TEST')),
   CONSTRAINT ai_price_rule_unit_chk CHECK (unit IN ('CALL', 'PER_10K_CHARS')),
   CONSTRAINT ai_price_rule_points_chk CHECK (points >= 0)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;

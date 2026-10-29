@@ -1777,6 +1777,202 @@ test("stored explanation shows after answering and can be regenerated", async ({
   await expect(page.getByText("解析库里的解析内容")).toHaveCount(0);
 });
 
+test("ask ai appears after answering and keeps follow-up history", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let answerCount = 0;
+  let available = 10;
+  const askBodies: Array<Record<string, unknown>> = [];
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { entitlements: { available }, ledger: [], rules: [] },
+      },
+    }),
+  );
+  await page.route("**/api/practice/last-scope", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: {} } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [
+          {
+            id: 1,
+            unit_id: 1,
+            type: "SINGLE",
+            content: "问 AI 测试题干",
+            options: [{ key: "A", text: "选项 A" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: "已有解析",
+          },
+          {
+            id: 2,
+            unit_id: 1,
+            type: "SINGLE",
+            content: "另一道题",
+            options: [{ key: "A", text: "选项 A" }],
+            difficulty: "MEDIUM",
+            images: null,
+            tags: null,
+            status: "ON",
+            explanation: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 2, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+  await page.route("**/api/practice/submit-choice", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { recordId: 1, verdict: "CORRECT", score: 10, correctAnswer: "A" },
+      },
+    }),
+  );
+  await page.route("**/api/practice/questions/1/ask-ai", async (route) => {
+    askBodies.push(route.request().postDataJSON());
+    answerCount += 1;
+    available -= 1;
+    await route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { answer: `第 ${answerCount} 个回答`, cost: 1, available },
+      },
+    });
+  });
+
+  await page.goto("/app/practice?unitId=1");
+  await expect(page.getByRole("button", { name: "问 AI" })).toHaveCount(0);
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+
+  await page.getByRole("button", { name: "问 AI" }).click();
+  const input = page.getByPlaceholder("输入你想追问的问题…");
+  await input.fill("这题还能补充什么？");
+  await input.press("Enter");
+  await expect(page.getByText("第 1 个回答")).toBeVisible();
+  expect(askBodies[0].question).toBe("这题还能补充什么？");
+  expect(askBodies[0].requestId).toBeTruthy();
+
+  await input.fill("再举一个例子");
+  await input.press("Enter");
+  await expect(page.getByText("第 2 个回答")).toBeVisible();
+  expect(askBodies[1].history).toEqual([
+    { role: "user", content: "这题还能补充什么？" },
+    { role: "assistant", content: "第 1 个回答" },
+  ]);
+
+  await page.getByRole("button", { name: /下一题/ }).click();
+  await expect(page.getByText("第 2 个回答")).toHaveCount(0);
+});
+
+test("ask ai keeps the question when points are insufficient", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { id: "test-user", email: "u@example.com", nickname: "u", role: "USER", status: "ENABLED" },
+      },
+    }),
+  );
+  await page.route("**/api/points", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { entitlements: { available: 0 }, ledger: [], rules: [] } },
+    }),
+  );
+  await page.route("**/api/practice/last-scope", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: {} } }),
+  );
+  await page.route("**/api/progress/cursor*", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { questionId: null } } }),
+  );
+  await page.route("**/api/units/1/questions*", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: [{
+          id: 1,
+          unit_id: 1,
+          type: "SINGLE",
+          content: "余额不足测试",
+          options: [{ key: "A", text: "选项 A" }],
+          difficulty: "MEDIUM",
+          images: null,
+          tags: null,
+          status: "ON",
+          explanation: "解析",
+        }],
+      },
+    }),
+  );
+  await page.route("**/api/practice/sessions", (route) =>
+    route.fulfill({ json: { code: 200, message: "ok", data: { id: 1 } } }),
+  );
+  await page.route("**/api/progress/unit/1", (route) =>
+    route.fulfill({
+      json: { code: 200, message: "ok", data: { total: 1, answered: 0, correct: 0, answeredIds: [] } },
+    }),
+  );
+  await page.route("**/api/practice/submit-choice", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "ok",
+        data: { recordId: 1, verdict: "CORRECT", score: 10, correctAnswer: "A" },
+      },
+    }),
+  );
+  await page.route("**/api/practice/questions/1/ask-ai", (route) =>
+    route.fulfill({
+      status: 402,
+      json: { code: 402, message: "AI 点数不足：本次需要 1 点", data: null },
+    }),
+  );
+
+  await page.goto("/app/practice?unitId=1");
+  await page.getByRole("button", { name: /选项 A/ }).click();
+  await page.getByRole("button", { name: "提交答案" }).click();
+  await page.getByRole("button", { name: "问 AI" }).click();
+  const input = page.getByPlaceholder("输入你想追问的问题…");
+  await input.fill("余额不足时保留问题");
+  await input.press("Enter");
+
+  await expect(page.getByText("AI 点数不足：本次需要 1 点")).toBeVisible();
+  await expect(input).toHaveValue("余额不足时保留问题");
+});
+
 test("wrongly picked option is marked red while correct ones stay green", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({

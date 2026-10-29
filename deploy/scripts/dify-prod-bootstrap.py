@@ -33,6 +33,7 @@ PROVIDER = "langgenius/deepseek/deepseek"
 WORKFLOWS = {
     "shuati-judge": "DIFY_WORKFLOW_JUDGE_TOKEN",
     "shuati-explain": "DIFY_WORKFLOW_EXPLAIN_TOKEN",
+    "shuati-ask": "DIFY_WORKFLOW_ASK_TOKEN",
     "shuati-extract-text": "DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN",
     "shuati-extract-image": "DIFY_WORKFLOW_EXTRACT_IMAGE_TOKEN",
 }
@@ -379,6 +380,19 @@ def smoke(tokens: dict[str, str]) -> None:
     )
     runs.append(
         run_workflow(
+            tokens["DIFY_WORKFLOW_ASK_TOKEN"],
+            {
+                "questionContent": "Spring Bean 默认作用域是什么？",
+                "options": "[]",
+                "referenceAnswer": "singleton",
+                "explanation": "Spring 容器默认每个 Bean 只有一个实例。",
+                "conversation": "",
+                "userQuestion": "prototype 和 singleton 最大的区别是什么？",
+            },
+        )
+    )
+    runs.append(
+        run_workflow(
             tokens["DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN"],
             {"sourceText": "Spring Bean 默认作用域是 singleton。"},
         )
@@ -391,7 +405,7 @@ def smoke(tokens: dict[str, str]) -> None:
             [{"type": "image", "transfer_method": "local_file", "upload_file_id": image_id}],
         )
     )
-    print("[bootstrap] 四类 Dify 工作流冒烟成功")
+    print("[bootstrap] 五类 Dify 工作流冒烟成功")
     print("[bootstrap] 运行 ID：" + ", ".join(runs))
 
 
@@ -416,7 +430,7 @@ def main() -> int:
     parser.add_argument(
         "--activate",
         action="store_true",
-        help="四类冒烟通过后切换 SHUATI_AI_ENGINE=dify 并重启后端",
+        help="五类冒烟通过后切换 SHUATI_AI_ENGINE=dify 并重启后端",
     )
     args = parser.parse_args()
 
