@@ -51,7 +51,7 @@ pwsh -File deploy/scripts/dify-local.ps1 start
 pwsh -File deploy/scripts/dify-local.ps1 status
 ```
 
-控制台为 `http://localhost:8501`。四个工作流 DSL 位于
+控制台为 `http://localhost:8501`。五个工作流 DSL 位于
 `deploy/dify/workflows/`，Service API Token 只填写到本机 `.env.local`。
 完整说明见 [`docs/Dify本地测试环境.md`](docs/Dify本地测试环境.md)。
 

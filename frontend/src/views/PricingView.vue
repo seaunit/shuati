@@ -71,6 +71,7 @@ const PERIODS: { key: Period; label: string; suffix: string }[] = [
 const PURPOSE_LABEL: Record<string, string> = {
   JUDGE: "简答题 / 伪代码 AI 判分",
   EXPLAIN: "选择题 AI 解析",
+  ASK: "题目追问与知识扩展",
   EXTRACT: "AI 解析生成题库",
   TEST: "连通性测试",
 };
@@ -84,9 +85,11 @@ const REASON_LABEL: Record<string, string> = {
   ADMIN_GRANT: "管理员赠送",
   AI_JUDGE: "AI 判分",
   AI_EXPLAIN: "AI 解析",
+  AI_ASK: "AI 题目追问",
   AI_EXTRACT: "AI 生成题库",
   AI_JUDGE_FAILED: "判分失败退回",
   AI_EXPLAIN_FAILED: "解析失败退回",
+  AI_ASK_FAILED: "追问失败退回",
   AI_EXTRACT_FAILED: "生成失败退回",
   AI_EXTRACT_PARTIAL_FAILED: "部分内容失败退回",
 };

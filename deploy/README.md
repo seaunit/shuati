@@ -100,6 +100,7 @@ DIFY_CONNECT_TIMEOUT=10s
 DIFY_READ_TIMEOUT=175s
 DIFY_WORKFLOW_JUDGE_TOKEN=
 DIFY_WORKFLOW_EXPLAIN_TOKEN=
+DIFY_WORKFLOW_ASK_TOKEN=
 DIFY_WORKFLOW_EXTRACT_TEXT_TOKEN=
 DIFY_WORKFLOW_EXTRACT_IMAGE_TOKEN=
 SHUATI_BOOTSTRAP_ADMIN_EMAIL=你的邮箱
@@ -246,13 +247,13 @@ sudo bash /opt/shuati/deploy/scripts/dify-prod.sh install
 sudo bash /opt/shuati/deploy/scripts/dify-prod.sh status
 ```
 
-初始化管理员、安装 DeepSeek 插件、导入并发布四个工作流、创建四个 Service API Token：
+初始化管理员、安装 DeepSeek 插件、导入并发布五个工作流、创建五个 Service API Token：
 
 ```bash
 sudo python3 /opt/shuati/deploy/scripts/dify-prod-bootstrap.py
 ```
 
-脚本先直接调用四类 Dify 工作流；全部成功后再切换正式后端：
+脚本先直接调用五类 Dify 工作流；全部成功后再切换正式后端：
 
 ```bash
 sudo python3 /opt/shuati/deploy/scripts/dify-prod-bootstrap.py --activate

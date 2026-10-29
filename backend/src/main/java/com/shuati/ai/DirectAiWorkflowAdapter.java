@@ -44,6 +44,23 @@ public class DirectAiWorkflowAdapter implements AiWorkflowPort {
   }
 
   @Override
+  public AiWorkflowResult ask(String userId, AiWorkflowInputs.AskInput input) {
+    long started = System.currentTimeMillis();
+    AiClient.AiResult result = ai.chat(
+        "ASK",
+        PromptTemplates.ASK_SYSTEM,
+        PromptTemplates.askUser(
+            input.questionContent(),
+            input.options(),
+            input.referenceAnswer(),
+            input.explanation(),
+            input.conversation(),
+            input.userQuestion()),
+        false);
+    return result(AiWorkflowKey.ASK, result, started);
+  }
+
+  @Override
   public AiWorkflowResult extractText(String userId, AiWorkflowInputs.ExtractTextInput input) {
     long started = System.currentTimeMillis();
     AiClient.AiResult result =
